@@ -21,7 +21,8 @@ struct DashboardView: View {
                 expenseToEdit: $expenseToEdit,
                 showEditSheet: $showEditSheet,
                 filteredExpenses: filteredExpenses,
-                onBuildCategoryGroups: buildCategoryGroups
+                onBuildCategoryGroups: buildCategoryGroups,
+                onExpenseDuplicate: duplicateExpense
             )
             .background(Color.bgPrimary)
             .navigationTitle("Gastos")
@@ -116,6 +117,30 @@ struct DashboardView: View {
         categoryGroups = Array(groups.values).sorted { $0.totalAmount > $1.totalAmount }
     }
     
+    private func duplicateExpense(_ expense: Expense) {
+        Task {
+            let duplicated = Expense(
+                amount: expense.amount,
+                name: expense.name,
+                category: expense.category,
+                subcategory: expense.subcategory,
+                date: Formatters.isoString(from: Date()),
+                paymentMethod: expense.paymentMethod,
+                notes: expense.notes,
+                isDeductible: expense.isDeductible
+            )
+            
+            do {
+                _ = try await ExpenseRepository().addExpense(duplicated)
+                await viewModel.refresh()
+                buildCategoryGroups()
+                HapticManager.notification(.success)
+            } catch {
+                print("Error duplicating expense: \(error)")
+            }
+        }
+    }
+    
     // MARK: - Filter Logic
     private var filteredExpenses: [Expense] {
         var expenses = viewModel.expenses
@@ -181,6 +206,7 @@ struct MainContent: View {
     @Binding var showEditSheet: Bool
     let filteredExpenses: [Expense]
     let onBuildCategoryGroups: () -> Void
+    let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
         VStack(spacing: 0) {
@@ -219,12 +245,16 @@ struct MainContent: View {
                 groupsEmpty: categoryGroups.isEmpty,
                 categoryGroups: $categoryGroups,
                 onDelete: { expense in
-                    Task { await viewModel.deleteExpense(expense) }
+                    Task {
+                        await viewModel.deleteExpense(expense)
+                        HapticManager.notification(.success)
+                    }
                 },
                 onEdit: { expense in
                     expenseToEdit = expense
                     showEditSheet = true
                 },
+                onDuplicate: onExpenseDuplicate,
                 onClearFilters: {
                     filter = ExpenseFilter()
                     onBuildCategoryGroups()
@@ -243,13 +273,30 @@ struct ExpenseListContent: View {
     @Binding var categoryGroups: [CategoryGroup]
     let onDelete: (Expense) -> Void
     let onEdit: (Expense) -> Void
+    let onDuplicate: (Expense) -> Void
     let onClearFilters: () -> Void
     
     var body: some View {
         if isLoading {
-            Spacer()
-            ProgressView().tint(Color.clarityPrimary)
-            Spacer()
+            List {
+                ForEach(0..<5) { _ in
+                    HStack {
+                        SkeletonView().frame(width: 40, height: 40).cornerRadius(20)
+                        VStack(alignment: .leading, spacing: 8) {
+                            SkeletonView().frame(width: 150, height: 16)
+                            SkeletonView().frame(width: 100, height: 12)
+                        }
+                        Spacer()
+                        SkeletonView().frame(width: 80, height: 20)
+                    }
+                    .padding(.vertical, 8)
+                    .listRowBackground(Color.bgPrimary)
+                    .listRowSeparator(.hidden)
+                }
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color.bgPrimary)
         } else if expensesEmpty {
             Spacer()
             EmptyStateView(
@@ -291,7 +338,8 @@ struct ExpenseListContent: View {
             ExpandableExpenseList(
                 categories: $categoryGroups,
                 onExpenseDelete: onDelete,
-                onExpenseEdit: onEdit
+                onExpenseEdit: onEdit,
+                onExpenseDuplicate: onDuplicate
             )
         }
     }

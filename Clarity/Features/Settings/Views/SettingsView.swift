@@ -40,7 +40,7 @@ struct SettingsView: View {
                     }
                     
                     NavigationLink("Gastos Recurrentes") {
-                        Text("Gastos recurrentes") // TODO
+                        RecurringExpensesView()
                     }
                     
                     NavigationLink("Notificaciones") {
@@ -51,9 +51,15 @@ struct SettingsView: View {
                 // Data Section
                 Section("Datos") {
                     Button {
-                        // TODO: Export CSV
+                        exportCSV()
                     } label: {
                         Label("Exportar a CSV", systemImage: "square.and.arrow.up")
+                    }
+                    
+                    if let fileURL = exportedFileURL {
+                        ShareLink(item: fileURL) {
+                            Label("Compartir CSV", systemImage: "square.and.arrow.up")
+                        }
                     }
                     
                     Button {
@@ -99,6 +105,23 @@ struct SettingsView: View {
                     authViewModel.signOut()
                 }
                 Button("Cancelar", role: .cancel) { }
+            }
+        }
+    }
+    
+    @State private var exportedFileURL: URL?
+    @State private var showingShareSheet = false
+    
+    private func exportCSV() {
+        Task {
+            do {
+                let expenses = try await ExpenseRepository().fetchExpenses()
+                if let url = ExportService.shared.generateCSV(from: expenses) {
+                    exportedFileURL = url
+                    showingShareSheet = true
+                }
+            } catch {
+                print("Error exporting CSV: \(error)")
             }
         }
     }

@@ -30,6 +30,7 @@ struct ExpandableExpenseList: View {
     @Binding var categories: [CategoryGroup]
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
+    let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
         List {
@@ -37,7 +38,8 @@ struct ExpandableExpenseList: View {
                 CategorySection(
                     category: $category,
                     onExpenseDelete: onExpenseDelete,
-                    onExpenseEdit: onExpenseEdit
+                    onExpenseEdit: onExpenseEdit,
+                    onExpenseDuplicate: onExpenseDuplicate
                 )
             }
         }
@@ -52,6 +54,7 @@ struct CategorySection: View {
     @Binding var category: CategoryGroup
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
+    let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
         Section {
@@ -60,7 +63,8 @@ struct CategorySection: View {
                     SubcategorySection(
                         subcategory: $subcategory,
                         onExpenseDelete: onExpenseDelete,
-                        onExpenseEdit: onExpenseEdit
+                        onExpenseEdit: onExpenseEdit,
+                        onExpenseDuplicate: onExpenseDuplicate
                     )
                 }
             }
@@ -119,6 +123,7 @@ struct SubcategorySection: View {
     @Binding var subcategory: SubcategoryGroup
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
+    let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
         DisclosureGroup(isExpanded: $subcategory.isExpanded) {
@@ -126,7 +131,8 @@ struct SubcategorySection: View {
                 ExpenseRow(
                     expense: expense,
                     onDelete: { onExpenseDelete(expense) },
-                    onEdit: { onExpenseEdit(expense) }
+                    onEdit: { onExpenseEdit(expense) },
+                    onDuplicate: { onExpenseDuplicate(expense) }
                 )
             }
         } label: {
@@ -156,11 +162,12 @@ struct SubcategorySection: View {
     }
 }
 
-// MARK: - Expense Row (Level 3) with Swipe Actions
+// MARK: - Expense Row (Level 3) with Menu
 struct ExpenseRow: View {
     let expense: Expense
     let onDelete: () -> Void
     let onEdit: () -> Void
+    let onDuplicate: () -> Void
     
     var body: some View {
         HStack(spacing: Spacing.sm) {
@@ -176,10 +183,9 @@ struct ExpenseRow: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     
-                    if let subcategory = expense.subcategory {
+                    if let subcategory = expense.subcategory, !subcategory.isEmpty {
                         Text("·")
                             .foregroundColor(.gray)
-                        
                         Text(subcategory)
                             .font(.system(size: 14))
                             .foregroundColor(Color.clarityPrimary)
@@ -192,7 +198,6 @@ struct ExpenseRow: View {
                         Image(systemName: "calendar")
                             .font(.system(size: 11))
                             .foregroundColor(.gray)
-                        
                         Text(formattedDate)
                             .font(.system(size: 12))
                             .foregroundColor(.gray)
@@ -213,31 +218,39 @@ struct ExpenseRow: View {
             Text(formatCurrency(expense.amount))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
+            
+            // Menú de 3 puntos verticales (⋮)
+            Menu {
+                Button { onEdit() } label: {
+                    Label("Editar", systemImage: "pencil")
+                }
+                Button { onDuplicate() } label: {
+                    Label("Duplicar", systemImage: "doc.on.doc")
+                }
+                Divider()
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Eliminar", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.gray)
+                    .rotationEffect(.degrees(90))
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xs)
+        .padding(.horizontal, Spacing.md)
         .listRowBackground(Color.bgPrimary)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Eliminar", systemImage: "trash")
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button {
-                onEdit()
-            } label: {
-                Label("Editar", systemImage: "pencil")
-            }
-            .tint(Color.clarityPrimary)
-        }
+        .listRowSeparator(.hidden)
+        .listRowInsets(EdgeInsets(top: 0, leading: Spacing.expenseIndent, bottom: 0, trailing: 0))
     }
     
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         guard let date = formatter.date(from: expense.date) else { return expense.date }
-        
         formatter.dateFormat = "dd/MM/yyyy"
         return formatter.string(from: date)
     }
@@ -297,7 +310,8 @@ struct ExpenseRow: View {
     ExpandableExpenseList(
         categories: .constant(categories),
         onExpenseDelete: { _ in },
-        onExpenseEdit: { _ in }
+        onExpenseEdit: { _ in },
+        onExpenseDuplicate: { _ in }
     )
     .preferredColorScheme(.dark)
 }

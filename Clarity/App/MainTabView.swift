@@ -96,31 +96,94 @@ struct MainTabView: View {
 // MARK: - Voice Input Sheet
 struct VoiceInputSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var speechManager = SpeechRecognitionManager()
+    @State private var pulse = false
     
     var body: some View {
         NavigationStack {
             VStack(spacing: Spacing.xl) {
                 Spacer()
                 
+                // Mic Button with Pulse Animation
                 ZStack {
-                    Circle()
-                        .fill(Color.clarityPrimary.opacity(0.2))
-                        .frame(width: 120, height: 120)
+                    if speechManager.isRecording {
+                        Circle()
+                            .fill(Color.clarityPrimary.opacity(0.3))
+                            .frame(width: 140, height: 140)
+                            .scaleEffect(pulse ? 1.2 : 1.0)
+                            .opacity(pulse ? 0.0 : 1.0)
+                            .onAppear {
+                                withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                                    pulse = true
+                                }
+                            }
+                    }
                     
-                    Image(systemName: "mic.fill")
-                        .font(.system(size: 40))
-                        .foregroundColor(Color.clarityPrimary)
+                    Button {
+                        toggleRecording()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(speechManager.isRecording ? Color.red : Color.clarityPrimary.opacity(0.2))
+                                .frame(width: 100, height: 100)
+                            
+                            Image(systemName: speechManager.isRecording ? "stop.fill" : "mic.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(speechManager.isRecording ? .white : .clarityPrimary)
+                        }
+                    }
                 }
                 
-                Text("Dicta tu gasto")
+                // Status Text
+                Text(speechManager.isRecording ? "Escuchando..." : "Toca para hablar")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(.white)
                 
-                Text("Por ejemplo: \"Café en Starbucks 4 euros\"")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
+                // Transcription
+                if !speechManager.transcription.isEmpty {
+                    ScrollView {
+                        Text(speechManager.transcription)
+                            .font(.system(size: 18))
+                            .foregroundColor(.white)
+                            .multilineTextAlignment(.center)
+                            .padding()
+                            .background(Color.bgCard)
+                            .cornerRadius(12)
+                    }
+                    .frame(maxHeight: 200)
+                    .padding(.horizontal)
+                } else {
+                    Text("Por ejemplo: \"Café en Starbucks 4 euros\"")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                
+                if let error = speechManager.error {
+                    Text(error)
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .padding(.top)
+                }
                 
                 Spacer()
+                
+                // Action Buttons
+                if !speechManager.transcription.isEmpty && !speechManager.isRecording {
+                    Button {
+                        // TODO: Send to AI for processing
+                        dismiss()
+                    } label: {
+                        Text("Procesar Gasto")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.brandGradient)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, Spacing.lg)
+                    .padding(.bottom, Spacing.lg)
+                }
             }
             .frame(maxWidth: .infinity)
             .background(Color.bgPrimary)
@@ -128,9 +191,26 @@ struct VoiceInputSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    Button("Cancelar") {
+                        speechManager.stopRecording()
+                        dismiss()
+                    }
                 }
             }
+            .onAppear {
+                try? speechManager.startRecording()
+            }
+            .onDisappear {
+                speechManager.stopRecording()
+            }
+        }
+    }
+    
+    private func toggleRecording() {
+        if speechManager.isRecording {
+            speechManager.stopRecording()
+        } else {
+            try? speechManager.startRecording()
         }
     }
 }
