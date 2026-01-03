@@ -7,7 +7,7 @@ import Charts
 struct ChartsView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @State private var selectedTab = 0
-    @State private var filter = ExpenseFilter()
+    @State private var filter = ExpenseFilter(dateRange: .thisYear)
     
     // Default colors for categories (in order)
     private let defaultColors: [Color] = [
@@ -133,6 +133,9 @@ struct ChartsView: View {
             }
             .toolbarBackground(Color.bgSecondary, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
+            .task {
+                await viewModel.loadExpenses()
+            }
             .refreshable {
                 await viewModel.refresh()
             }
@@ -144,11 +147,17 @@ struct ChartsView: View {
     private var filteredExpenses: [Expense] {
         var expenses = viewModel.expenses
         
+        print("📊 CHARTS: Total expenses from VM: \(expenses.count)")
+        
         // Apply date range filter
         let dateRange = filter.dateRangeForQuery()
+        print("📊 CHARTS: Filter range: \(dateRange.0) to \(dateRange.1)")
+        
         expenses = expenses.filter { expense in
-            expense.date >= dateRange.start && expense.date <= dateRange.end
+            expense.date >= dateRange.0 && expense.date <= dateRange.1
         }
+        
+        print("📊 CHARTS: After date filter: \(expenses.count)")
         
         // Apply category filter
         if !filter.selectedCategories.isEmpty {
@@ -157,6 +166,7 @@ struct ChartsView: View {
                     expense.category.localizedCaseInsensitiveContains(category.components(separatedBy: " ").first ?? category)
                 }
             }
+            print("📊 CHARTS: After category filter: \(expenses.count)")
         }
         
         // Apply payment method filter
@@ -164,13 +174,16 @@ struct ChartsView: View {
             expenses = expenses.filter { expense in
                 filter.selectedPaymentMethods.contains(expense.paymentMethod)
             }
+            print("📊 CHARTS: After payment filter: \(expenses.count)")
         }
         
         return expenses
     }
     
     private var filteredTotal: Double {
-        filteredExpenses.reduce(0) { $0 + $1.amount }
+        let total = filteredExpenses.reduce(0) { $0 + $1.amount }
+        print("📊 CHARTS: Total amount: \(total)€")
+        return total
     }
     
     private var filteredCategoryTotals: [(category: String, total: Double)] {
@@ -178,12 +191,14 @@ struct ChartsView: View {
         for expense in filteredExpenses {
             totals[expense.category, default: 0] += expense.amount
         }
-        return totals.map { (category: $0.key, total: $0.value) }
+        let result = totals.map { (category: $0.key, total: $0.value) }
             .sorted { $0.total > $1.total }
+        print("📊 CHARTS: Category totals: \(result.map { "\($0.category): \($0.total)€" })")
+        return result
     }
     
     private func buildChartData() -> [CategoryChartData] {
-        filteredCategoryTotals.enumerated().map { index, item in
+        let data = filteredCategoryTotals.enumerated().map { index, item in
             let percentage = filteredTotal > 0
                 ? (item.total / filteredTotal) * 100
                 : 0
@@ -195,6 +210,8 @@ struct ChartsView: View {
                 color: colorForCategory(item.category, index: index)
             )
         }
+        print("📊 CHARTS: buildChartData returned \(data.count) items")
+        return data
     }
     
     private func colorForCategory(_ category: String, index: Int) -> Color {

@@ -2,16 +2,17 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>Añadir:
-Privacy - Microphone Usage Description</key>
-	<string>Para escuchar tus gastos</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Usamos el micrófono para añadir gastos por voz</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Necesitamos reconocer tu voz para detectar gastos automáticamente</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>ß</string>
+			<string>com.clarity.app</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>com.googleusercontent.apps.318846020421-g6mtccrq40f4uqkrgptbfldt2i485o0j</string>

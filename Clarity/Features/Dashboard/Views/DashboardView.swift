@@ -6,7 +6,7 @@ import SwiftUI
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @State private var searchText = ""
-    @State private var filter = ExpenseFilter()
+    @State private var filter = ExpenseFilter(dateRange: .thisYear)
     @State private var categoryGroups: [CategoryGroup] = []
     @State private var expenseToEdit: Expense? = nil
     @State private var showEditSheet = false
@@ -29,11 +29,21 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await viewModel.refresh() }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .foregroundColor(.gray)
+                    HStack(spacing: 12) {
+                        Button {
+                            Task { await viewModel.refresh() }
+                        } label: {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundColor(.gray)
+                        }
+                        
+                        Button {
+                            viewModel.showAddExpense = true
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(Color.clarityPrimary)
+                        }
                     }
                 }
             }
@@ -142,11 +152,23 @@ struct DashboardView: View {
     private var filteredExpenses: [Expense] {
         var expenses = viewModel.expenses
         
+        print("📱 DASHBOARD: Total expenses loaded from Firebase: \(expenses.count)")
+        if !expenses.isEmpty {
+            print("📱 DASHBOARD: Date range of expenses: \(expenses.last?.date ?? "N/A") to \(expenses.first?.date ?? "N/A")")
+            expenses.forEach { exp in
+                print("   - \(exp.date): \(exp.name) - \(exp.amount)€")
+            }
+        }
+        
         // Apply date range filter
         let dateRange = filter.dateRangeForQuery()
+        print("📱 DASHBOARD: Applying filter - \(filter.dateRange.rawValue): \(dateRange.0) to \(dateRange.1)")
+        
         expenses = expenses.filter { expense in
-            expense.date >= dateRange.start && expense.date <= dateRange.end
+            expense.date >= dateRange.0 && expense.date <= dateRange.1
         }
+        
+        print("📱 DASHBOARD: Expenses after date filter: \(expenses.count)")
         
         // Apply search filter
         if !searchText.isEmpty {
@@ -172,6 +194,8 @@ struct DashboardView: View {
                 filter.selectedPaymentMethods.contains(expense.paymentMethod)
             }
         }
+        
+        print("📱 DASHBOARD: FINAL filtered expenses shown to user: \(expenses.count)")
         
         return expenses
     }

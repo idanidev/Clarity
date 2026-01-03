@@ -23,7 +23,7 @@ struct ExpenseFilter: Equatable {
     var hasActiveFilters: Bool {
         !selectedCategories.isEmpty || 
         !selectedPaymentMethods.isEmpty || 
-        dateRange != .thisMonth
+        dateRange != .thisYear
     }
     
     func dateRangeForQuery() -> (start: String, end: String) {
@@ -56,7 +56,8 @@ struct ExpenseFilter: Equatable {
             
         case .thisYear:
             let start = calendar.date(from: calendar.dateComponents([.year], from: now))!
-            return (formatter.string(from: start), formatter.string(from: now))
+            let end = calendar.date(from: DateComponents(year: calendar.component(.year, from: now), month: 12, day: 31))!
+            return (formatter.string(from: start), formatter.string(from: end))
             
         case .custom:
             return (formatter.string(from: customStartDate), formatter.string(from: customEndDate))

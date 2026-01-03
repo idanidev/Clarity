@@ -5,7 +5,7 @@ import Foundation
 import FirebaseFirestore
 import FirebaseFirestore
 
-struct Expense: Codable, Identifiable, Hashable {
+struct Expense: Identifiable, Hashable, Codable {
     @DocumentID var id: String?
     let amount: Double
     let name: String
@@ -26,6 +26,76 @@ struct Expense: Codable, Identifiable, Hashable {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.date(from: date) ?? Date()
+    }
+    
+    // MARK: - Codable
+    
+    enum CodingKeys: String, CodingKey {
+        case id, amount, name, category, subcategory, date
+        case paymentMethod, notes, isDeductible, recurring, isRecurring, recurringId
+        case createdAt, updatedAt
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        _id = try container.decodeIfPresent(DocumentID<String>.self, forKey: .id) ?? DocumentID(wrappedValue: nil)
+        amount = try container.decode(Double.self, forKey: .amount)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(String.self, forKey: .category)
+        subcategory = try container.decodeIfPresent(String.self, forKey: .subcategory)
+        date = try container.decode(String.self, forKey: .date)
+        paymentMethod = try container.decode(String.self, forKey: .paymentMethod)
+        notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        isDeductible = try container.decodeIfPresent(Bool.self, forKey: .isDeductible)
+        recurring = try container.decodeIfPresent(Bool.self, forKey: .recurring)
+        
+        // Handle both Bool and Int for isRecurring (0/1 from web)
+        if let boolValue = try? container.decodeIfPresent(Bool.self, forKey: .isRecurring) {
+            isRecurring = boolValue
+        } else if let intValue = try? container.decodeIfPresent(Int.self, forKey: .isRecurring) {
+            isRecurring = intValue != 0
+        } else {
+            isRecurring = nil
+        }
+        
+        recurringId = try container.decodeIfPresent(String.self, forKey: .recurringId)
+        
+        // Flexible createdAt: accepts Date timestamp OR ISO string
+        if let timestampDate = try? container.decodeIfPresent(Date.self, forKey: .createdAt) {
+            createdAt = timestampDate
+        } else if let stringDate = try? container.decodeIfPresent(String.self, forKey: .createdAt) {
+            createdAt = ISO8601DateFormatter().date(from: stringDate)
+        } else {
+            createdAt = nil
+        }
+        
+        // Flexible updatedAt: accepts Date timestamp OR ISO string
+        if let timestampDate = try? container.decodeIfPresent(Date.self, forKey: .updatedAt) {
+            updatedAt = timestampDate
+        } else if let stringDate = try? container.decodeIfPresent(String.self, forKey: .updatedAt) {
+            updatedAt = ISO8601DateFormatter().date(from: stringDate)
+        } else {
+            updatedAt = nil
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        try container.encode(amount, forKey: .amount)
+        try container.encode(name, forKey: .name)
+        try container.encode(category, forKey: .category)
+        try container.encodeIfPresent(subcategory, forKey: .subcategory)
+        try container.encode(date, forKey: .date)
+        try container.encode(paymentMethod, forKey: .paymentMethod)
+        try container.encodeIfPresent(notes, forKey: .notes)
+        try container.encodeIfPresent(isDeductible, forKey: .isDeductible)
+        try container.encodeIfPresent(recurring, forKey: .recurring)
+        try container.encodeIfPresent(isRecurring, forKey: .isRecurring)
+        try container.encodeIfPresent(recurringId, forKey: .recurringId)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }
     
     init(

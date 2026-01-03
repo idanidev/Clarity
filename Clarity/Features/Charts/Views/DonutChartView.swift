@@ -21,85 +21,115 @@ struct DonutChartView: View {
     let categoryData: [CategoryChartData]
     let total: Double
     @State private var selectedCategory: CategoryChartData?
+    @State private var animationProgress: CGFloat = 0
     
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
-                // Donut Chart
-                ZStack {
-                    // Chart segments
-                    ForEach(Array(categoryData.enumerated()), id: \.element.id) { index, data in
-                        DonutSegment(
-                            startAngle: startAngle(for: index),
-                            endAngle: endAngle(for: index)
-                        )
-                        .fill(data.color)
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3)) {
-                                if selectedCategory == data {
-                                    selectedCategory = nil
-                                } else {
-                                    selectedCategory = data
-                                }
-                            }
-                        }
-                        .scaleEffect(selectedCategory == data ? 1.05 : 1.0)
-                    }
-                    
-                    // Center hole
-                    Circle()
-                        .fill(Color.bgPrimary)
-                        .frame(width: 140, height: 140)
-                    
-                    // Center text
-                    VStack(spacing: 4) {
-                        Text("Total")
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
-                        
-                        Text(formatCurrency(total))
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .frame(width: 260, height: 260)
-                .padding(.top, Spacing.md)
-                
-                // Category Grid (2 columns)
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: Spacing.sm) {
-                    ForEach(categoryData) { data in
-                        CategoryChartCard(
-                            data: data,
-                            isSelected: selectedCategory == data
-                        )
-                        .onTapGesture {
-                            withAnimation(.spring(response: 0.3)) {
-                                if selectedCategory == data {
-                                    selectedCategory = nil
-                                } else {
-                                    selectedCategory = data
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal)
-                
-                // Selected category detail (if any)
-                if let selected = selectedCategory {
-                    SelectedCategoryDetailView(data: selected)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                donutChart
+                categoryGrid
+                selectedCategoryDetail
             }
             .padding(.bottom, Spacing.xl)
         }
         .background(Color.bgPrimary)
     }
     
-    // Calculate start angle for segment
+    // MARK: - Donut Chart Component
+    
+    private var donutChart: some View {
+        ZStack {
+            // Chart segments
+            ForEach(Array(categoryData.enumerated()), id: \.element.id) { index, data in
+                DonutSegment(
+                    startAngle: startAngle(for: index),
+                    endAngle: endAngle(for: index)
+                )
+                .trim(from: 0, to: animationProgress)
+                .fill(data.color)
+                .scaleEffect(selectedCategory == data ? 1.05 : 1.0)
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3)) {
+                        if selectedCategory == data {
+                            selectedCategory = nil
+                        } else {
+                            selectedCategory = data
+                        }
+                    }
+                }
+            }
+            
+            // Center hole
+            Circle()
+                .fill(Color.bgPrimary)
+                .frame(width: 140, height: 140)
+            
+            // Center text
+            VStack(spacing: 4) {
+                Text("Total")
+                    .font(.system(size: 14))
+                    .foregroundColor(.gray)
+                    .opacity(animationProgress)
+                
+                Text(formatCurrency(total * Double(animationProgress)))
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundColor(.white)
+                    .opacity(animationProgress)
+            }
+        }
+        .frame(width: 260, height: 260)
+        .padding(.top, Spacing.md)
+        .onAppear {
+            withAnimation(.spring(response: 1.2, dampingFraction: 0.8)) {
+                animationProgress = 1.0
+            }
+        }
+    }
+    
+    // MARK: - Category Grid Component
+    
+    private var categoryGrid: some View {
+        LazyVGrid(columns: [
+            GridItem(.flexible()),
+            GridItem(.flexible())
+        ], spacing: Spacing.sm) {
+            ForEach(Array(categoryData.enumerated()), id: \.element.id) { index, data in
+                CategoryChartCard(
+                    data: data,
+                    isSelected: selectedCategory == data
+                )
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3)) {
+                        if selectedCategory == data {
+                            selectedCategory = nil
+                        } else {
+                            selectedCategory = data
+                        }
+                    }
+                }
+                .opacity(animationProgress)
+                .scaleEffect(animationProgress)
+                .animation(
+                    .spring(response: 0.6, dampingFraction: 0.8)
+                        .delay(Double(index) * 0.1),
+                    value: animationProgress
+                )
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    // MARK: - Selected Category Detail Component
+    
+    @ViewBuilder
+    private var selectedCategoryDetail: some View {
+        if let selected = selectedCategory {
+            SelectedCategoryDetailView(data: selected)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+    
+    // MARK: - Angle Calculations
     private func startAngle(for index: Int) -> Angle {
         let precedingPercentages = categoryData.prefix(index).reduce(0) { $0 + $1.percentage }
         return Angle(degrees: (precedingPercentages / 100) * 360 - 90)

@@ -37,9 +37,27 @@ class ExpenseRepository: ObservableObject {
         
         let snapshot = try await query.getDocuments()
         
-        return snapshot.documents.compactMap { doc in
-            try? doc.data(as: Expense.self)
+        print("🔥 FIREBASE: Found \(snapshot.documents.count) documents in Firestore")
+        
+        var successfulExpenses: [Expense] = []
+        var failedCount = 0
+        
+        for doc in snapshot.documents {
+            do {
+                let expense = try doc.data(as: Expense.self)
+                print("✅ Decoded: \(expense.date) - \(expense.name) - \(expense.amount)€")
+                successfulExpenses.append(expense)
+            } catch {
+                failedCount += 1
+                print("❌ FAILED to decode document \(doc.documentID)")
+                print("   Data: \(doc.data())")
+                print("   Error: \(error)")
+            }
         }
+        
+        print("🔥 FIREBASE: Successfully decoded \(successfulExpenses.count) expenses, \(failedCount) failed")
+        
+        return successfulExpenses
     }
     
     func fetchExpenses(startDate: String, endDate: String) async throws -> [Expense] {
