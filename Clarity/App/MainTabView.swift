@@ -64,7 +64,7 @@ struct MainTabView: View {
                         .foregroundColor(.white)
                 }
             }
-            .offset(y: -26)
+            .offset(y: -8)
             
             // Floating mic button (bottom right, above tab bar)
             FloatingMicButton {

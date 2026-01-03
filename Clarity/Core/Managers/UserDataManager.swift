@@ -187,7 +187,7 @@ final class UserDataManager: ObservableObject {
     private func createDefaultCategories() -> [Category] {
         DefaultCategory.allCases.enumerated().map { index, cat in
             Category(
-                id: cat.rawValue,
+                id: nil,  // Let Firestore manage the ID
                 name: cat.rawValue,
                 color: cat.defaultColor,
                 subcategories: cat.defaultSubcategories,

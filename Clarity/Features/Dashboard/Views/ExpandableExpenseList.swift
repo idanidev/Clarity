@@ -218,33 +218,32 @@ struct ExpenseRow: View {
             Text(formatCurrency(expense.amount))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(.white)
-            
-            // Menú de 3 puntos verticales (⋮)
-            Menu {
-                Button { onEdit() } label: {
-                    Label("Editar", systemImage: "pencil")
-                }
-                Button { onDuplicate() } label: {
-                    Label("Duplicar", systemImage: "doc.on.doc")
-                }
-                Divider()
-                Button(role: .destructive) { onDelete() } label: {
-                    Label("Eliminar", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.gray)
-                    .rotationEffect(.degrees(90))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
         }
-        .padding(.vertical, Spacing.xs)
-        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, 4)
         .listRowBackground(Color.bgPrimary)
         .listRowSeparator(.hidden)
-        .listRowInsets(EdgeInsets(top: 0, leading: Spacing.expenseIndent, bottom: 0, trailing: 0))
+        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("Eliminar", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                onEdit()
+            } label: {
+                Label("Editar", systemImage: "pencil")
+            }
+            .tint(Color.clarityPrimary)
+            
+            Button {
+                onDuplicate()
+            } label: {
+                Label("Duplicar", systemImage: "doc.on.doc")
+            }
+            .tint(.blue)
+        }
     }
     
     private var formattedDate: String {

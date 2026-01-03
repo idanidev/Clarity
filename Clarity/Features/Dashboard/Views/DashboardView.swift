@@ -29,21 +29,11 @@ struct DashboardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 16) {
-                        Button {
-                            Task { await viewModel.refresh() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Button {
-                            viewModel.showAddExpense = true
-                        } label: {
-                            Image(systemName: "plus")
-                                .foregroundColor(Color.clarityPrimary)
-                                .fontWeight(.semibold)
-                        }
+                    Button {
+                        Task { await viewModel.refresh() }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .foregroundColor(.gray)
                     }
                 }
             }
@@ -52,10 +42,17 @@ struct DashboardView: View {
             .refreshable {
                 await viewModel.refresh()
             }
-            .onAppear {
+            .task {
+                await viewModel.loadExpenses()
                 buildCategoryGroups()
             }
             .onChange(of: viewModel.expenses) { _, _ in
+                buildCategoryGroups()
+            }
+            .onChange(of: filter) { _, _ in
+                buildCategoryGroups()
+            }
+            .onChange(of: searchText) { _, _ in
                 buildCategoryGroups()
             }
             .sheet(isPresented: $showEditSheet) {
@@ -208,15 +205,19 @@ struct MainContent: View {
     let onBuildCategoryGroups: () -> Void
     let onExpenseDuplicate: (Expense) -> Void
     
+    private var filteredTotal: Double {
+        filteredExpenses.reduce(0) { $0 + $1.amount }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Summary Cards
             SummaryCardsView(
-                totalExpenses: viewModel.monthlyTotal,
-                expenseCount: viewModel.expenses.count,
-                savings: max(0, 3000 - viewModel.monthlyTotal),
-                savingsPercentage: viewModel.monthlyTotal > 0 ? Int((3000 - viewModel.monthlyTotal) / 30) : 0,
-                available: max(0, 3000 - viewModel.monthlyTotal)
+                totalExpenses: filteredTotal,
+                expenseCount: filteredExpenses.count,
+                savings: max(0, 3000 - filteredTotal),
+                savingsPercentage: filteredTotal > 0 ? Int((3000 - filteredTotal) / 30) : 0,
+                available: max(0, 3000 - filteredTotal)
             )
             .padding(.horizontal)
             .padding(.top, Spacing.sm)

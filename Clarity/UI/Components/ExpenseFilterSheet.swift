@@ -8,7 +8,7 @@ struct ExpenseFilter: Equatable {
     var selectedCategories: Set<String> = []
     var selectedPaymentMethods: Set<String> = []
     var dateRange: DateRange = .thisMonth
-    var customStartDate: Date = Calendar.current.date(byAdding: .month, value: -1, to: Date())!
+    var customStartDate: Date = Date()
     var customEndDate: Date = Date()
     
     enum DateRange: String, CaseIterable {

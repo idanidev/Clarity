@@ -8,7 +8,7 @@ import Combine
 class DashboardViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var expenses: [Expense] = []
-    @Published var isLoading = true
+    @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showAddExpense = false
     
@@ -36,9 +36,7 @@ class DashboardViewModel: ObservableObject {
     
     // MARK: - Init
     init() {
-        Task {
-            await loadExpenses()
-        }
+        // Initial load is handled by .task in the view
     }
     
     // MARK: - Methods

@@ -144,6 +144,12 @@ struct ChartsView: View {
     private var filteredExpenses: [Expense] {
         var expenses = viewModel.expenses
         
+        // Apply date range filter
+        let dateRange = filter.dateRangeForQuery()
+        expenses = expenses.filter { expense in
+            expense.date >= dateRange.start && expense.date <= dateRange.end
+        }
+        
         // Apply category filter
         if !filter.selectedCategories.isEmpty {
             expenses = expenses.filter { expense in
