@@ -36,7 +36,7 @@ struct SettingsView: View {
                 // Preferences Section
                 Section("Preferencias") {
                     NavigationLink("Categorías") {
-                        Text("Gestión de categorías") // TODO
+                        CategoriesManagementView()
                     }
                     
                     NavigationLink("Gastos Recurrentes") {
@@ -44,7 +44,7 @@ struct SettingsView: View {
                     }
                     
                     NavigationLink("Notificaciones") {
-                        Text("Configuración de notificaciones") // TODO
+                        NotificationsView()
                     }
                 }
                 

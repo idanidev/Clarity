@@ -6,7 +6,7 @@ import SwiftUI
 struct DashboardView: View {
     @StateObject private var viewModel = DashboardViewModel()
     @State private var searchText = ""
-    @State private var filter = ExpenseFilter(dateRange: .thisYear)
+    @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     @State private var categoryGroups: [CategoryGroup] = []
     @State private var expenseToEdit: Expense? = nil
     @State private var showEditSheet = false
@@ -27,26 +27,6 @@ struct DashboardView: View {
             .background(Color.bgPrimary)
             .navigationTitle("Gastos")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 12) {
-                        Button {
-                            Task { await viewModel.refresh() }
-                        } label: {
-                            Image(systemName: "arrow.clockwise")
-                                .foregroundColor(.gray)
-                        }
-                        
-                        Button {
-                            viewModel.showAddExpense = true
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(Color.clarityPrimary)
-                        }
-                    }
-                }
-            }
             .toolbarBackground(Color.bgSecondary, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .refreshable {
@@ -152,23 +132,22 @@ struct DashboardView: View {
     private var filteredExpenses: [Expense] {
         var expenses = viewModel.expenses
         
-        print("📱 DASHBOARD: Total expenses loaded from Firebase: \(expenses.count)")
-        if !expenses.isEmpty {
-            print("📱 DASHBOARD: Date range of expenses: \(expenses.last?.date ?? "N/A") to \(expenses.first?.date ?? "N/A")")
-            expenses.forEach { exp in
-                print("   - \(exp.date): \(exp.name) - \(exp.amount)€")
+        // Deduplicate based on document ID (in case Firebase returns duplicates)
+        var seen = Set<String>()
+        expenses = expenses.filter { expense in
+            guard let id = expense.id, !id.isEmpty else { return true }
+            if seen.contains(id) {
+                return false
             }
+            seen.insert(id)
+            return true
         }
         
         // Apply date range filter
         let dateRange = filter.dateRangeForQuery()
-        print("📱 DASHBOARD: Applying filter - \(filter.dateRange.rawValue): \(dateRange.0) to \(dateRange.1)")
-        
         expenses = expenses.filter { expense in
             expense.date >= dateRange.0 && expense.date <= dateRange.1
         }
-        
-        print("📱 DASHBOARD: Expenses after date filter: \(expenses.count)")
         
         // Apply search filter
         if !searchText.isEmpty {
@@ -194,8 +173,6 @@ struct DashboardView: View {
                 filter.selectedPaymentMethods.contains(expense.paymentMethod)
             }
         }
-        
-        print("📱 DASHBOARD: FINAL filtered expenses shown to user: \(expenses.count)")
         
         return expenses
     }
@@ -244,7 +221,7 @@ struct MainContent: View {
                 available: max(0, 3000 - filteredTotal)
             )
             .padding(.horizontal)
-            .padding(.top, Spacing.sm)
+            .padding(.top, 4)
             
             // Search Bar with native iOS Menu filter
             SearchBarView(
@@ -253,7 +230,7 @@ struct MainContent: View {
                 onFilterChange: onBuildCategoryGroups
             )
             .padding(.horizontal)
-            .padding(.top, Spacing.sm)
+            .padding(.top, 6)
             
             // Active filter pills
             ActiveFilterPillsView(

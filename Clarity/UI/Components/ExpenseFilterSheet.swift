@@ -12,10 +12,12 @@ struct ExpenseFilter: Equatable {
     var customEndDate: Date = Date()
     
     enum DateRange: String, CaseIterable {
+        case allTime = "Todos"
         case thisMonth = "Este mes"
         case lastMonth = "Mes anterior"
         case last3Months = "Últimos 3 meses"
         case last6Months = "Últimos 6 meses"
+        case last12Months = "Últimos 12 meses"
         case thisYear = "Este año"
         case custom = "Personalizado"
     }
@@ -23,7 +25,7 @@ struct ExpenseFilter: Equatable {
     var hasActiveFilters: Bool {
         !selectedCategories.isEmpty || 
         !selectedPaymentMethods.isEmpty || 
-        dateRange != .thisYear
+        dateRange != .thisMonth
     }
     
     func dateRangeForQuery() -> (start: String, end: String) {
@@ -34,6 +36,11 @@ struct ExpenseFilter: Equatable {
         let now = Date()
         
         switch dateRange {
+        case .allTime:
+            // Return a very wide range (from 10 years ago to today)
+            let start = calendar.date(byAdding: .year, value: -10, to: now)!
+            return (formatter.string(from: start), formatter.string(from: now))
+            
         case .thisMonth:
             let start = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
             let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start)!
@@ -52,6 +59,11 @@ struct ExpenseFilter: Equatable {
         case .last6Months:
             let end = now
             let start = calendar.date(byAdding: .month, value: -6, to: now)!
+            return (formatter.string(from: start), formatter.string(from: end))
+            
+        case .last12Months:
+            let end = now
+            let start = calendar.date(byAdding: .month, value: -12, to: now)!
             return (formatter.string(from: start), formatter.string(from: end))
             
         case .thisYear:

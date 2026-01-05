@@ -13,7 +13,7 @@ struct VoiceSettings: Codable {
         autoConfirm: true,
         vibration: true,
         showSuggestions: true,
-        silenceTimeout: 10.0
+        silenceTimeout: 2.5  // Auto-close after 2.5s of silence
     )
     
     private static let storageKey = "voiceSettings"

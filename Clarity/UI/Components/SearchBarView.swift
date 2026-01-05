@@ -148,20 +148,10 @@ struct ActiveFilterPillsView: View {
                             }
                         )
                     }
-                    
-                    // Clear all button
-                    Button {
-                        filter = ExpenseFilter()
-                        onFilterChange()
-                    } label: {
-                        Text("Limpiar todo")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(Color.clarityPrimary)
-                    }
                 }
                 .padding(.horizontal)
             }
-            .padding(.vertical, Spacing.xs)
+            .padding(.vertical, 4) // Reduced padding
         }
     }
 }

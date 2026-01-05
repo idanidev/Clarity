@@ -80,7 +80,7 @@ struct DonutChartView: View {
         .frame(width: 260, height: 260)
         .padding(.top, Spacing.md)
         .onAppear {
-            withAnimation(.spring(response: 1.2, dampingFraction: 0.8)) {
+            withAnimation(.easeInOut(duration: 1.5)) {
                 animationProgress = 1.0
             }
         }

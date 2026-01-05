@@ -10,6 +10,8 @@ import Combine
 class BudgetsViewModel: ObservableObject {
     @Published var budgetProgress: [BudgetProgress] = []
     @Published var budgetLimits: [String: Double] = [:]
+    @Published var monthlySavingsGoal: Double = 0
+    @Published var currentSavings: Double = 0
     @Published var showEditBudgets = false
     @Published var isLoading = false
     
@@ -50,17 +52,38 @@ class BudgetsViewModel: ObservableObject {
         do {
             let doc = try await db.collection("users")
                 .document(userId)
-                .collection("budgets")
-                .document(currentMonth)
                 .getDocument()
             
             if doc.exists, let data = doc.data() {
-                if let categories = data["categories"] as? [String: Double] {
-                    budgetLimits = categories
+                // Extract goals
+                if let goals = data["goals"] as? [String: Any] {
+                    // Category goals
+                    if let categoryGoals = goals["categoryGoals"] as? [String: Double] {
+                        budgetLimits = categoryGoals
+                        print("✅ Loaded budgets from goals.categoryGoals: \(categoryGoals)")
+                    }
+                    
+                    // Monthly savings goal
+                    if let savingsGoal = goals["monthlySavingsGoal"] as? Double {
+                        monthlySavingsGoal = savingsGoal
+                    }
+                    
+                    // Current month savings
+                    if let monthlyHistory = goals["monthlyHistory"] as? [String: Any],
+                       let currentMonthData = monthlyHistory[currentMonth] as? [String: Any],
+                       let savings = currentMonthData["savings"] as? Double {
+                        currentSavings = savings
+                    }
+                } else {
+                    print("⚠️ No goals found")
+                    budgetLimits = [:]
                 }
+            } else {
+                print("⚠️ User document does not exist")
+                budgetLimits = [:]
             }
         } catch {
-            print("Error loading budgets: \(error)")
+            print("❌ Error loading budgets: \(error)")
         }
     }
     
@@ -99,22 +122,21 @@ class BudgetsViewModel: ObservableObject {
         // Filter out zero budgets
         let nonZeroBudgets = budgetLimits.filter { $0.value > 0 }
         
-        let data: [String: Any] = [
-            "month": currentMonth,
-            "categories": nonZeroBudgets,
-            "updatedAt": Timestamp(date: Date())
-        ]
-        
         do {
+            // Update goals.categoryGoals in user document
             try await db.collection("users")
                 .document(userId)
-                .collection("budgets")
-                .document(currentMonth)
-                .setData(data, merge: true)
+                .setData([
+                    "goals": [
+                        "categoryGoals": nonZeroBudgets,
+                        "updatedAt": Timestamp(date: Date())
+                    ]
+                ], merge: true)
             
+            print("✅ Saved budgets to goals.categoryGoals")
             await calculateProgress()
         } catch {
-            print("Error saving budgets: \(error)")
+            print("❌ Error saving budgets: \(error)")
         }
     }
 }

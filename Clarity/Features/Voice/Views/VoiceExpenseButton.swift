@@ -15,6 +15,8 @@ struct VoiceExpenseButton: View {
     @State private var parsedData: ParsedExpense?
     @State private var settings = VoiceSettings.load()
     @State private var stats = VoiceStats.load()
+    @State private var showSuccessToast = false
+    @State private var savedExpenseName = ""
     
     var body: some View {
         Button {
@@ -94,6 +96,39 @@ struct VoiceExpenseButton: View {
                 generator.impactOccurred()
             }
         }
+        .overlay(alignment: .top) {
+            // Success toast
+            if showSuccessToast {
+                VStack {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green)
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Gasto guardado")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.white)
+                            Text(savedExpenseName)
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        
+                        Spacer()
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(.ultraThinMaterial)
+                            .shadow(color: .black.opacity(0.2), radius: 10)
+                    )
+                    .padding(.horizontal)
+                    .padding(.top, 60)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .zIndex(999)
+            }
+        }
     }
     
     private func handleButtonTap() async {
@@ -149,11 +184,13 @@ struct VoiceExpenseButton: View {
         )
         
         // Show confirmation or auto-confirm
-        if settings.autoConfirm && parsed.subcategory != nil {
+        if settings.autoConfirm && parsed.subcategory != nil && parsed.confidence > 0.8 {
+            // High confidence: auto-confirm directly
             Task {
                 await addExpense(pendingExpense!)
             }
         } else {
+            // Show confirmation sheet
             showConfirmationSheet = true
         }
     }
@@ -163,29 +200,56 @@ struct VoiceExpenseButton: View {
             let repository = ExpenseRepository()
             _ = try await repository.addExpense(expense)
             
+            // Close confirmation sheet immediately
+            await MainActor.run {
+                showConfirmationSheet = false
+            }
+            
             // Reload expenses
             await viewModel.loadExpenses()
             
             // Update stats
             stats.recordSuccess()
             
+            // Show success toast
+            await MainActor.run {
+                savedExpenseName = "\(String(format: "%.2f", expense.amount))€ - \(expense.name)"
+                withAnimation(.spring(response: 0.4)) {
+                    showSuccessToast = true
+                }
+            }
+            
+            // Auto-hide toast after 3 seconds
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await MainActor.run {
+                withAnimation(.spring(response: 0.4)) {
+                    showSuccessToast = false
+                }
+            }
+            
             // Haptic feedback
             if settings.vibration {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
+                await MainActor.run {
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                }
             }
             
             // Reset state
-            pendingExpense = nil
-            speechManager.transcript = ""
-            speechManager.interimTranscript = ""
+            await MainActor.run {
+                pendingExpense = nil
+                speechManager.transcript = ""
+                speechManager.interimTranscript = ""
+            }
         } catch {
             print("Error adding expense: \(error)")
             stats.recordFailure()
             
             if settings.vibration {
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.error)
+                await MainActor.run {
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.error)
+                }
             }
         }
     }

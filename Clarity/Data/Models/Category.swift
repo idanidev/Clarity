@@ -7,12 +7,12 @@ import SwiftUI
 
 struct Category: Codable, Identifiable, Hashable {
     @DocumentID var id: String?
-    let name: String
-    let color: String // Hex color
-    let subcategories: [String]
-    let order: Int
-    let createdAt: Date?
-    let updatedAt: Date?
+    var name: String
+    var color: String // Hex color
+    var subcategories: [String]
+    var order: Int
+    var createdAt: Date?
+    var updatedAt: Date?
     
     var uiColor: Color {
         Color(hex: color) ?? .gray

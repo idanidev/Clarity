@@ -74,32 +74,34 @@ struct CategorySection: View {
                     category.isExpanded.toggle()
                 }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: 12) {
                     Image(systemName: category.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 10, weight: .semibold))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.gray)
-                        .frame(width: 16)
+                        .frame(width: 20)
                     
                     Circle()
                         .fill(category.color)
-                        .frame(width: 10, height: 10)
+                        .frame(width: 14, height: 14)
                     
                     Text("\(category.name) \(category.emoji)")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.white)
                     
                     Text("\(category.expenseCount) gasto\(category.expenseCount == 1 ? "" : "s")")
-                        .font(.system(size: 11))
+                        .font(.system(size: 14))
                         .foregroundColor(.gray)
                     
                     Spacer()
                     
                     Text(formatCurrency(category.totalAmount))
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 16, weight: .bold))
                         .foregroundColor(.white)
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
         .listRowBackground(
             Color.bgSecondary
@@ -170,55 +172,64 @@ struct ExpenseRow: View {
     let onDuplicate: () -> Void
     
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
             Image(systemName: "doc.text.fill")
-                .font(.system(size: 12))
-                .foregroundColor(Color.clarityPrimary)
-                .frame(width: 16)
+                .font(.system(size: 14))
+                .foregroundColor(.gray)
+                .frame(width: 20)
             
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 3) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
                     Text(expense.name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                     
                     if let subcategory = expense.subcategory, !subcategory.isEmpty {
                         Text("·")
-                            .font(.system(size: 10))
+                            .font(.system(size: 12))
                             .foregroundColor(.gray)
                         Text(subcategory)
-                            .font(.system(size: 11))
-                            .foregroundColor(Color.clarityPrimary)
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
                             .lineLimit(1)
                     }
                 }
                 
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     Image(systemName: "calendar")
-                        .font(.system(size: 9))
+                        .font(.system(size: 11))
                         .foregroundColor(.gray)
                     Text(formattedDate)
-                        .font(.system(size: 10))
+                        .font(.system(size: 13))
                         .foregroundColor(.gray)
                     
                     Text(expense.paymentMethod)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 4)
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color(hex: "#2D2D4A")!)
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(4)
                 }
             }
             
             Spacer()
             
-            Text(formatCurrency(expense.amount))
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(formatCurrency(expense.amount))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                
+                if expense.notes != nil {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 11))
+                        .foregroundColor(.gray)
+                }
+            }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 8)
+        .padding(.leading, 8)
         .listRowBackground(Color.bgPrimary)
         .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {

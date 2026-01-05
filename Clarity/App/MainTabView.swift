@@ -11,63 +11,55 @@ struct MainTabView: View {
     
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Native TabView with 5 tabs (center one is dummy for spacing)
+            // 5 tabs: Gastos | Metas | [+] | IA | Ajustes
             TabView(selection: $selectedTab) {
-                DashboardView()
-                    .tabItem {
-                        Image(systemName: "tablecells")
-                        Text("Tabla")
-                    }
-                    .tag(0)
+                NavigationStack {
+                    ExpensesView()
+                }
+                .tabItem {
+                    Image(systemName: "list.bullet")
+                    Text("Gastos")
+                }
+                .tag(0)
                 
-                ChartsView()
-                    .tabItem {
-                        Image(systemName: "chart.pie.fill")
-                        Text("Gráfico")
-                    }
-                    .tag(1)
+                NavigationStack {
+                    BudgetsView()
+                }
+                .tabItem {
+                    Image(systemName: "target")
+                    Text("Metas")
+                }
+                .tag(1)
                 
-                // Dummy center tab (hidden by the floating button)
+                // Center add button (inline with tab bar)
                 Color.clear
                     .tabItem {
-                        Text(" ")
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 24))
                     }
                     .tag(2)
                 
-                AIAssistantView()
-                    .tabItem {
-                        Image(systemName: "sparkles")
-                        Text("Asistente")
-                    }
-                    .tag(3)
+                NavigationStack {
+                    AIAssistantView()
+                }
+                .tabItem {
+                    Image(systemName: "sparkles")
+                    Text("IA")
+                }
+                .tag(3)
                 
-                SettingsView()
-                    .tabItem {
-                        Image(systemName: "gearshape.fill")
-                        Text("Ajustes")
-                    }
-                    .tag(4)
+                NavigationStack {
+                    SettingsView()
+                }
+                .tabItem {
+                    Image(systemName: "gearshape.fill")
+                    Text("Ajustes")
+                }
+                .tag(4)
             }
             .tint(Color.clarityPrimary)
             
-            // Floating center "+" button (over the center tab)
-            Button {
-                showAddExpense = true
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.brandGradient)
-                        .frame(width: 56, height: 56)
-                        .shadow(color: Color.clarityPrimary.opacity(0.4), radius: 8, x: 0, y: 4)
-                    
-                    Image(systemName: "plus")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-            }
-            .offset(y: -8)
-            
-            // New Voice Expense Button (bottom right)
+            // Voice Expense Button (bottom right)
             VoiceExpenseButton(
                 viewModel: dashboardViewModel,
                 categories: userDataManager.categories
@@ -82,7 +74,7 @@ struct MainTabView: View {
             }
         }
         .onChange(of: selectedTab) { oldValue, newValue in
-            // Intercept center tab selection and show add sheet instead
+            // Intercept add button tap
             if newValue == 2 {
                 selectedTab = oldValue
                 showAddExpense = true

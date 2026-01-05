@@ -103,6 +103,61 @@ final class UserDataManager: ObservableObject {
         }
     }
     
+    // MARK: - Category CRUD Operations
+    
+    /// Add a new category to Firebase
+    func addCategory(_ category: Category) async throws {
+        guard let userId = userId else {
+            throw NSError(domain: "UserDataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
+        }
+        
+        let docRef = db.collection("users").document(userId).collection("categories").document()
+        var newCategory = category
+        newCategory.id = docRef.documentID
+        newCategory.createdAt = Date()
+        newCategory.updatedAt = Date()
+        
+        try docRef.setData(from: newCategory)
+        logger.info("✅ Category '\(newCategory.name)' added")
+        
+        await refreshCategories()
+    }
+    
+    /// Update an existing category in Firebase
+    func updateCategory(_ category: Category) async throws {
+        guard let userId = userId, let catId = category.id else {
+            throw NSError(domain: "UserDataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid category or user"])
+        }
+        
+        var updatedCategory = category
+        updatedCategory.updatedAt = Date()
+        
+        try db.collection("users").document(userId).collection("categories")
+            .document(catId)
+            .setData(from: updatedCategory, merge: true)
+        
+        logger.info("✅ Category '\(updatedCategory.name)' updated")
+        
+        await refreshCategories()
+    }
+    
+    /// Delete a category from Firebase
+    func deleteCategory(id: String) async throws {
+        guard let userId = userId else {
+            throw NSError(domain: "UserDataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
+        }
+        
+        // TODO: Validate that no expenses use this category
+        
+        try await db.collection("users").document(userId).collection("categories")
+            .document(id)
+            .delete()
+        
+        logger.info("✅ Category deleted")
+        
+        await refreshCategories()
+    }
+    
     /// Clears all cached data (call on logout)
     func clearCache() {
         categories = createDefaultCategories()
@@ -140,25 +195,61 @@ final class UserDataManager: ObservableObject {
     // MARK: - Private Methods
     
     private func loadCategories(for userId: String) async throws -> [Category] {
-        // Try to load without ordering first (more reliable)
         let snapshot = try await db
             .collection("users")
             .document(userId)
             .collection("categories")
+            .order(by: "order") // Added order by
             .getDocuments()
         
         let userCategories = snapshot.documents.compactMap { doc -> Category? in
             try? doc.data(as: Category.self)
         }
         
-        // Return defaults if user has no custom categories
-        guard !userCategories.isEmpty else {
-            logger.info("No user categories found, using defaults")
-            return createDefaultCategories()
+        // If NO categories exist, initialize defaults in Firebase
+        if userCategories.isEmpty {
+            logger.info("No user categories found. Initializing defaults in Firebase...")
+            try await initializeDefaultCategories(for: userId)
+            
+            // Reload after initialization
+            let newSnapshot = try await db
+                .collection("users")
+                .document(userId)
+                .collection("categories")
+                .getDocuments()
+            
+            return newSnapshot.documents.compactMap { try? $0.data(as: Category.self) }
+                .sorted { ($0.order) < ($1.order) }
         }
         
-        // Sort by order field if present
         return userCategories.sorted { ($0.order) < ($1.order) }
+    }
+    
+    /// Initializes default categories in Firebase for a new user
+    private func initializeDefaultCategories(for userId: String) async throws {
+        let defaults = createDefaultCategories()
+        
+        logger.info("Initializing \(defaults.count) default categories in Firebase for user \(userId, privacy: .private)")
+        
+        let batch = db.batch()
+        let categoriesRef = db.collection("users").document(userId).collection("categories")
+        
+        for category in defaults {
+            let docRef = categoriesRef.document()
+            var categoryData = category
+            categoryData.id = docRef.documentID
+            categoryData.createdAt = Date()
+            categoryData.updatedAt = Date()
+            
+            do {
+                try batch.setData(from: categoryData, forDocument: docRef)
+            } catch {
+                logger.error("Failed to encode category \(category.name): \(error.localizedDescription)")
+            }
+        }
+        
+        try await batch.commit()
+        logger.info("✅ Default categories created in Firebase")
     }
     
     private func loadPaymentMethods(for userId: String) async throws -> Set<String> {
