@@ -36,6 +36,10 @@ final class UserDataManager: ObservableObject {
         Auth.auth().currentUser?.uid
     }
     
+    // Cache control
+    private var categoriesVersion: String?
+    private var lastCategoriesUpdate: Date?
+    
     // MARK: - Initialization
     private init() {
         // Initialize with default payment methods and categories
@@ -66,11 +70,34 @@ final class UserDataManager: ObservableObject {
         
         logger.info("Loading user data for \(userId, privacy: .private)")
         
-        // Load categories
+        // Load categories with caching
         do {
-            let loadedCategories = try await loadCategories(for: userId)
-            categories = loadedCategories
-            logger.info("Loaded \(self.categories.count) categories")
+            // Check version first
+            let doc = try await db.collection("users").document(userId).getDocument()
+            
+            var shouldReload = true
+            
+            if let data = doc.data(),
+               let version = data["categoriesVersion"] as? String,
+               let updated = (data["categoriesUpdatedAt"] as? Timestamp)?.dateValue() {
+                
+                // If version matches and updated recently (< 1h), skip reload
+                if version == categoriesVersion,
+                   let lastUpdate = lastCategoriesUpdate,
+                   Date().timeIntervalSince(lastUpdate) < 3600 {
+                    logger.info("✅ Categories cache hit, skipping reload")
+                    shouldReload = false
+                } else {
+                    categoriesVersion = version
+                    lastCategoriesUpdate = Date()
+                }
+            }
+            
+            if shouldReload {
+                let loadedCategories = try await loadCategories(for: userId)
+                categories = loadedCategories
+                logger.info("Loaded \(self.categories.count) categories")
+            }
         } catch {
             logger.warning("Could not load user categories, using defaults: \(error.localizedDescription)")
             categories = createDefaultCategories()
@@ -117,7 +144,9 @@ final class UserDataManager: ObservableObject {
         ]
         
         try await db.collection("users").document(userId).updateData([
-            "categories.\(category.name)": categoryData
+            "categories.\(category.name)": categoryData,
+            "categoriesVersion": UUID().uuidString,
+            "categoriesUpdatedAt": FieldValue.serverTimestamp()
         ])
         
         logger.info("✅ Category '\(category.name)' added to user document map")
@@ -143,7 +172,9 @@ final class UserDataManager: ObservableObject {
         }
         
         try await db.collection("users").document(userId).updateData([
-            "categories.\(category.name)": categoryData
+            "categories.\(category.name)": categoryData,
+            "categoriesVersion": UUID().uuidString,
+            "categoriesUpdatedAt": FieldValue.serverTimestamp()
         ])
         
         logger.info("✅ Category '\(category.name)' updated in user document map")
@@ -157,7 +188,9 @@ final class UserDataManager: ObservableObject {
         }
         
         try await db.collection("users").document(userId).updateData([
-            "categories.\(id)": FieldValue.delete()
+            "categories.\(id)": FieldValue.delete(),
+            "categoriesVersion": UUID().uuidString,
+            "categoriesUpdatedAt": FieldValue.serverTimestamp()
         ])
         
         logger.info("✅ Category '\(id)' deleted from user document map")
@@ -169,6 +202,8 @@ final class UserDataManager: ObservableObject {
         categories = createDefaultCategories()
         paymentMethods = PaymentMethod.allCases.map { $0.rawValue }
         error = nil
+        categoriesVersion = nil
+        lastCategoriesUpdate = nil
         logger.info("User data cache cleared")
     }
     

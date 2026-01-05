@@ -12,6 +12,9 @@ struct ExpensesView: View {
     @State private var expenseToEdit: Expense?
     @State private var showEditSheet = false
     
+    // Cache for performance
+    @State private var cachedFilteredExpenses: [Expense] = []
+    
     
     var body: some View {
         NavigationStack {
@@ -25,11 +28,12 @@ struct ExpensesView: View {
                 .refreshable { await viewModel.refresh() }
                 .task {
                     await viewModel.loadExpenses()
-                    buildCategoryGroups()
+                    updateFilteredExpenses()
                 }
-                .onChange(of: viewModel.expenses) { _, _ in buildCategoryGroups() }
-                .onChange(of: filter) { _, _ in buildCategoryGroups() }
-                .onChange(of: searchText) { _, _ in buildCategoryGroups() }
+                .onChange(of: viewModel.expenses) { _, _ in updateFilteredExpenses() }
+                .onChange(of: filter) { _, _ in updateFilteredExpenses() }
+                .onChange(of: searchText) { _, _ in updateFilteredExpenses() }
+                .onChange(of: cachedFilteredExpenses) { _, _ in buildCategoryGroups() }
                 .sheet(isPresented: $showEditSheet) { editSheet }
                 .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
         }
@@ -215,7 +219,7 @@ struct ExpensesView: View {
     }
     
     private var totalExpenses: Double {
-        filteredExpenses.reduce(0) { $0 + $1.amount }
+        cachedFilteredExpenses.reduce(0) { $0 + $1.amount }
     }
     
     private func calculateSavings() -> Double {
@@ -224,7 +228,7 @@ struct ExpensesView: View {
         return monthlyIncome - totalExpenses
     }
     
-    private var filteredExpenses: [Expense] {
+    private func updateFilteredExpenses() {
         var expenses = viewModel.expenses
         
         // Deduplicate

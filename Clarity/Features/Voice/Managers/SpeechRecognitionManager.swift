@@ -139,6 +139,9 @@ class SpeechRecognitionManager: ObservableObject {
     }
     
     func stopRecording() {
+        // Reset buffer count
+        bufferCount = 0
+        
         // Stop silence timer
         silenceTimer?.invalidate()
         silenceTimer = nil

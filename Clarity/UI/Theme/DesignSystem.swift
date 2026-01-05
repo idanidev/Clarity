@@ -104,3 +104,21 @@ struct SkeletonCircle: View {
             .skeleton()
     }
 }
+
+// MARK: - Category Colors
+enum CategoryColors {
+    static let allCases = [
+        indigo, amber, violet, pink,
+        emerald, red, teal, blue
+    ]
+    
+    // Modern Palette
+    static let indigo = "#6366F1"
+    static let amber = "#F59E0B"
+    static let violet = "#8B5CF6"
+    static let pink = "#EC4899"
+    static let emerald = "#10B981"
+    static let red = "#EF4444"
+    static let teal = "#14B8A6"
+    static let blue = "#3B82F6"
+}

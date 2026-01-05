@@ -20,12 +20,12 @@ class ExpenseRepository: ObservableObject {
     
     // MARK: - Fetch Expenses (Codable)
     
-    func fetchExpenses(for month: String? = nil) async throws -> [Expense] {
+    func fetchExpenses(for month: String? = nil, limit: Int? = nil) async throws -> [Expense] {
         guard let collection = expensesCollection else {
             throw RepositoryError.notAuthenticated
         }
         
-        var query: Query = collection.order(by: "date", descending: true)
+        var query: Query = collection
         
         if let month = month {
             let startDate = "\(month)-01"
@@ -35,29 +35,21 @@ class ExpenseRepository: ObservableObject {
                 .whereField("date", isLessThanOrEqualTo: endDate)
         }
         
-        let snapshot = try await query.getDocuments()
+        // Optimization: Order + Limit
+        query = query.order(by: "date", descending: true)
         
-        print("🔥 FIREBASE: Found \(snapshot.documents.count) documents in Firestore")
-        
-        var successfulExpenses: [Expense] = []
-        var failedCount = 0
-        
-        for doc in snapshot.documents {
-            do {
-                let expense = try doc.data(as: Expense.self)
-                print("✅ Decoded: \(expense.date) - \(expense.name) - \(expense.amount)€")
-                successfulExpenses.append(expense)
-            } catch {
-                failedCount += 1
-                print("❌ FAILED to decode document \(doc.documentID)")
-                print("   Data: \(doc.data())")
-                print("   Error: \(error)")
-            }
+        if let limit = limit {
+            query = query.limit(to: limit)
         }
         
-        print("🔥 FIREBASE: Successfully decoded \(successfulExpenses.count) expenses, \(failedCount) failed")
+        let snapshot = try await query.getDocuments()
         
-        return successfulExpenses
+        print("🔥 FIREBASE: Found \(snapshot.documents.count) documents (limit: \(limit ?? -1))")
+        
+        return snapshot.documents.compactMap { doc in
+            try? doc.data(as: Expense.self)
+        }
+    }
     }
     
     func fetchExpenses(startDate: String, endDate: String) async throws -> [Expense] {

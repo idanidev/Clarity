@@ -187,14 +187,12 @@ struct AddCategorySheet: View {
     let onSave: (Category) -> Void
     
     @State private var name = ""
-    @State private var selectedColor = "#6366F1"
+    @State private var selectedColor = CategoryColors.indigo
     @State private var subcategories: [String] = []
     @State private var newSubcategory = ""
     
-    private let availableColors = [
-        "#6366F1", "#F59E0B", "#8B5CF6", "#EC4899",
-        "#10B981", "#EF4444", "#14B8A6", "#3B82F6"
-    ]
+    // Using centralized DesignSystem colors
+    private let availableColors = CategoryColors.allCases
     
     var body: some View {
         NavigationStack {

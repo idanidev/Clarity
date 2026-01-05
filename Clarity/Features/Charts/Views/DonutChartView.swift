@@ -22,6 +22,7 @@ struct DonutChartView: View {
     let total: Double
     @State private var selectedCategory: CategoryChartData?
     @State private var animationProgress: CGFloat = 0
+    @State private var cachedSegments: [(start: Angle, end: Angle, data: CategoryChartData)] = []
     
     var body: some View {
         ScrollView {
@@ -40,20 +41,20 @@ struct DonutChartView: View {
     private var donutChart: some View {
         ZStack {
             // Chart segments
-            ForEach(Array(categoryData.enumerated()), id: \.element.id) { index, data in
+            ForEach(cachedSegments, id: \.data.id) { segment in
                 DonutSegment(
-                    startAngle: startAngle(for: index),
-                    endAngle: endAngle(for: index)
+                    startAngle: segment.start,
+                    endAngle: segment.end
                 )
                 .trim(from: 0, to: animationProgress)
-                .fill(data.color)
-                .scaleEffect(selectedCategory == data ? 1.05 : 1.0)
+                .fill(segment.data.color)
+                .scaleEffect(selectedCategory == segment.data ? 1.05 : 1.0)
                 .onTapGesture {
                     withAnimation(.bouncy(duration: 0.3)) {
-                        if selectedCategory == data {
+                        if selectedCategory == segment.data {
                             selectedCategory = nil
                         } else {
-                            selectedCategory = data
+                            selectedCategory = segment.data
                         }
                     }
                 }
@@ -80,9 +81,13 @@ struct DonutChartView: View {
         .frame(width: 260, height: 260)
         .padding(.top, Spacing.md)
         .onAppear {
+            updateCachedSegments()
             withAnimation(.bouncy(duration: 1.5)) {
                 animationProgress = 1.0
             }
+        }
+        .onChange(of: categoryData) { _, _ in
+            updateCachedSegments()
         }
     }
     
@@ -139,6 +144,20 @@ struct DonutChartView: View {
     private func endAngle(for index: Int) -> Angle {
         let includingPercentages = categoryData.prefix(index + 1).reduce(0) { $0 + $1.percentage }
         return Angle(degrees: (includingPercentages / 100) * 360 - 90)
+    }
+    
+    private func updateCachedSegments() {
+        var segments: [(start: Angle, end: Angle, data: CategoryChartData)] = []
+        
+        for (index, data) in categoryData.enumerated() {
+            segments.append((
+                start: startAngle(for: index),
+                end: endAngle(for: index),
+                data: data
+            ))
+        }
+        
+        cachedSegments = segments
     }
     
     private func formatCurrency(_ value: Double) -> String {
