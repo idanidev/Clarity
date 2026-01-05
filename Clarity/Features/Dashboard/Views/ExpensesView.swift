@@ -160,6 +160,12 @@ struct ExpensesView: View {
                         value: "\(filteredExpenses.count)",
                         color: .blue
                     )
+                    
+                    StatCard(
+                        title: "Ahorro",
+                        value: Formatters.currency(calculateSavings()),
+                        color: calculateSavings() >= 0 ? .green : .red
+                    )
 
                 }
                 .padding(.horizontal)
@@ -212,8 +218,11 @@ struct ExpensesView: View {
         filteredExpenses.reduce(0) { $0 + $1.amount }
     }
     
-
-
+    private func calculateSavings() -> Double {
+        // Get income from BudgetsViewModel or default to 0
+        let monthlyIncome = 2700.0  // This should come from user data
+        return monthlyIncome - totalExpenses
+    }
     
     private var filteredExpenses: [Expense] {
         var expenses = viewModel.expenses

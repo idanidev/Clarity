@@ -103,7 +103,7 @@ struct CategorySection: View {
                         .foregroundStyle(.primary)
                         .monospacedDigit()
                 }
-                .padding(.vertical, 4)  // Reduced for compact layout
+                .padding(.vertical, 2)  // More compact
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -115,7 +115,7 @@ struct CategorySection: View {
                 .overlay(
                     Rectangle()
                         .fill(category.color)
-                        .frame(width: 3),
+                        .frame(width: 5),  // Increased from 3 for better visibility
                     alignment: .leading
                 )
         )
