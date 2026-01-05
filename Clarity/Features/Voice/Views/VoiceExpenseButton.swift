@@ -69,6 +69,8 @@ struct VoiceExpenseButton: View {
             .animation(.bouncy(duration: 0.3), value: speechManager.isListening)
         }
         .shadow(color: speechManager.isListening ? .red.opacity(0.5) : .purple.opacity(0.5), radius: 20)
+        .accessibilityLabel("Grabar gasto por voz")
+        .accessibilityHint("Mantén presionado para hablar")
         .sheet(isPresented: $showRecordingSheet) {
             VoiceRecordingSheet(
                 speechManager: speechManager,

@@ -24,11 +24,11 @@ struct DashboardView: View {
                 onBuildCategoryGroups: buildCategoryGroups,
                 onExpenseDuplicate: duplicateExpense
             )
-            .background(Color.bgPrimary)
+            .background(.regularMaterial)
             .navigationTitle("Gastos")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.bgSecondary, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
             .refreshable {
                 await viewModel.refresh()
             }
@@ -298,26 +298,25 @@ struct ExpenseListContent: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .background(Color.bgPrimary)
+            .background(.regularMaterial)
         } else if expensesEmpty {
             Spacer()
-            EmptyStateView(
-                icon: "wallet.bifold",
-                title: "Sin gastos",
-                message: "Añade tu primer gasto del mes",
-                actionTitle: nil
-            )
+            ContentUnavailableView {
+                Label("Sin gastos", systemImage: "wallet.bifold")
+            } description: {
+                Text("Añade tu primer gasto del mes")
+            }
             Spacer()
         } else if filteredEmpty && activeFilters {
             Spacer()
             VStack(spacing: Spacing.md) {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                     .font(.system(size: 48))
-                    .foregroundColor(.gray)
+                    .foregroundStyle(.secondary)
                 
                 Text("Sin resultados")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.primary)
                 
                 Text("No hay gastos que coincidan con tus filtros")
                     .font(.system(size: 14))

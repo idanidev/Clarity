@@ -82,7 +82,7 @@ struct DonutChartView: View {
         .padding(.top, Spacing.md)
         .onAppear {
             updateCachedSegments()
-            withAnimation(.bouncy(duration: 1.5)) {
+            withAnimation(.bouncy(duration: 0.5)) {
                 animationProgress = 1.0
             }
         }

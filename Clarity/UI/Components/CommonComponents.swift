@@ -21,45 +21,24 @@ struct LoadingView: View {
     }
 }
 
-// MARK: - Empty State View
-struct EmptyStateView: View {
-    let icon: String
-    let title: String
-    let message: String
-    var actionTitle: String? = nil
-    var action: (() -> Void)? = nil
-    
-    var body: some View {
-        VStack(spacing: Spacing.lg) {
-            Image(systemName: icon)
-                .font(.system(size: 60))
-                .foregroundStyle(.secondary)
-            
-            VStack(spacing: Spacing.xs) {
-                Text(title)
-                    .font(.clarityTitle3)
-                
-                Text(message)
-                    .font(.claritySubheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-            
-            if let actionTitle = actionTitle, let action = action {
-                Button(action: action) {
-                    Text(actionTitle)
-                        .font(.clarityHeadline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.clarityPrimary)
-                        .clipShape(RoundedRectangle(cornerRadius: Spacing.buttonRadius))
-                }
-                .padding(.horizontal, Spacing.xl)
-            }
-        }
-        .padding(Spacing.xl)
+
+// MARK: - Button Styles
+struct ClarityProminentButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(Color.clarityPrimary)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .animation(.bouncy(duration: 0.2), value: configuration.isPressed)
     }
+}
+
+extension ButtonStyle where Self == ClarityProminentButtonStyle {
+    static var clarityProminent: ClarityProminentButtonStyle { ClarityProminentButtonStyle() }
 }
 
 // MARK: - Primary Button
@@ -112,13 +91,5 @@ struct SecondaryButton: View {
     LoadingView()
 }
 
-#Preview("Empty State") {
-    EmptyStateView(
-        icon: "wallet.bifold",
-        title: "No hay gastos",
-        message: "Añade tu primer gasto para comenzar a controlar tus finanzas",
-        actionTitle: "Añadir Gasto"
-    ) {
-        print("Add tapped")
-    }
-}
+
+// Empty State Preview removed as struct was deleted

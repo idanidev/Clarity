@@ -11,18 +11,19 @@ struct RecurringExpensesView: View {
     
     var body: some View {
         ZStack {
-            Color.bgPrimary.ignoresSafeArea()
+            Color.bgPrimary.ignoresSafeArea().overlay(.regularMaterial)
             
             if isLoading {
                 ProgressView().tint(Color.clarityPrimary)
             } else if expenses.isEmpty {
-                EmptyStateView(
-                    icon: "repeat.circle",
-                    title: "Sin gastos recurrentes",
-                    message: "Añade tus suscripciones o pagos fijos",
-                    actionTitle: "Añadir gasto recurrente"
-                ) {
-                    showAddSheet = true
+                ContentUnavailableView {
+                    Label("Sin gastos recurrentes", systemImage: "repeat.circle")
+                } description: {
+                    Text("Añade tus suscripciones o pagos fijos")
+                } actions: {
+                    Button("Añadir gasto recurrente") {
+                        showAddSheet = true
+                    }
                 }
             } else {
                 List {
@@ -43,14 +44,14 @@ struct RecurringExpensesView: View {
             }
         }
         .navigationTitle("Gastos Recurrentes")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     showAddSheet = true
                 } label: {
                     Image(systemName: "plus")
-                        .foregroundColor(Color.clarityPrimary)
+                        .foregroundStyle(Color.clarityPrimary)
                 }
             }
         }

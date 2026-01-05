@@ -87,7 +87,7 @@ struct MainTabView: View {
         .task {
             await userDataManager.loadUserData()
         }
-        .preferredColorScheme(.dark)
+        }
     }
 }
 

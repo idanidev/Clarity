@@ -15,30 +15,31 @@ struct BudgetsView: View {
                         HStack {
                             Text("Meta de Ahorro Mensual")
                                 .font(.system(size: 18, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.primary)
                             
                             Spacer()
                             
                             Image(systemName: viewModel.currentSavings >= viewModel.monthlySavingsGoal ? "checkmark.circle.fill" : "target")
                                 .foregroundColor(viewModel.currentSavings >= viewModel.monthlySavingsGoal ? .green : Color.clarityPrimary)
                                 .font(.system(size: 24))
+                                .symbolRenderingMode(.hierarchical)
                         }
                         
                         HStack {
                             Text(Formatters.currency(viewModel.currentSavings))
                                 .font(.system(size: 22, weight: .semibold))
-                                .foregroundColor(.white)
+                                .foregroundStyle(.primary)
                             
                             Text("/ \(Formatters.currency(viewModel.monthlySavingsGoal))")
                                 .font(.system(size: 16))
-                                .foregroundColor(.gray)
+                                .foregroundStyle(.secondary)
                             
                             Spacer()
                             
                             let percentage = viewModel.monthlySavingsGoal > 0 ? (viewModel.currentSavings / viewModel.monthlySavingsGoal * 100) : 0
                             Text("\(Int(percentage))%")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.gray)
+                                .foregroundStyle(.secondary)
                         }
                         
                         ProgressView(value: min(viewModel.currentSavings, viewModel.monthlySavingsGoal), total: viewModel.monthlySavingsGoal)

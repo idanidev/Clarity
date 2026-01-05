@@ -22,6 +22,7 @@ struct AddExpenseSheet: View {
                             .font(.system(size: 48, weight: .bold, design: .monospaced))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.leading)
+                            .accessibilityLabel("Cantidad del gasto")
                     }
                     .padding(.vertical, Spacing.sm)
                 }
@@ -30,6 +31,7 @@ struct AddExpenseSheet: View {
                 Section("Descripción") {
                     TextField("¿En qué gastaste?", text: $viewModel.name)
                         .font(.clarityBody)
+                        .accessibilityLabel("Descripción del gasto")
                     
                     // Quick voice input button (placeholder)
                     Button {
@@ -69,6 +71,7 @@ struct AddExpenseSheet: View {
                     )
                     .datePickerStyle(.graphical)
                     .tint(Color.clarityPrimary)
+                    .accessibilityLabel("Fecha del gasto")
                 }
                 
                 // Payment Method Section
@@ -89,7 +92,7 @@ struct AddExpenseSheet: View {
                 }
             }
             .navigationTitle("Nuevo Gasto")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {

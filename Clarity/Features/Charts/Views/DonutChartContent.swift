@@ -27,11 +27,11 @@ struct DonutChartContent: View {
             Spacer()
         } else if filteredExpenses.isEmpty {
             Spacer()
-            EmptyStateView(
-                icon: "chart.pie",
-                title: "Sin datos",
-                message: "Añade gastos para ver tus estadísticas"
-            )
+            ContentUnavailableView {
+                Label("Sin datos", systemImage: "chart.pie")
+            } description: {
+                Text("Añade gastos para ver tus estadísticas")
+            }
             Spacer()
         } else {
             DonutChartView(
@@ -100,11 +100,11 @@ struct CalendarChartContent: View {
             Spacer()
         } else if viewModel.expenses.isEmpty {
             Spacer()
-            EmptyStateView(
-                icon: "calendar",
-                title: "Sin datos",
-                message: "Añade gastos para ver el calendario"
-            )
+            ContentUnavailableView {
+                Label("Sin datos", systemImage: "calendar")
+            } description: {
+                Text("Añade gastos para ver el calendario")
+            }
             Spacer()
         } else {
             ExpenseCalendarView(expenses: viewModel.expenses)

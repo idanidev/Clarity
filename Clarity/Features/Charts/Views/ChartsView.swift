@@ -43,11 +43,11 @@ struct ChartsView: View {
                     Spacer()
                 } else if filteredExpenses.isEmpty {
                     Spacer()
-                    EmptyStateView(
-                        icon: "chart.pie",
-                        title: "Sin datos",
-                        message: filter.hasActiveFilters ? "No hay gastos con estos filtros" : "Añade gastos para ver tus estadísticas"
-                    )
+                    ContentUnavailableView {
+                        Label("Sin datos", systemImage: "chart.pie")
+                    } description: {
+                        Text(filter.hasActiveFilters ? "No hay gastos con estos filtros" : "Añade gastos para ver tus estadísticas")
+                    }
                     Spacer()
                 } else {
                     switch selectedTab {
@@ -65,9 +65,9 @@ struct ChartsView: View {
                     }
                 }
             }
-            .background(Color.bgPrimary)
+            .background(.regularMaterial)
             .navigationTitle("Gráficos")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     // Native iOS Menu for quick filter actions
@@ -119,7 +119,8 @@ struct ChartsView: View {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                                 .font(.system(size: 18))
-                                .foregroundColor(filter.hasActiveFilters ? Color.clarityPrimary : .gray)
+                                .symbolRenderingMode(.hierarchical)
+                                .foregroundStyle(filter.hasActiveFilters ? Color.clarityPrimary : .secondary)
                             
                             if filter.hasActiveFilters {
                                 Circle()
@@ -131,8 +132,8 @@ struct ChartsView: View {
                     }
                 }
             }
-            .toolbarBackground(Color.bgSecondary, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
             .task {
                 await viewModel.loadExpenses()
             }

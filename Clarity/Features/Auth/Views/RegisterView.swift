@@ -94,13 +94,17 @@ struct RegisterView: View {
                     }
                     
                     // Register Button
-                    PrimaryButton(
-                        title: "Crear Cuenta",
-                        isLoading: isLoading,
-                        disabled: !isValidForm
-                    ) {
+                    Button(action: {
                         register()
+                    }) {
+                        if isLoading {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("Crear Cuenta")
+                        }
                     }
+                    .buttonStyle(.clarityProminent)
+                    .disabled(!isValidForm || isLoading)
                     .padding(.horizontal, Spacing.lg)
                     
                     // Terms

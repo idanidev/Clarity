@@ -251,6 +251,9 @@ struct ExpenseRow: View {
         }
         .padding(.vertical, 6)  // Reduced from Spacing.xs (8)
         .padding(.leading, 4)    // Reduced from Spacing.xs (8)
+        .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
+        .accessibilityHint("Desliza para editar o eliminar")
+        .contentShape(Rectangle())
         .listRowBackground(Color(.systemBackground))
         .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))  // Compact insets
         .listRowSeparator(.hidden)

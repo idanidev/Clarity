@@ -18,7 +18,7 @@ struct CategoriesManagementView: View {
     private var mainContent: some View {
         listView
             .navigationTitle("Mis Categorías")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -26,7 +26,8 @@ struct CategoriesManagementView: View {
                     } label: {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color.clarityPrimary)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundStyle(Color.clarityPrimary)
                     }
                 }
                 

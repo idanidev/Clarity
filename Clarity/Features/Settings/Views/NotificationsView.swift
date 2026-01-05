@@ -48,7 +48,7 @@ struct NotificationsView: View {
                         Text("Hora")
                         Spacer()
                         Text("\(weeklyHour):\(String(format: "%02d", weeklyMinute))")
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 
@@ -61,7 +61,7 @@ struct NotificationsView: View {
                         Text("Hora")
                         Spacer()
                         Text("\(customHour):\(String(format: "%02d", customMinute))")
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.secondary)
                     }
                 }
             } header: {
@@ -82,11 +82,11 @@ struct NotificationsView: View {
                     saveSettings()
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(Color.clarityPrimary)
+                .foregroundStyle(Color.clarityPrimary)
             }
         }
         .navigationTitle("Notificaciones")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
     }
     
     private func requestNotificationPermission() {

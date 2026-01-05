@@ -80,13 +80,17 @@ struct LoginView: View {
                     
                     // Login Button
                     VStack(spacing: Spacing.md) {
-                        PrimaryButton(
-                            title: "Iniciar Sesión",
-                            isLoading: isLoading,
-                            disabled: !isValidForm
-                        ) {
+                        Button(action: {
                             login()
+                        }) {
+                            if isLoading {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text("Iniciar Sesión")
+                            }
                         }
+                        .buttonStyle(.clarityProminent)
+                        .disabled(!isValidForm || isLoading)
                         
                         // Divider
                         HStack {

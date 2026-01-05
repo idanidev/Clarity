@@ -66,15 +66,21 @@ struct SummaryCard: View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-                .foregroundColor(iconColor)
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundStyle(iconColor)
             
             Text(title)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.gray)
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.secondary)
             
             Text(value)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundColor(valueColor)
+            Text(value)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(valueColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             
@@ -86,7 +92,8 @@ struct SummaryCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, Spacing.sm)
-        .background(Color.bgSecondary)
+        .padding(.vertical, Spacing.sm)
+        .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: Spacing.cardRadius))
         .overlay(
             RoundedRectangle(cornerRadius: Spacing.cardRadius)
