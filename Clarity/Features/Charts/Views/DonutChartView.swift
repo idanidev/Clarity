@@ -49,7 +49,7 @@ struct DonutChartView: View {
                 .fill(data.color)
                 .scaleEffect(selectedCategory == data ? 1.05 : 1.0)
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.3)) {
+                    withAnimation(.bouncy(duration: 0.3)) {
                         if selectedCategory == data {
                             selectedCategory = nil
                         } else {
@@ -80,7 +80,7 @@ struct DonutChartView: View {
         .frame(width: 260, height: 260)
         .padding(.top, Spacing.md)
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.5)) {
+            withAnimation(.bouncy(duration: 1.5)) {
                 animationProgress = 1.0
             }
         }
@@ -99,7 +99,7 @@ struct DonutChartView: View {
                     isSelected: selectedCategory == data
                 )
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.3)) {
+                    withAnimation(.bouncy(duration: 0.3)) {
                         if selectedCategory == data {
                             selectedCategory = nil
                         } else {
@@ -110,7 +110,7 @@ struct DonutChartView: View {
                 .opacity(animationProgress)
                 .scaleEffect(animationProgress)
                 .animation(
-                    .spring(response: 0.6, dampingFraction: 0.8)
+                    .bouncy(duration: 0.6)
                         .delay(Double(index) * 0.1),
                     value: animationProgress
                 )
@@ -224,7 +224,7 @@ struct SelectedCategoryDetailView: View {
         VStack(spacing: 0) {
             // Header
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.bouncy(duration: 0.2)) {
                     isExpanded.toggle()
                 }
             } label: {

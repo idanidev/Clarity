@@ -87,7 +87,7 @@ struct VoiceRecordingSheet: View {
                             Text(examples[index])
                                 .font(.system(size: 12))
                                 .foregroundColor(index == currentExampleIndex ? .purple : .secondary.opacity(0.3))
-                                .animation(.easeInOut(duration: 0.3), value: currentExampleIndex)
+                                .animation(.bouncy(duration: 0.3), value: currentExampleIndex)
                         }
                         .onReceive(timer) { _ in
                             currentExampleIndex = (currentExampleIndex + 1) % examples.count

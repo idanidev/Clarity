@@ -17,11 +17,18 @@ struct VoiceExpenseButton: View {
     @State private var stats = VoiceStats.load()
     @State private var showSuccessToast = false
     @State private var savedExpenseName = ""
+    @State private var isProcessing = false // Debounce state
     
     var body: some View {
         Button {
+            guard !isProcessing else { return }
+            isProcessing = true
+            
             Task {
                 await handleButtonTap()
+                // 0.5s debounce to prevent double taps
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                isProcessing = false
             }
         } label: {
             ZStack {
@@ -59,7 +66,7 @@ struct VoiceExpenseButton: View {
                     .foregroundColor(.white)
             }
             .scaleEffect(speechManager.isListening ? 1.1 : 1.0)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: speechManager.isListening)
+            .animation(.bouncy(duration: 0.3), value: speechManager.isListening)
         }
         .shadow(color: speechManager.isListening ? .red.opacity(0.5) : .purple.opacity(0.5), radius: 20)
         .sheet(isPresented: $showRecordingSheet) {
@@ -214,7 +221,7 @@ struct VoiceExpenseButton: View {
             // Show success toast
             await MainActor.run {
                 savedExpenseName = "\(String(format: "%.2f", expense.amount))€ - \(expense.name)"
-                withAnimation(.spring(response: 0.4)) {
+                withAnimation(.bouncy(duration: 0.4)) {
                     showSuccessToast = true
                 }
             }
@@ -222,7 +229,7 @@ struct VoiceExpenseButton: View {
             // Auto-hide toast after 3 seconds
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             await MainActor.run {
-                withAnimation(.spring(response: 0.4)) {
+                withAnimation(.bouncy(duration: 0.4)) {
                     showSuccessToast = false
                 }
             }

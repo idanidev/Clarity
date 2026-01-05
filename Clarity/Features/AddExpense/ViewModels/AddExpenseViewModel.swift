@@ -2,23 +2,27 @@
 // Add expense form logic
 
 import Foundation
-import Combine
+import Observation
 
 @MainActor
-class AddExpenseViewModel: ObservableObject {
-    // MARK: - Form Fields
-    @Published var amount: Double?
-    @Published var name: String = ""
-    @Published var category: String = ""
-    @Published var subcategory: String?
-    @Published var date: Date = Date()
-    @Published var paymentMethod: PaymentMethod = .tarjeta
-    @Published var notes: String = ""
+@Observable
+class AddExpenseViewModel {
+    // MARK: - Form Fields (No @Published needed)
+    var amount: Double?
+    var name: String = ""
+    var category: String = ""
+    var subcategory: String?
+    var date: Date = Date()
+    // Explicitly ignoring PaymentMethod if it's enum-based and not Observable-compliant, 
+    // but enum with rawValue usually works fine if it's Equatable.
+    // Assuming PaymentMethod is simple enum, it works with @Observable.
+    var paymentMethod: PaymentMethod = .tarjeta
+    var notes: String = ""
     
     // MARK: - State
-    @Published var isLoading = false
-    @Published var showError = false
-    @Published var errorMessage: String?
+    var isLoading = false
+    var showError = false
+    var errorMessage: String?
     
     // MARK: - Dependencies
     private let repository = ExpenseRepository()

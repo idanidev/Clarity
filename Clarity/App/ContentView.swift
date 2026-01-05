@@ -16,7 +16,7 @@ struct ContentView: View {
                 LoginView()
             }
         }
-        .animation(.easeInOut, value: authViewModel.isAuthenticated)
+        .animation(.bouncy(duration: 0.25), value: authViewModel.isAuthenticated)
     }
 }
 

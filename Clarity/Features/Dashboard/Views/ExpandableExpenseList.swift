@@ -41,11 +41,13 @@ struct ExpandableExpenseList: View {
                     onExpenseEdit: onExpenseEdit,
                     onExpenseDuplicate: onExpenseDuplicate
                 )
+                .id(category.id) // Critical for diff performance
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(.regularMaterial)  // Liquid Glass
+        .background(.regularMaterial)
+        .environment(\.defaultMinListRowHeight, 0) // iOS 26 optimization
     }
 }
 

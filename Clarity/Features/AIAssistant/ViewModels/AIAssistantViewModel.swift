@@ -3,18 +3,19 @@
 
 import Foundation
 import FirebaseFunctions
-import Combine
+import Observation
 
 @MainActor
-class AIAssistantViewModel: ObservableObject {
-    // MARK: - Published
-    @Published var messages: [ChatMessage] = []
-    @Published var inputText: String = ""
-    @Published var isLoading = false
+@Observable
+class AIAssistantViewModel {
+    // MARK: - Properties (No @Published)
+    var messages: [ChatMessage] = []
+    var inputText: String = ""
+    var isLoading = false
     
-    @Published var quotaRemaining: Int = 3
-    @Published var quotaTotal: Int = 3
-    @Published var isUnlimited: Bool = false
+    var quotaRemaining: Int = 3
+    var quotaTotal: Int = 3
+    var isUnlimited: Bool = false
     
     // MARK: - Suggestions
     let suggestions = [

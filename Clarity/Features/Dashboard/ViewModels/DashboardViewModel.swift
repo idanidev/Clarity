@@ -2,15 +2,16 @@
 // Dashboard state management - loads all expenses for local filtering
 
 import Foundation
-import Combine
+import Observation
 
 @MainActor
-class DashboardViewModel: ObservableObject {
-    // MARK: - Published Properties
-    @Published var expenses: [Expense] = []
-    @Published var isLoading = false
-    @Published var errorMessage: String?
-    @Published var showAddExpense = false
+@Observable
+class DashboardViewModel {
+    // MARK: - Properties (NO @Published needed with @Observable)
+    var expenses: [Expense] = []
+    var isLoading = false
+    var errorMessage: String?
+    var showAddExpense = false
     
     // MARK: - Computed Properties
     var monthlyTotal: Double {

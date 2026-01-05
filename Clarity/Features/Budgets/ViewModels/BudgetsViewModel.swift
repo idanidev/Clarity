@@ -4,17 +4,18 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
-import Combine
+import Observation
 
 @MainActor
-class BudgetsViewModel: ObservableObject {
-    @Published var budgetProgress: [BudgetProgress] = []
-    @Published var budgetLimits: [String: Double] = [:]
-    @Published var monthlySavingsGoal: Double = 0
-    @Published var currentSavings: Double = 0
-    @Published var income: Double = 0
-    @Published var showEditBudgets = false
-    @Published var isLoading = false
+@Observable
+class BudgetsViewModel {
+    var budgetProgress: [BudgetProgress] = []
+    var budgetLimits: [String: Double] = [:]
+    var monthlySavingsGoal: Double = 0
+    var currentSavings: Double = 0
+    var income: Double = 0
+    var showEditBudgets = false
+    var isLoading = false
     
     private let db = Firestore.firestore()
     private let expenseRepository = ExpenseRepository()

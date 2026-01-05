@@ -82,11 +82,23 @@ class SpeechRecognitionManager: ObservableObject {
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         
+        // Reset buffer count
+        bufferCount = 0
+        
         // Install tap with the input node's output format
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             guard let self = self else { return }
             self.recognitionRequest?.append(buffer)
             self.extractAudioLevel(from: buffer)
+            
+            // Memory Safety: Stop if we exceed buffer limit
+            self.bufferCount += 1
+            if self.bufferCount > self.maxBuffers {
+                DispatchQueue.main.async {
+                    print("⚠️ Auto-stopping recording to prevent OOM")
+                    self.stopRecording()
+                }
+            }
         }
         
         // Prepare and start the audio engine AFTER installing the tap
