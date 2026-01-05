@@ -221,25 +221,36 @@ struct AddCategorySheet: View {
                     .padding(.vertical, 8)
                 }
                 
-                Section("Subcategorías") {
-                    ForEach(subcategories, id: \.self) { sub in
-                        Text(sub)
+                Section {
+                    ForEach($subcategories, id: \.self) { $sub in
+                        TextField("Subcategoría", text: $sub)
                     }
                     .onDelete { indexSet in
                         subcategories.remove(atOffsets: indexSet)
+                    }
+                    .onMove { indices, newOffset in
+                        subcategories.move(fromOffsets: indices, toOffset: newOffset)
                     }
                     
                     HStack {
                         TextField("Nueva subcategoría", text: $newSubcategory)
                         
-                        Button("Añadir") {
+                        Button {
                             if !newSubcategory.isEmpty {
                                 subcategories.append(newSubcategory)
                                 newSubcategory = ""
+                                HapticManager.impact(.light)
                             }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.tint)
                         }
                         .disabled(newSubcategory.isEmpty)
                     }
+                } header: {
+                    Text("Subcategorías")
+                } footer: {
+                    Text("Desliza para eliminar, arrastra para reordenar")
                 }
             }
             .navigationTitle("Nueva Categoría")
@@ -311,25 +322,36 @@ struct EditCategorySheet: View {
                     .padding(.vertical, 8)
                 }
                 
-                Section("Subcategorías") {
-                    ForEach(subcategories, id: \.self) { sub in
-                        Text(sub)
+                Section {
+                    ForEach($subcategories, id: \.self) { $sub in
+                        TextField("Subcategoría", text: $sub)
                     }
                     .onDelete { indexSet in
                         subcategories.remove(atOffsets: indexSet)
+                    }
+                    .onMove { indices, newOffset in
+                        subcategories.move(fromOffsets: indices, toOffset: newOffset)
                     }
                     
                     HStack {
                         TextField("Nueva subcategoría", text: $newSubcategory)
                         
-                        Button("Añadir") {
+                        Button {
                             if !newSubcategory.isEmpty {
                                 subcategories.append(newSubcategory)
                                 newSubcategory = ""
+                                HapticManager.impact(.light)
                             }
+                        } label: {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundStyle(.tint)
                         }
                         .disabled(newSubcategory.isEmpty)
                     }
+                } header: {
+                    Text("Subcategorías")
+                } footer: {
+                    Text("Desliza para eliminar, arrastra para reordenar")
                 }
             }
             .navigationTitle("Editar Categoría")

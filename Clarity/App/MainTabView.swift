@@ -72,6 +72,10 @@ struct MainTabView: View {
             AddExpenseSheet {
                 // Refresh after adding
             }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(.regularMaterial)  // Liquid Glass
+            .presentationCornerRadius(CornerRadius.large)
         }
         .onChange(of: selectedTab) { oldValue, newValue in
             // Intercept add button tap

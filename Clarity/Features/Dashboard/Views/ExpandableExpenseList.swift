@@ -45,7 +45,7 @@ struct ExpandableExpenseList: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color.bgPrimary)
+        .background(.regularMaterial)  // Liquid Glass
     }
 }
 
@@ -70,14 +70,16 @@ struct CategorySection: View {
             }
         } header: {
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
+                withAnimation(.bouncy(duration: 0.25)) {
                     category.isExpanded.toggle()
                 }
+                HapticManager.selection()
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: Spacing.sm) {
                     Image(systemName: category.isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.gray)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
                         .frame(width: 20)
                     
                     Circle()
@@ -85,26 +87,31 @@ struct CategorySection: View {
                         .frame(width: 14, height: 14)
                     
                     Text("\(category.name) \(category.emoji)")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(.body)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
                     
                     Text("\(category.expenseCount) gasto\(category.expenseCount == 1 ? "" : "s")")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     
                     Spacer()
                     
                     Text(formatCurrency(category.totalAmount))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(.body)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                        .monospacedDigit()
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)  // Reduced for compact layout
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(category.name), \(category.expenseCount) gastos, total \(formatCurrency(category.totalAmount))")
+            .accessibilityHint(category.isExpanded ? "Toca para contraer" : "Toca para expandir")
         }
         .listRowBackground(
-            Color.bgSecondary
+            Color(.secondarySystemBackground)
                 .overlay(
                     Rectangle()
                         .fill(category.color)
@@ -138,24 +145,27 @@ struct SubcategorySection: View {
                 )
             }
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: Spacing.xs) {
                 Text(subcategory.name)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.textSecondary)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
                 
                 Text("\(subcategory.expenseCount)")
-                    .font(.system(size: 10))
-                    .foregroundColor(.gray)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
                 
                 Spacer()
                 
                 Text(formatCurrency(subcategory.totalAmount))
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.textSecondary)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
             }
         }
-        .tint(.gray)
-        .listRowBackground(Color.bgCard)
+        .tint(.secondary)
+        .listRowBackground(Color(.tertiarySystemBackground))
         .listRowSeparator(.hidden)
     }
     
@@ -164,7 +174,7 @@ struct SubcategorySection: View {
     }
 }
 
-// MARK: - Expense Row (Level 3) with Menu
+// MARK: - Expense Row (Level 3) with iOS 26 Design
 struct ExpenseRow: View {
     let expense: Expense
     let onDelete: () -> Void
@@ -172,88 +182,104 @@ struct ExpenseRow: View {
     let onDuplicate: () -> Void
     
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Spacing.xs) {  // Reduced from sm
+            // Icon
             Image(systemName: "doc.text.fill")
-                .font(.system(size: 14))
-                .foregroundColor(.gray)
+                .font(.system(size: IconSize.small))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tertiary)
                 .frame(width: 20)
             
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
+            // Content
+            VStack(alignment: .leading, spacing: 2) {  // Reduced spacing
+                HStack(spacing: Spacing.xxs) {
                     Text(expense.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     
                     if let subcategory = expense.subcategory, !subcategory.isEmpty {
                         Text("·")
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
                         Text(subcategory)
-                            .font(.system(size: 14))
-                            .foregroundColor(.gray)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
                 
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "calendar")
                         .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.tertiary)
                     Text(formattedDate)
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     
                     Text(expense.paymentMethod)
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 6)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, Spacing.xs)
                         .padding(.vertical, 2)
-                        .background(Color.gray.opacity(0.2))
-                        .cornerRadius(4)
+                        .background(.quaternary)
+                        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.small / 2))
                 }
             }
             
             Spacer()
             
-            VStack(alignment: .trailing, spacing: 3) {
+            // Amount
+            VStack(alignment: .trailing, spacing: 2) {  // Reduced spacing
                 Text(formatCurrency(expense.amount))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
+                    .font(.callout)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.primary)
+                    .monospacedDigit()
                 
                 if expense.notes != nil {
                     Image(systemName: "note.text")
                         .font(.system(size: 11))
-                        .foregroundColor(.gray)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
-        .padding(.vertical, 8)
-        .padding(.leading, 8)
-        .listRowBackground(Color.bgPrimary)
+        .padding(.vertical, 6)  // Reduced from Spacing.xs (8)
+        .padding(.leading, 4)    // Reduced from Spacing.xs (8)
+        .listRowBackground(Color(.systemBackground))
+        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))  // Compact insets
         .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
+                HapticManager.notification(.warning)
                 onDelete()
             } label: {
-                Label("Eliminar", systemImage: "trash")
+                Label("Eliminar", systemImage: "trash.fill")
             }
         }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
+                HapticManager.impact(.light)
                 onEdit()
             } label: {
                 Label("Editar", systemImage: "pencil")
             }
-            .tint(Color.clarityPrimary)
+            .tint(Color.accentColor)
             
             Button {
+                HapticManager.impact(.light)
                 onDuplicate()
             } label: {
-                Label("Duplicar", systemImage: "doc.on.doc")
+                Label("Duplicar", systemImage: "doc.on.doc.fill")
             }
             .tint(.blue)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
+        .accessibilityHint("Desliza para editar o eliminar")
     }
     
     private var formattedDate: String {

@@ -12,6 +12,7 @@ class BudgetsViewModel: ObservableObject {
     @Published var budgetLimits: [String: Double] = [:]
     @Published var monthlySavingsGoal: Double = 0
     @Published var currentSavings: Double = 0
+    @Published var income: Double = 0
     @Published var showEditBudgets = false
     @Published var isLoading = false
     
@@ -77,6 +78,12 @@ class BudgetsViewModel: ObservableObject {
                 } else {
                     print("⚠️ No goals found")
                     budgetLimits = [:]
+                }
+                
+                // Load income (root level field)
+                if let userIncome = data["income"] as? Double {
+                    income = userIncome
+                    print("✅ Loaded income: \(userIncome)")
                 }
             } else {
                 print("⚠️ User document does not exist")

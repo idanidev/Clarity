@@ -105,39 +105,48 @@ final class UserDataManager: ObservableObject {
     
     // MARK: - Category CRUD Operations
     
-    /// Add a new category to Firebase
+    /// Add a new category to Firebase (stored in user document map)
     func addCategory(_ category: Category) async throws {
         guard let userId = userId else {
             throw NSError(domain: "UserDataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
         }
         
-        let docRef = db.collection("users").document(userId).collection("categories").document()
-        var newCategory = category
-        newCategory.id = docRef.documentID
-        newCategory.createdAt = Date()
-        newCategory.updatedAt = Date()
+        let categoryData: [String: Any] = [
+            "color": category.color,
+            "subcategories": category.subcategories
+        ]
         
-        try docRef.setData(from: newCategory)
-        logger.info("✅ Category '\(newCategory.name)' added")
+        try await db.collection("users").document(userId).updateData([
+            "categories.\(category.name)": categoryData
+        ])
         
+        logger.info("✅ Category '\(category.name)' added to user document map")
         await refreshCategories()
     }
     
     /// Update an existing category in Firebase
     func updateCategory(_ category: Category) async throws {
-        guard let userId = userId, let catId = category.id else {
+        guard let userId = userId else {
             throw NSError(domain: "UserDataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid category or user"])
         }
         
-        var updatedCategory = category
-        updatedCategory.updatedAt = Date()
+        let categoryData: [String: Any] = [
+            "color": category.color,
+            "subcategories": category.subcategories
+        ]
         
-        try db.collection("users").document(userId).collection("categories")
-            .document(catId)
-            .setData(from: updatedCategory, merge: true)
+        // If name changed, delete old and add new
+        if let oldId = category.id, oldId != category.name {
+            try await db.collection("users").document(userId).updateData([
+                "categories.\(oldId)": FieldValue.delete()
+            ])
+        }
         
-        logger.info("✅ Category '\(updatedCategory.name)' updated")
+        try await db.collection("users").document(userId).updateData([
+            "categories.\(category.name)": categoryData
+        ])
         
+        logger.info("✅ Category '\(category.name)' updated in user document map")
         await refreshCategories()
     }
     
@@ -147,14 +156,11 @@ final class UserDataManager: ObservableObject {
             throw NSError(domain: "UserDataManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
         }
         
-        // TODO: Validate that no expenses use this category
+        try await db.collection("users").document(userId).updateData([
+            "categories.\(id)": FieldValue.delete()
+        ])
         
-        try await db.collection("users").document(userId).collection("categories")
-            .document(id)
-            .delete()
-        
-        logger.info("✅ Category deleted")
-        
+        logger.info("✅ Category '\(id)' deleted from user document map")
         await refreshCategories()
     }
     
@@ -195,34 +201,37 @@ final class UserDataManager: ObservableObject {
     // MARK: - Private Methods
     
     private func loadCategories(for userId: String) async throws -> [Category] {
-        let snapshot = try await db
-            .collection("users")
-            .document(userId)
-            .collection("categories")
-            .order(by: "order") // Added order by
-            .getDocuments()
+        // Read categories from the user document (map field, not collection)
+        let doc = try await db.collection("users").document(userId).getDocument()
         
-        let userCategories = snapshot.documents.compactMap { doc -> Category? in
-            try? doc.data(as: Category.self)
+        guard let data = doc.data(),
+              let categoriesMap = data["categories"] as? [String: [String: Any]] else {
+            logger.info("No categories map found in user document. Using defaults.")
+            return createDefaultCategories()
         }
         
-        // If NO categories exist, initialize defaults in Firebase
-        if userCategories.isEmpty {
-            logger.info("No user categories found. Initializing defaults in Firebase...")
-            try await initializeDefaultCategories(for: userId)
+        var loadedCategories: [Category] = []
+        var order = 0
+        
+        for (name, categoryData) in categoriesMap {
+            let color = categoryData["color"] as? String ?? "#6366F1"
+            let subcategories = categoryData["subcategories"] as? [String] ?? []
             
-            // Reload after initialization
-            let newSnapshot = try await db
-                .collection("users")
-                .document(userId)
-                .collection("categories")
-                .getDocuments()
-            
-            return newSnapshot.documents.compactMap { try? $0.data(as: Category.self) }
-                .sorted { ($0.order) < ($1.order) }
+            let category = Category(
+                id: name,
+                name: name,
+                color: color,
+                subcategories: subcategories,
+                order: order,
+                createdAt: Date(),
+                updatedAt: Date()
+            )
+            loadedCategories.append(category)
+            order += 1
         }
         
-        return userCategories.sorted { ($0.order) < ($1.order) }
+        logger.info("✅ Loaded \(loadedCategories.count) categories from user document map")
+        return loadedCategories.sorted { $0.name < $1.name }
     }
     
     /// Initializes default categories in Firebase for a new user

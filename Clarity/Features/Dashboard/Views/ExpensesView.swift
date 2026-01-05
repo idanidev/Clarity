@@ -5,68 +5,143 @@ import SwiftUI
 
 struct ExpensesView: View {
     @StateObject private var viewModel = DashboardViewModel()
-    @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfica
+    @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario
     @State private var searchText = ""
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     @State private var categoryGroups: [CategoryGroup] = []
     @State private var expenseToEdit: Expense?
     @State private var showEditSheet = false
     
+    
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Segmented Control (no interfiere con swipes)
-                Picker("Vista", selection: $selectedView) {
-                    Text("Tabla").tag(0)
-                    Text("Gráfica").tag(1)
+            mainContent
+                .background(.regularMaterial)
+                .navigationTitle("Gastos")
+                .navigationBarTitleDisplayMode(.large)
+                .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+                .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
+                .toolbar { filterToolbar }
+                .refreshable { await viewModel.refresh() }
+                .task {
+                    await viewModel.loadExpenses()
+                    buildCategoryGroups()
                 }
-                .pickerStyle(.segmented)
-                .padding(.horizontal)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+                .onChange(of: viewModel.expenses) { _, _ in buildCategoryGroups() }
+                .onChange(of: filter) { _, _ in buildCategoryGroups() }
+                .onChange(of: searchText) { _, _ in buildCategoryGroups() }
+                .sheet(isPresented: $showEditSheet) { editSheet }
+                .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
+        }
+    }
+    
+    // MARK: - Main Content
+    private var mainContent: some View {
+        VStack(spacing: 0) {
+            segmentedPicker
+            
+            TabView(selection: $selectedView) {
+                tableContent
+                    .tag(0)
                 
-                // Content based on selection
-                if selectedView == 0 {
-                    tableContent
-                } else {
-                    ChartsView()
+                VStack(spacing: 0) {
+                    filterBar
+                    DonutChartContent(viewModel: viewModel, filter: filter)
                 }
-            }
-            .background(Color.bgPrimary)
-            .navigationTitle("Gastos")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.bgSecondary, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
-            .refreshable {
-                await viewModel.refresh()
-            }
-            .task {
-                await viewModel.loadExpenses()
-                buildCategoryGroups()
-            }
-            .onChange(of: viewModel.expenses) { _, _ in
-                buildCategoryGroups()
-            }
-            .onChange(of: filter) { _, _ in
-                buildCategoryGroups()
-            }
-            .onChange(of: searchText) { _, _ in
-                buildCategoryGroups()
-            }
-            .sheet(isPresented: $showEditSheet) {
-                if let expense = expenseToEdit {
-                    EditExpenseSheet(expense: expense) {
-                        Task { await viewModel.refresh() }
-                        buildCategoryGroups()
-                    }
+                .tag(1)
+                
+                VStack(spacing: 0) {
+                    filterBar
+                    CalendarChartContent(viewModel: viewModel)
                 }
+                .tag(2)
             }
-            .sheet(isPresented: $viewModel.showAddExpense) {
-                AddExpenseSheet {
-                    Task { await viewModel.refresh() }
-                }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .onChange(of: selectedView) { _, _ in
+                HapticManager.selection()
             }
         }
+    }
+    
+    // MARK: - Segmented Picker
+    private var segmentedPicker: some View {
+        Picker("Vista", selection: $selectedView) {
+            Text("Tabla").tag(0)
+            Text("Gráfico").tag(1)
+            Text("Calendario").tag(2)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal)
+        .padding(.top, Spacing.sm)
+        .padding(.bottom, Spacing.xs)
+    }
+    
+    // MARK: - Filter Bar (for charts)
+    private var filterBar: some View {
+        HStack {
+            Spacer()
+            
+            Menu {
+                Section("Período") {
+                    ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
+                        Button {
+                            filter.dateRange = range
+                            HapticManager.selection()
+                        } label: {
+                            HStack {
+                                Text(range.rawValue)
+                                if filter.dateRange == range {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(filter.dateRange.rawValue)
+                        .font(.subheadline)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, Spacing.sm)
+                .padding(.vertical, Spacing.xs)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, Spacing.xs)
+    }
+    
+    // MARK: - Filter Toolbar (empty for now)
+    @ToolbarContentBuilder
+    private var filterToolbar: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            EmptyView()
+        }
+    }
+    
+    // MARK: - Sheets
+    @ViewBuilder
+    private var editSheet: some View {
+        if let expense = expenseToEdit {
+            EditExpenseSheet(expense: expense) {
+                Task { await viewModel.refresh() }
+                buildCategoryGroups()
+            }
+            .presentationDetents([.large])
+            .presentationBackground(.regularMaterial)
+        }
+    }
+    
+    private var addSheet: some View {
+        AddExpenseSheet {
+            Task { await viewModel.refresh() }
+        }
+        .presentationDetents([.large])
+        .presentationBackground(.regularMaterial)
     }
     
     private var tableContent: some View {
@@ -84,12 +159,6 @@ struct ExpensesView: View {
                         title: "Gastos",
                         value: "\(filteredExpenses.count)",
                         color: .blue
-                    )
-                    
-                    StatCard(
-                        title: "Ahorro",
-                        value: Formatters.currency(calculateSavings()),
-                        color: calculateSavings() >= 0 ? .green : .red
                     )
 
                 }
@@ -143,11 +212,7 @@ struct ExpensesView: View {
         filteredExpenses.reduce(0) { $0 + $1.amount }
     }
     
-    private func calculateSavings() -> Double {
-        // Get income from user data (would need to add this to UserDataManager)
-        let monthlyIncome = 2700.0 // TODO: Get from Firebase
-        return monthlyIncome - totalExpenses
-    }
+
 
     
     private var filteredExpenses: [Expense] {
@@ -203,7 +268,7 @@ struct ExpensesView: View {
                 groups[categoryName] = CategoryGroup(
                     name: categoryName,
                     emoji: emoji,
-                    color: colorForCategory(categoryName),
+                    color: colorForCategory(expense.category),  // Use full category name with emoji
                     totalAmount: 0,
                     expenseCount: 0,
                     subcategories: []
@@ -270,11 +335,20 @@ struct ExpensesView: View {
         return components.count > 1 ? components.last ?? "" : ""
     }
     
-    private func colorForCategory(_ name: String) -> Color {
+    private func colorForCategory(_ categoryWithEmoji: String) -> Color {
+        // Categories in Firebase use full names like "Alimentacion🫄" 
+        // So we need to match the full original expense.category
         let userDataManager = UserDataManager.shared
-        if let category = userDataManager.categories.first(where: { $0.name == name }) {
+        
+        // First try exact match with the full category name from expense
+        if let category = userDataManager.categories.first(where: { 
+            $0.name.localizedCaseInsensitiveContains(categoryWithEmoji) ||
+            categoryWithEmoji.localizedCaseInsensitiveContains($0.name.components(separatedBy: " ").first ?? $0.name)
+        }) {
             return Color(hex: category.color) ?? .gray
         }
-        return .gray
+        
+        // Fallback to default color
+        return UserDataManager.shared.color(for: categoryWithEmoji)
     }
 }
