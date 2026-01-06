@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct BudgetsView: View {
-    @StateObject private var viewModel = BudgetsViewModel()
+    @State private var viewModel = BudgetsViewModel()
     
     var body: some View {
         List {
@@ -157,7 +157,7 @@ struct BudgetProgressRow: View {
 
 // MARK: - Edit Budgets Sheet
 struct EditBudgetsSheet: View {
-    @ObservedObject var viewModel: BudgetsViewModel
+    var viewModel: BudgetsViewModel
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {

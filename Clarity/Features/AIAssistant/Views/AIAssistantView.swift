@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct AIAssistantView: View {
-    @StateObject private var viewModel = AIAssistantViewModel()
+    @State private var viewModel = AIAssistantViewModel()
     
     var body: some View {
         NavigationStack {

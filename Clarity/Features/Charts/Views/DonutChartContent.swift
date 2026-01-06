@@ -5,7 +5,7 @@ import SwiftUI
 import Charts
 
 struct DonutChartContent: View {
-    @ObservedObject var viewModel: DashboardViewModel
+    var viewModel: DashboardViewModel
     var filter: ExpenseFilter
     
     private let defaultColors: [Color] = [
@@ -90,7 +90,7 @@ struct DonutChartContent: View {
 
 // MARK: - Calendar Chart Content
 struct CalendarChartContent: View {
-    @ObservedObject var viewModel: DashboardViewModel
+    var viewModel: DashboardViewModel
     
     var body: some View {
         if viewModel.isLoading {

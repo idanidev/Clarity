@@ -5,7 +5,7 @@ import SwiftUI
 import Charts
 
 struct ChartsView: View {
-    @StateObject private var viewModel = DashboardViewModel()
+    @State private var viewModel = DashboardViewModel()
     @State private var selectedTab = 0
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     

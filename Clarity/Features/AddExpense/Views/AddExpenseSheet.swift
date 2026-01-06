@@ -5,7 +5,7 @@ import SwiftUI
 
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var viewModel = AddExpenseViewModel()
+    @State private var viewModel = AddExpenseViewModel()
     let onSave: () -> Void
     
     var body: some View {

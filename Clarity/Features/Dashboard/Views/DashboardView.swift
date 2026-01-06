@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct DashboardView: View {
-    @StateObject private var viewModel = DashboardViewModel()
+    @State private var viewModel = DashboardViewModel()
     @State private var searchText = ""
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     @State private var categoryGroups: [CategoryGroup] = []
@@ -196,7 +196,7 @@ struct DashboardView: View {
 // MARK: - Subviews
 
 struct MainContent: View {
-    @ObservedObject var viewModel: DashboardViewModel
+    var viewModel: DashboardViewModel
     @Binding var searchText: String
     @Binding var filter: ExpenseFilter
     @Binding var categoryGroups: [CategoryGroup]
