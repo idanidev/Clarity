@@ -7,7 +7,7 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var showAddExpense = false
     @ObservedObject private var userDataManager = UserDataManager.shared
-    @StateObject private var dashboardViewModel = DashboardViewModel()
+    @State private var dashboardViewModel = DashboardViewModel()
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -87,8 +87,8 @@ struct MainTabView: View {
         .task {
             await userDataManager.loadUserData()
         }
-        }
     }
+
 }
 
 

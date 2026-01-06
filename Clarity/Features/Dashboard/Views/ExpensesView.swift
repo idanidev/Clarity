@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct ExpensesView: View {
-    @StateObject private var viewModel = DashboardViewModel()
+    @State private var viewModel = DashboardViewModel()
     @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario
     @State private var searchText = ""
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
@@ -267,13 +267,13 @@ struct ExpensesView: View {
             expenses = expenses.filter { filter.selectedPaymentMethods.contains($0.paymentMethod) }
         }
         
-        return expenses
+        self.cachedFilteredExpenses = expenses
     }
     
     private func buildCategoryGroups() {
         var groups: [String: CategoryGroup] = [:]
         
-        for expense in filteredExpenses {
+        for expense in cachedFilteredExpenses {
             let categoryName = extractCategoryName(from: expense.category)
             let emoji = extractEmoji(from: expense.category)
             

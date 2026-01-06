@@ -50,7 +50,7 @@ class ExpenseRepository: ObservableObject {
             try? doc.data(as: Expense.self)
         }
     }
-    }
+    
     
     func fetchExpenses(startDate: String, endDate: String) async throws -> [Expense] {
         guard let collection = expensesCollection else {
