@@ -161,7 +161,7 @@ struct ExpensesView: View {
                     
                     StatCard(
                         title: "Gastos",
-                        value: "\(filteredExpenses.count)",
+                        value: "\(cachedFilteredExpenses.count)",
                         color: .blue
                     )
                     
@@ -195,7 +195,7 @@ struct ExpensesView: View {
             ExpenseListContent(
                 isLoading: viewModel.isLoading,
                 expensesEmpty: viewModel.expenses.isEmpty,
-                filteredEmpty: filteredExpenses.isEmpty,
+                filteredEmpty: cachedFilteredExpenses.isEmpty,
                 activeFilters: filter.hasActiveFilters,
                 groupsEmpty: categoryGroups.isEmpty,
                 categoryGroups: $categoryGroups,
