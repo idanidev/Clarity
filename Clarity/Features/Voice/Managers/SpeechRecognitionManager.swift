@@ -20,6 +20,8 @@ class SpeechRecognitionManager: ObservableObject {
     
     private var silenceTimer: Timer?
     private var settings: VoiceSettings
+    private var bufferCount: Int = 0
+    private let maxBuffers: Int = 1000  // Prevent OOM after ~10 seconds
     
     init(settings: VoiceSettings = .load()) {
         self.settings = settings

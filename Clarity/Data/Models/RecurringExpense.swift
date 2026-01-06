@@ -11,14 +11,90 @@ struct RecurringExpense: Codable, Identifiable {
     let category: String
     let subcategory: String?
     let paymentMethod: String
-    let frequency: RecurringFrequency
+    var frequency: RecurringFrequency // Now has default in decoder
     let dayOfMonth: Int // 1-31
     var active: Bool
+    var icon: String?
     let startDate: String?
-    let endDate: String? // null = sin fin
-    let lastCreated: String? // Última vez que se creó gasto
-    let createdAt: Date?
-    let updatedAt: Date?
+    let endDate: String?
+    let lastCreated: String?
+    var createdAt: String?
+    var updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case amount, name, category, subcategory, paymentMethod
+        case frequency, dayOfMonth, active, icon
+        case startDate, endDate, lastCreated, createdAt, updatedAt
+        // Note: id is NOT included - @DocumentID handles it automatically
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // id is handled by @DocumentID - don't decode manually
+        amount = try container.decode(Double.self, forKey: .amount)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(String.self, forKey: .category)
+        subcategory = try container.decodeIfPresent(String.self, forKey: .subcategory)
+        paymentMethod = try container.decode(String.self, forKey: .paymentMethod)
+        dayOfMonth = try container.decode(Int.self, forKey: .dayOfMonth)
+        active = try container.decode(Bool.self, forKey: .active)
+        icon = try container.decodeIfPresent(String.self, forKey: .icon)
+        startDate = try container.decodeIfPresent(String.self, forKey: .startDate)
+        endDate = try container.decodeIfPresent(String.self, forKey: .endDate)
+        lastCreated = try container.decodeIfPresent(String.self, forKey: .lastCreated)
+        
+        // frequency: optional with default, handle "annual" alias
+        if let freqString = try container.decodeIfPresent(String.self, forKey: .frequency) {
+            if freqString == "annual" {
+                frequency = .yearly
+            } else if let freq = RecurringFrequency(rawValue: freqString) {
+                frequency = freq
+            } else {
+                frequency = .monthly // Unknown value fallback
+            }
+        } else {
+            frequency = .monthly // Missing field fallback
+        }
+        
+        // createdAt/updatedAt: handle both String and Timestamp
+        createdAt = Self.decodeFlexibleDate(container: container, key: .createdAt)
+        updatedAt = Self.decodeFlexibleDate(container: container, key: .updatedAt)
+    }
+    
+    private static func decodeFlexibleDate(container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        // Try String first
+        if let stringValue = try? container.decodeIfPresent(String.self, forKey: key) {
+            return stringValue
+        }
+        // Try Timestamp
+        if let timestamp = try? container.decodeIfPresent(Timestamp.self, forKey: key) {
+            return Formatters.isoString(from: timestamp.dateValue())
+        }
+        return nil
+    }
+    
+    // Standard memberwise init for creating new expenses
+    init(id: String?, amount: Double, name: String, category: String, subcategory: String?,
+         paymentMethod: String, frequency: RecurringFrequency, dayOfMonth: Int, active: Bool,
+         icon: String?, startDate: String?, endDate: String?, lastCreated: String?,
+         createdAt: String?, updatedAt: String?) {
+        self.id = id
+        self.amount = amount
+        self.name = name
+        self.category = category
+        self.subcategory = subcategory
+        self.paymentMethod = paymentMethod
+        self.frequency = frequency
+        self.dayOfMonth = dayOfMonth
+        self.active = active
+        self.icon = icon
+        self.startDate = startDate
+        self.endDate = endDate
+        self.lastCreated = lastCreated
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
 }
 
 enum RecurringFrequency: String, Codable, CaseIterable {
@@ -46,6 +122,7 @@ extension RecurringExpense {
         frequency: .monthly,
         dayOfMonth: 15,
         active: true,
+        icon: "📺",
         startDate: nil,
         endDate: nil,
         lastCreated: nil,
@@ -53,3 +130,4 @@ extension RecurringExpense {
         updatedAt: nil
     )
 }
+

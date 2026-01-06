@@ -150,31 +150,28 @@ struct ExpensesView: View {
     
     private var tableContent: some View {
         VStack(spacing: 0) {
-            // Stat Cards (compact and beautiful)
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    StatCard(
-                        title: "Total",
-                        value: Formatters.currency(totalExpenses),
-                        color: Color.clarityPrimary
-                    )
-                    
-                    StatCard(
-                        title: "Gastos",
-                        value: "\(cachedFilteredExpenses.count)",
-                        color: .blue
-                    )
-                    
-                    StatCard(
-                        title: "Ahorro",
-                        value: Formatters.currency(calculateSavings()),
-                        color: calculateSavings() >= 0 ? .green : .red
-                    )
-
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 12)
+            // Stat Cards (3 cards, responsive - fill width)
+            HStack(spacing: 8) {
+                StatCard(
+                    title: "Total",
+                    value: Formatters.currency(totalExpenses),
+                    color: Color.clarityPrimary
+                )
+                
+                StatCard(
+                    title: "Gastos",
+                    value: "\(cachedFilteredExpenses.count)",
+                    color: .blue
+                )
+                
+                StatCard(
+                    title: "Ahorro",
+                    value: Formatters.currency(calculateSavings()),
+                    color: calculateSavings() >= 0 ? .green : .red
+                )
             }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
             
             // Search Bar
             SearchBarView(

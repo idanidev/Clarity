@@ -16,6 +16,8 @@ struct AddRecurringExpenseSheet: View {
     @State private var paymentMethod = "Tarjeta"
     @State private var frequency: RecurringFrequency = .monthly
     @State private var dayOfMonth: Int = 1
+    @State private var selectedIcon = "💰"
+    @State private var showEmojiPicker = false
     @State private var isSaving = false
     
     // Cached data from singleton
@@ -25,16 +27,29 @@ struct AddRecurringExpenseSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Icon section
+                Section {
+                    HStack {
+                        Text("Icono")
+                        Spacer()
+                        Button {
+                            showEmojiPicker = true
+                        } label: {
+                            Text(selectedIcon)
+                                .font(.system(size: 40))
+                                .padding(8)
+                                .background(Color.clarityPrimary.opacity(0.15))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                        }
+                    }
+                }
+                
                 Section {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
                         .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                        .listRowBackground(Color.bgSecondary)
                     
                     TextField("Nombre (ej. Netflix)", text: $name)
-                        .foregroundColor(.white)
-                        .listRowBackground(Color.bgSecondary)
                 }
                 
                 Section {
@@ -44,21 +59,17 @@ struct AddRecurringExpenseSheet: View {
                     )) {
                         HStack {
                             Text("Categoría")
-                                .foregroundColor(.white)
                             Spacer()
                             Text(formatCategorySelection())
-                                .foregroundColor(.gray)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .listRowBackground(Color.bgSecondary)
                     
                     Picker("Método de Pago", selection: $paymentMethod) {
                         ForEach(paymentMethods, id: \.self) { method in
                             Text(method).tag(method)
                         }
                     }
-                    .foregroundColor(.white)
-                    .listRowBackground(Color.bgSecondary)
                 }
                 
                 Section {
@@ -67,18 +78,14 @@ struct AddRecurringExpenseSheet: View {
                             Text(freq.displayName).tag(freq)
                         }
                     }
-                    .listRowBackground(Color.bgSecondary)
                     
                     Picker("Día del cargo", selection: $dayOfMonth) {
                         ForEach(1...31, id: \.self) { day in
                             Text("Día \(day)").tag(day)
                         }
                     }
-                    .listRowBackground(Color.bgSecondary)
                 }
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.bgPrimary)
             .navigationTitle("Nuevo Recurrente")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -91,7 +98,11 @@ struct AddRecurringExpenseSheet: View {
                         saveExpense()
                     }
                     .disabled(amountString.isEmpty || name.isEmpty || selectedCategory.isEmpty || isSaving)
+                    .fontWeight(.semibold)
                 }
+            }
+            .sheet(isPresented: $showEmojiPicker) {
+                EmojiPickerView(selectedEmoji: $selectedIcon)
             }
         }
     }
@@ -111,11 +122,12 @@ struct AddRecurringExpenseSheet: View {
             frequency: frequency,
             dayOfMonth: dayOfMonth,
             active: true,
+            icon: selectedIcon,
             startDate: Formatters.isoString(from: Date()),
             endDate: nil,
             lastCreated: nil,
-            createdAt: Date(),
-            updatedAt: Date()
+            createdAt: Formatters.isoString(from: Date()),
+            updatedAt: Formatters.isoString(from: Date())
         )
         
         Task {
@@ -139,3 +151,4 @@ struct AddRecurringExpenseSheet: View {
         return selectedCategory
     }
 }
+

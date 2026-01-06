@@ -79,7 +79,7 @@ final class UserDataManager: ObservableObject {
             
             if let data = doc.data(),
                let version = data["categoriesVersion"] as? String,
-               let updated = (data["categoriesUpdatedAt"] as? Timestamp)?.dateValue() {
+               let _ = (data["categoriesUpdatedAt"] as? Timestamp)?.dateValue() {
                 
                 // If version matches and updated recently (< 1h), skip reload
                 if version == categoriesVersion,

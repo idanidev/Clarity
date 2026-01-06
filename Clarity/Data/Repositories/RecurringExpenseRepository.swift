@@ -21,7 +21,19 @@ class RecurringExpenseRepository: ObservableObject {
             throw RepositoryError.notAuthenticated
         }
         let snapshot = try await collection.order(by: "dayOfMonth").getDocuments()
-        return snapshot.documents.compactMap { try? $0.data(as: RecurringExpense.self) }
+        
+        // Debug: log decoding results
+        var results: [RecurringExpense] = []
+        for doc in snapshot.documents {
+            do {
+                let expense = try doc.data(as: RecurringExpense.self)
+                results.append(expense)
+            } catch {
+                print("⚠️ Failed to decode document \(doc.documentID): \(error)")
+            }
+        }
+        print("📋 Loaded \(results.count) recurring expenses (\(results.filter { $0.active }.count) active, \(results.filter { !$0.active }.count) paused)")
+        return results
     }
     
     func fetchActive() async throws -> [RecurringExpense] {
@@ -44,7 +56,7 @@ class RecurringExpenseRepository: ObservableObject {
         guard let collection = collection, let id = expense.id else {
             throw RepositoryError.notAuthenticated
         }
-        try collection.document(id).setData(from: expense)
+        try collection.document(id).setData(from: expense, merge: true)
     }
     
     func toggleActive(id: String, active: Bool) async throws {

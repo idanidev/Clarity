@@ -210,19 +210,26 @@ struct StatCard: View {
     let color: Color
     
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 4) {
             Text(value)
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             
             Text(title)
-                .font(.system(size: 12))
+                .font(.caption)
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(color.opacity(0.1))
-        .cornerRadius(12)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(color.opacity(0.3), lineWidth: 1)
+        )
     }
 }
 

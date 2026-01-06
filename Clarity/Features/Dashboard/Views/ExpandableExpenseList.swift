@@ -64,6 +64,7 @@ struct CategorySection: View {
                 ForEach($category.subcategories) { $subcategory in
                     SubcategorySection(
                         subcategory: $subcategory,
+                        categoryColor: category.color,
                         onExpenseDelete: onExpenseDelete,
                         onExpenseEdit: onExpenseEdit,
                         onExpenseDuplicate: onExpenseDuplicate
@@ -77,35 +78,34 @@ struct CategorySection: View {
                 }
                 HapticManager.selection()
             } label: {
-                HStack(spacing: Spacing.sm) {
+                HStack(spacing: 8) {
                     Image(systemName: category.isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
-                        .frame(width: 20)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 16)
                     
                     Circle()
                         .fill(category.color)
-                        .frame(width: 14, height: 14)
+                        .frame(width: 10, height: 10)
                     
-                    Text("\(category.name) \(category.emoji)")
-                        .font(.body)
-                        .fontWeight(.semibold)
+                    Text("\(category.name)\(category.emoji)")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                         .foregroundStyle(.primary)
                     
                     Text("\(category.expenseCount) gasto\(category.expenseCount == 1 ? "" : "s")")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
                     
                     Spacer()
                     
                     Text(formatCurrency(category.totalAmount))
-                        .font(.body)
-                        .fontWeight(.bold)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
                         .foregroundStyle(.primary)
                         .monospacedDigit()
                 }
-                .padding(.vertical, 2)  // More compact
+                .padding(.vertical, 0)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -117,10 +117,11 @@ struct CategorySection: View {
                 .overlay(
                     Rectangle()
                         .fill(category.color)
-                        .frame(width: 5),  // Increased from 3 for better visibility
+                        .frame(width: 3),
                     alignment: .leading
                 )
         )
+        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
         .listRowSeparator(.hidden)
     }
     
@@ -132,6 +133,7 @@ struct CategorySection: View {
 // MARK: - Subcategory Section (Level 2)
 struct SubcategorySection: View {
     @Binding var subcategory: SubcategoryGroup
+    let categoryColor: Color
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
     let onExpenseDuplicate: (Expense) -> Void
@@ -141,33 +143,43 @@ struct SubcategorySection: View {
             ForEach(subcategory.expenses) { expense in
                 ExpenseRow(
                     expense: expense,
+                    categoryColor: categoryColor,
                     onDelete: { onExpenseDelete(expense) },
                     onEdit: { onExpenseEdit(expense) },
                     onDuplicate: { onExpenseDuplicate(expense) }
                 )
             }
         } label: {
-            HStack(spacing: Spacing.xs) {
+            HStack(spacing: 6) {
                 Text(subcategory.name)
-                    .font(.caption)
+                    .font(.subheadline)
                     .fontWeight(.medium)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.primary)
                 
                 Text("\(subcategory.expenseCount)")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 
                 Spacer()
                 
                 Text(formatCurrency(subcategory.totalAmount))
-                    .font(.caption)
+                    .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
         }
         .tint(.secondary)
-        .listRowBackground(Color(.tertiarySystemBackground))
+        .listRowBackground(
+            Color(.tertiarySystemBackground)
+                .overlay(
+                    Rectangle()
+                        .fill(categoryColor.opacity(0.6))
+                        .frame(width: 3),
+                    alignment: .leading
+                )
+        )
+        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
         .listRowSeparator(.hidden)
     }
     
@@ -179,6 +191,7 @@ struct SubcategorySection: View {
 // MARK: - Expense Row (Level 3) with iOS 26 Design
 struct ExpenseRow: View {
     let expense: Expense
+    var categoryColor: Color = .gray
     let onDelete: () -> Void
     let onEdit: () -> Void
     let onDuplicate: () -> Void
@@ -254,8 +267,16 @@ struct ExpenseRow: View {
         .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
         .accessibilityHint("Desliza para editar o eliminar")
         .contentShape(Rectangle())
-        .listRowBackground(Color(.systemBackground))
-        .listRowInsets(EdgeInsets(top: 2, leading: 8, bottom: 2, trailing: 8))  // Compact insets
+        .listRowBackground(
+            Color(.systemBackground)
+                .overlay(
+                    Rectangle()
+                        .fill(categoryColor.opacity(0.4))
+                        .frame(width: 3),
+                    alignment: .leading
+                )
+        )
+        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 12))
         .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {

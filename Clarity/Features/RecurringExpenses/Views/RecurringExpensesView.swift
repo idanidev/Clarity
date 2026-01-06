@@ -1,5 +1,5 @@
 // RecurringExpensesView.swift
-// List of recurring expenses with toggle and edit capabilities
+// List of recurring expenses with active/paused sections
 
 import SwiftUI
 
@@ -9,38 +9,23 @@ struct RecurringExpensesView: View {
     @State private var isLoading = true
     @State private var showAddSheet = false
     
+    private var activeExpenses: [RecurringExpense] {
+        expenses.filter { $0.active }.sorted { $0.dayOfMonth < $1.dayOfMonth }
+    }
+    
+    private var pausedExpenses: [RecurringExpense] {
+        expenses.filter { !$0.active }.sorted { $0.dayOfMonth < $1.dayOfMonth }
+    }
+    
     var body: some View {
-        ZStack {
-            Color.bgPrimary.ignoresSafeArea().overlay(.regularMaterial)
-            
+        Group {
             if isLoading {
-                ProgressView().tint(Color.clarityPrimary)
+                ProgressView()
+                    .tint(Color.clarityPrimary)
             } else if expenses.isEmpty {
-                ContentUnavailableView {
-                    Label("Sin gastos recurrentes", systemImage: "repeat.circle")
-                } description: {
-                    Text("Añade tus suscripciones o pagos fijos")
-                } actions: {
-                    Button("Añadir gasto recurrente") {
-                        showAddSheet = true
-                    }
-                }
+                emptyState
             } else {
-                List {
-                    ForEach(expenses) { expense in
-                        RecurringExpenseRow(
-                            expense: expense,
-                            onToggle: {
-                                toggleExpense(expense)
-                            },
-                            onDelete: {
-                                deleteExpense(expense)
-                            }
-                        )
-                    }
-                }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
+                list
             }
         }
         .navigationTitle("Gastos Recurrentes")
@@ -51,22 +36,104 @@ struct RecurringExpensesView: View {
                     showAddSheet = true
                 } label: {
                     Image(systemName: "plus")
-                        .foregroundStyle(Color.clarityPrimary)
                 }
             }
-        }
-        .onAppear {
-            loadExpenses()
         }
         .sheet(isPresented: $showAddSheet) {
             AddRecurringExpenseSheet {
                 loadExpenses()
             }
         }
+        .task {
+            loadExpenses()
+        }
+        .refreshable {
+            loadExpenses()
+        }
+    }
+    
+    private var emptyState: some View {
+        ContentUnavailableView {
+            Label("Sin Gastos Recurrentes", systemImage: "repeat.circle")
+        } description: {
+            Text("Añade suscripciones o pagos que se repiten cada mes")
+        } actions: {
+            Button("Añadir Gasto Recurrente") {
+                showAddSheet = true
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+    
+    private var list: some View {
+        List {
+            // Active
+            if !activeExpenses.isEmpty {
+                Section {
+                    ForEach(activeExpenses) { expense in
+                        NavigationLink {
+                            RecurringExpenseDetailView(expense: expense) {
+                                loadExpenses()
+                            }
+                        } label: {
+                            RecurringExpenseRow(expense: expense) {
+                                toggleExpense(expense)
+                            }
+                        }
+                    }
+                    .onDelete { indexSet in
+                        deleteExpenses(at: indexSet, from: activeExpenses)
+                    }
+                } header: {
+                    Label("Activos", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                } footer: {
+                    Text("Se cargarán automáticamente el día indicado")
+                        .font(.caption2)
+                }
+            }
+            
+            // Paused
+            if !pausedExpenses.isEmpty {
+                Section {
+                    ForEach(pausedExpenses) { expense in
+                        NavigationLink {
+                            RecurringExpenseDetailView(expense: expense) {
+                                loadExpenses()
+                            }
+                        } label: {
+                            RecurringExpenseRow(expense: expense) {
+                                toggleExpense(expense)
+                            }
+                        }
+                    }
+                    .onDelete { indexSet in
+                        deleteExpenses(at: indexSet, from: pausedExpenses)
+                    }
+                } header: {
+                    Label("Pausados", systemImage: "pause.circle.fill")
+                        .foregroundStyle(.orange)
+                } footer: {
+                    Text("No se crearán cargos automáticamente")
+                        .font(.caption2)
+                }
+            }
+            
+            // Add button
+            Section {
+                Button {
+                    showAddSheet = true
+                } label: {
+                    Label("Añadir Gasto Recurrente", systemImage: "plus.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(Color.clarityPrimary)
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
     }
     
     private func loadExpenses() {
-        isLoading = true
         Task {
             do {
                 expenses = try await repository.fetchAll()
@@ -82,34 +149,40 @@ struct RecurringExpensesView: View {
         
         // Optimistic update
         if let index = expenses.firstIndex(where: { $0.id == id }) {
-            expenses[index].active.toggle()
+            withAnimation(.bouncy) {
+                expenses[index].active.toggle()
+            }
         }
         
         Task {
             do {
                 try await repository.toggleActive(id: id, active: !expense.active)
-                HapticManager.selection()
+                HapticManager.impact(.light)
             } catch {
                 // Revert on error
                 if let index = expenses.firstIndex(where: { $0.id == id }) {
                     expenses[index].active.toggle()
                 }
+                HapticManager.notification(.error)
             }
         }
     }
     
-    private func deleteExpense(_ expense: RecurringExpense) {
-        guard let id = expense.id else { return }
-        
-        // Optimistic remove
-        expenses.removeAll { $0.id == id }
-        
-        Task {
-            do {
-                try await repository.delete(id: id)
-                HapticManager.notification(.success)
-            } catch {
-                loadExpenses() // Reload to restore if failed
+    private func deleteExpenses(at offsets: IndexSet, from list: [RecurringExpense]) {
+        for index in offsets {
+            let expense = list[index]
+            guard let id = expense.id else { continue }
+            
+            // Optimistic remove
+            expenses.removeAll { $0.id == id }
+            
+            Task {
+                do {
+                    try await repository.delete(id: id)
+                    HapticManager.notification(.success)
+                } catch {
+                    loadExpenses() // Reload to restore
+                }
             }
         }
     }
@@ -120,70 +193,93 @@ struct RecurringExpensesView: View {
 struct RecurringExpenseRow: View {
     let expense: RecurringExpense
     let onToggle: () -> Void
-    let onDelete: () -> Void
+    
+    private var categoryColor: Color {
+        UserDataManager.shared.color(for: expense.category)
+    }
+    
+    private var emoji: String {
+        // Use saved icon, fallback to extracting from category or default
+        if let icon = expense.icon, !icon.isEmpty {
+            return icon
+        }
+        let components = expense.category.components(separatedBy: " ")
+        return components.count > 1 ? components.last ?? "💰" : "💰"
+    }
     
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            // Icon Background
+        HStack(spacing: 12) {
+            // Icon
             ZStack {
                 Circle()
-                    .fill(Color(hex: "#2D2D4A")!)
-                    .frame(width: 44, height: 44)
+                    .fill(categoryColor.gradient)
+                    .frame(width: 50, height: 50)
                 
-                Text(extractEmoji(from: expense.category))
-                    .font(.system(size: 20))
+                Text(emoji)
+                    .font(.title3)
             }
+            .opacity(expense.active ? 1.0 : 0.5)
             
+            // Info
             VStack(alignment: .leading, spacing: 4) {
                 Text(expense.name)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(expense.active ? .white : .gray)
+                    .font(.headline)
+                    .foregroundStyle(expense.active ? .primary : .secondary)
                 
                 HStack(spacing: 6) {
-                    Text(expense.frequency.displayName)
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.bgSecondary)
-                        .cornerRadius(4)
+                    // Frequency badge
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 10))
+                        Text(expense.frequency.displayName)
+                            .font(.caption2)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.secondary.opacity(0.15))
+                    .clipShape(Capsule())
                     
-                    Text("Día \(expense.dayOfMonth)")
-                        .font(.system(size: 12))
-                        .foregroundColor(.gray)
+                    Text("•")
+                        .font(.caption2)
+                    
+                    // Day badge
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 10))
+                        Text("Día \(expense.dayOfMonth)")
+                            .font(.caption2)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.secondary.opacity(0.15))
+                    .clipShape(Capsule())
                 }
+                .foregroundStyle(.secondary)
             }
             
             Spacer()
             
-            VStack(alignment: .trailing, spacing: 4) {
+            // Amount & Toggle
+            VStack(alignment: .trailing, spacing: 8) {
                 Text(Formatters.currency(expense.amount))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(expense.active ? .white : .gray)
+                    .font(.headline.monospacedDigit())
+                    .foregroundStyle(expense.active ? .primary : .secondary)
                 
                 Toggle("", isOn: Binding(
                     get: { expense.active },
                     set: { _ in onToggle() }
                 ))
                 .labelsHidden()
-                .scaleEffect(0.8)
-                .frame(width: 50, height: 30)
+                .tint(.green)
             }
         }
-        .padding(.vertical, 8)
-        .listRowBackground(Color.bgPrimary)
-        .listRowSeparator(.hidden)
-        .swipeActions(edge: .trailing) {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("Eliminar", systemImage: "trash")
-            }
-        }
+        .padding(.vertical, 4)
+        .contentShape(Rectangle())
     }
-    
-    private func extractEmoji(from category: String) -> String {
-        let components = category.components(separatedBy: " ")
-        return components.count > 1 ? components.last ?? "📝" : "📝"
+}
+
+#Preview {
+    NavigationStack {
+        RecurringExpensesView()
     }
 }
