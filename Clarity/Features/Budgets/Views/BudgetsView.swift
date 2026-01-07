@@ -261,9 +261,10 @@ struct EditBudgetsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(DefaultCategory.allCases, id: \.self) { category in
+                // Income Section
+                Section {
                     HStack {
-                        Text(category.rawValue)
+                        Label("Salario Mensual", systemImage: "dollarsign.circle.fill")
                             .font(.clarityBody)
                         
                         Spacer()
@@ -271,16 +272,47 @@ struct EditBudgetsSheet: View {
                         TextField(
                             "€0",
                             value: Binding(
-                                get: { viewModel.budgetLimits[category.rawValue] ?? 0 },
-                                set: { viewModel.budgetLimits[category.rawValue] = $0 }
+                                get: { viewModel.income },
+                                set: { viewModel.income = $0 }
                             ),
-                            format: .number
+                            format: .currency(code: "EUR")
                         )
                         .keyboardType(.decimalPad)
                         .textFieldStyle(.roundedBorder)
-                        .frame(width: 100)
+                        .frame(width: 120)
                         .multilineTextAlignment(.trailing)
                     }
+                } header: {
+                    Text("Ingresos")
+                } footer: {
+                    Text("Tu salario mensual se usa para calcular el ahorro disponible")
+                }
+                
+                // Category Budgets Section
+                Section {
+                    ForEach(DefaultCategory.allCases, id: \.self) { category in
+                        HStack {
+                            Text(category.rawValue)
+                                .font(.clarityBody)
+                            
+                            Spacer()
+                            
+                            TextField(
+                                "€0",
+                                value: Binding(
+                                    get: { viewModel.budgetLimits[category.rawValue] ?? 0 },
+                                    set: { viewModel.budgetLimits[category.rawValue] = $0 }
+                                ),
+                                format: .number
+                            )
+                            .keyboardType(.decimalPad)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 100)
+                            .multilineTextAlignment(.trailing)
+                        }
+                    }
+                } header: {
+                    Text("Presupuesto por Categoría")
                 }
             }
             .navigationTitle("Editar Presupuestos")

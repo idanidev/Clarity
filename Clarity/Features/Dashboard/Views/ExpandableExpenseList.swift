@@ -67,6 +67,10 @@ struct CategorySection: View {
                         onExpenseEdit: onExpenseEdit,
                         onExpenseDuplicate: onExpenseDuplicate
                     )
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .top).combined(with: .opacity),
+                        removal: .opacity
+                    ))
                 }
             }
         } header: {
@@ -77,10 +81,11 @@ struct CategorySection: View {
                 HapticManager.selection()
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: category.isExpanded ? "chevron.down" : "chevron.right")
+                    Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.tertiary)
                         .frame(width: 16)
+                        .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
                     
                     Circle()
                         .fill(category.color)
@@ -110,7 +115,7 @@ struct CategorySection: View {
             .accessibilityLabel("\(category.name), \(category.expenseCount) gastos, total \(formatCurrency(category.totalAmount))")
             .accessibilityHint(category.isExpanded ? "Toca para contraer" : "Toca para expandir")
         }
-        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
     }
     
     private func formatCurrency(_ value: Double) -> String {
@@ -158,7 +163,7 @@ struct SubcategorySection: View {
             }
         }
         .tint(.secondary)
-        .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 16))
     }
     
     private func formatCurrency(_ value: Double) -> String {
@@ -175,20 +180,12 @@ struct ExpenseRow: View {
     let onDuplicate: () -> Void
     
     var body: some View {
-        HStack(spacing: Spacing.xs) {  // Reduced from sm
-            // Category Color Bar
+        HStack(spacing: Spacing.sm) {
+            // Category Color Bar (more visible)
             Capsule()
-                .fill(categoryColor)
-                .frame(width: 4)
+                .fill(categoryColor.opacity(0.9))
+                .frame(width: 5)
                 .padding(.vertical, 2)
-                .padding(.trailing, 4)
-            
-            // Icon
-            Image(systemName: "doc.text.fill")
-                .font(.system(size: IconSize.small))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tertiary)
-                .frame(width: 20)
             
             // Content
             VStack(alignment: .leading, spacing: 2) {  // Reduced spacing
@@ -247,7 +244,7 @@ struct ExpenseRow: View {
                 }
             }
         }
-        .padding(.vertical, 6)  // Reduced from Spacing.xs (8)
+        .padding(.vertical, 8)  // Increased from 6
         .padding(.leading, 4)    // Reduced from Spacing.xs (8)
         .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
         .accessibilityHint("Desliza para editar o eliminar")

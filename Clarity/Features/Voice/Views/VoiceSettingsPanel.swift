@@ -210,7 +210,7 @@ struct StatCard: View {
     let color: Color
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             Text(value)
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(color)
@@ -222,14 +222,16 @@ struct StatCard: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 8)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(color.opacity(0.3), lineWidth: 1)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 10)
+        .background(
+            ZStack {
+                color.opacity(0.12)
+                    .blendMode(.overlay)
+            }
+            .background(.ultraThinMaterial)
         )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
 

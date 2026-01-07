@@ -5,9 +5,17 @@ import SwiftUI
 
 struct MainTabView: View {
     @State private var selectedTab = 0
-    @State private var showAddExpense = false
+    @State private var previousTab = 0
+    @State private var showVoiceInput = false
+    @State private var showAddOptions = false
+    @State private var showManualExpense = false
+    @State private var showRecurring = false
     @ObservedObject private var userDataManager = UserDataManager.shared
     @State private var dashboardViewModel = DashboardViewModel()
+    
+    // Voice components
+    @StateObject private var speechManager = SpeechRecognitionManager()
+    @StateObject private var voiceCoordinator = VoiceExpenseCoordinator()
     
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -31,11 +39,10 @@ struct MainTabView: View {
                 }
                 .tag(1)
                 
-                // Center add button (inline with tab bar)
+                // Center add button (Primary Action = Voice)
                 Color.clear
                     .tabItem {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 24))
+                        Image(systemName: "mic.badge.plus")
                     }
                     .tag(2)
                 
@@ -58,37 +65,114 @@ struct MainTabView: View {
                 .tag(4)
             }
             .tint(Color.clarityPrimary)
-            
-            // Voice Expense Button (bottom right)
-            VoiceExpenseButton(
-                viewModel: dashboardViewModel,
-                categories: userDataManager.categories
-            )
-            .padding(.trailing, 20)
-            .padding(.bottom, 100)
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .sheet(isPresented: $showAddExpense) {
+        // Tab bar button actions handled by onChange
+        // Voice Recording Sheet
+        .sheet(isPresented: $voiceCoordinator.showRecording) {
+            VoiceRecordingSheet(
+                speechManager: speechManager,
+                onComplete: { transcript in
+                    voiceCoordinator.handleTranscript(
+                        transcript,
+                        categories: userDataManager.categories
+                    )
+                }
+            )
+        }
+        // Voice Confirmation Sheet
+        .sheet(isPresented: $voiceCoordinator.showConfirmation) {
+            if let expense = voiceCoordinator.pendingExpense {
+                VoiceConfirmationSheet(
+                    expense: expense,
+                    wasFullyDetected: voiceCoordinator.wasFullyDetected,
+                    categories: userDataManager.categories,
+                    speechManager: speechManager,
+                    onConfirm: { confirmed in
+                        Task {
+                            await voiceCoordinator.saveExpense(
+                                confirmed,
+                                viewModel: dashboardViewModel
+                            )
+                        }
+                    },
+                    onCancel: {
+                        voiceCoordinator.reset()
+                    }
+                )
+            }
+        }
+        // Manual Expense Sheet
+        .sheet(isPresented: $showManualExpense) {
             AddExpenseSheet {
-                // Refresh after adding
+                Task { await dashboardViewModel.refresh() }
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
-            .presentationBackground(.regularMaterial)  // Liquid Glass
+            .presentationBackground(.regularMaterial)
             .presentationCornerRadius(CornerRadius.large)
         }
+        // Recurring Expenses Sheet
+        .sheet(isPresented: $showRecurring) {
+            NavigationStack {
+                RecurringExpensesView()
+            }
+            .presentationDetents([.large])
+            .presentationBackground(.regularMaterial)
+        }
+        // Options Dialog (Long Press on +)
+        .confirmationDialog("Añadir gasto", isPresented: $showAddOptions, titleVisibility: .visible) {
+            Button("🎤 Añadir con voz") {
+                voiceCoordinator.handleButtonTap(speechManager: speechManager)
+            }
+            Button("✏️ Añadir manualmente") {
+                showManualExpense = true
+            }
+            Button("🔁 Gasto recurrente") {
+                showRecurring = true
+            }
+            Button("Cancelar", role: .cancel) {}
+        }
+        // Error Alert
+        .alert("Error de Voz", isPresented: $voiceCoordinator.showError) {
+            Button("OK", role: .cancel) {
+                voiceCoordinator.clearError()
+            }
+        } message: {
+            Text(voiceCoordinator.errorMessage ?? "Error desconocido")
+        }
+        // Handle Tab Change - show options when + is tapped
         .onChange(of: selectedTab) { oldValue, newValue in
-            // Intercept add button tap
             if newValue == 2 {
+                // Revert to previous tab and show options
                 selectedTab = oldValue
-                showAddExpense = true
+                showAddOptions = true
+                HapticManager.selection()
+            } else {
+                previousTab = newValue
+            }
+        }
+        // Handle silence detection
+        .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
+            if stopped && voiceCoordinator.showRecording {
+                let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                speechManager.stopRecording()
+                voiceCoordinator.showRecording = false
+                voiceCoordinator.handleTranscript(fullTranscript, categories: userDataManager.categories)
+            }
+        }
+        // Success Toast
+        .overlay(alignment: .top) {
+            if voiceCoordinator.showSuccessToast {
+                SuccessToast(message: voiceCoordinator.successMessage)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
         .task {
             await userDataManager.loadUserData()
         }
     }
-
 }
 
 

@@ -34,10 +34,20 @@ struct DonutChartContent: View {
             }
             Spacer()
         } else {
-            DonutChartView(
-                categoryData: buildChartData(),
-                total: filteredTotal
-            )
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Donut Chart
+                    DonutChartView(
+                        categoryData: buildChartData(),
+                        total: filteredTotal
+                    )
+                    
+                    // Month Comparison Chart
+                    MonthComparisonChart(expenses: viewModel.expenses)
+                        .padding(.horizontal)
+                }
+                .padding(.bottom, 100)
+            }
         }
     }
     

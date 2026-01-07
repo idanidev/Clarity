@@ -127,10 +127,11 @@ class BudgetsViewModel {
         let nonZeroBudgets = budgetLimits.filter { $0.value > 0 }
         
         do {
-            // Update goals.categoryGoals in user document
+            // Update goals.categoryGoals AND income in user document
             try await db.collection("users")
                 .document(userId)
                 .setData([
+                    "income": income,
                     "goals": [
                         "categoryGoals": nonZeroBudgets,
                         "updatedAt": Timestamp(date: Date())

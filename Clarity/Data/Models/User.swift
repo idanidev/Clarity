@@ -107,9 +107,9 @@ struct Goals: Codable {
 }
 
 struct UserSettings: Codable {
-    let language: String // "es" | "en"
-    let theme: String // "dark" | "light" | "system"
-    let currency: String // "EUR" | "USD"
+    var language: String? // "es" | "en"
+    var theme: String? // "dark" | "light" | "system"
+    var currency: String? // "EUR" | "USD"
     
     static let `default` = UserSettings(language: "es", theme: "system", currency: "EUR")
 }

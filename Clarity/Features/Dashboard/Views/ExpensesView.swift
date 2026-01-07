@@ -82,20 +82,12 @@ struct ExpensesView: View {
     // MARK: - Bottom Toolbar (Filter + View Modes)
     private var segmentedPicker: some View {
         HStack {
-            // Filter Button (Left)
-            Button {
-                showFilterSheet = true
-                HapticManager.selection()
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease.circle" + (filter.hasActiveFilters || !searchText.isEmpty ? ".fill" : ""))
-                    .font(.system(size: 22))
-                    .foregroundStyle(filter.hasActiveFilters || !searchText.isEmpty ? Color.clarityPrimary : .secondary)
-            }
-            .padding(.leading, Spacing.sm)
+            // Left spacer to balance filter button
+            Color.clear.frame(width: 60, height: 1)
             
             Spacer()
             
-            // View Mode Selector (Icons)
+            // View Mode Selector (Icons) - CENTERED
             HStack(spacing: 0) {
                 viewModeButton(icon: "list.bullet", index: 0)
                 viewModeButton(icon: "chart.pie.fill", index: 1)
@@ -105,12 +97,77 @@ struct ExpensesView: View {
             
             Spacer()
             
-            // Balance spacer to center the view mode selector relative to screen
-            // or we just let it be center-ish.
-            // Empty view of same size as filter button to perfectly center the middle part?
-            Color.clear.frame(width: 44, height: 44)
+            // Clear + Filter buttons (Right)
+            HStack(spacing: 4) {
+                if filter.hasActiveFilters || !searchText.isEmpty {
+                    Button {
+                        filter = ExpenseFilter(dateRange: .thisMonth)
+                        searchText = ""
+                        updateFilteredExpenses()
+                        buildCategoryGroups()
+                        HapticManager.notification(.success)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                
+                Menu {
+                    Section("Período") {
+                        ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
+                            Button {
+                                filter.dateRange = range
+                                updateFilteredExpenses()
+                                HapticManager.selection()
+                            } label: {
+                                HStack {
+                                    Text(range.rawValue)
+                                    if filter.dateRange == range {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Section("Método de Pago") {
+                        ForEach(["Tarjeta", "Efectivo", "Bizum", "Transferencia"], id: \.self) { method in
+                            Button {
+                                if filter.selectedPaymentMethods.contains(method) {
+                                    filter.selectedPaymentMethods.remove(method)
+                                } else {
+                                    filter.selectedPaymentMethods.insert(method)
+                                }
+                                updateFilteredExpenses()
+                                HapticManager.selection()
+                            } label: {
+                                HStack {
+                                    Text(method)
+                                    if filter.selectedPaymentMethods.contains(method) {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Divider()
+                    
+                    Button {
+                        showFilterSheet = true
+                    } label: {
+                        Label("Más filtros...", systemImage: "slider.horizontal.3")
+                    }
+                } label: {
+                    Image(systemName: "line.3.horizontal.decrease.circle" + (filter.hasActiveFilters || !searchText.isEmpty ? ".fill" : ""))
+                        .font(.system(size: 22))
+                        .foregroundStyle(filter.hasActiveFilters || !searchText.isEmpty ? Color.clarityPrimary : .secondary)
+                }
+            }
+            .frame(width: 60)
         }
-        .padding(.horizontal)
+        .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.sm)
         .background(.ultraThinMaterial)
     }
@@ -152,9 +209,9 @@ struct ExpensesView: View {
     }
     
     private var tableContent: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 16) {
             // Stat Cards (3 cards, responsive - fill width)
-            HStack(spacing: 8) {
+            HStack(spacing: 12) {
                 StatCard(
                     title: "Total",
                     value: Formatters.currency(totalExpenses),
@@ -173,8 +230,8 @@ struct ExpensesView: View {
                     color: calculateSavings() >= 0 ? .green : .red
                 )
             }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
             
             // Active filter pills (kept for feedback)
             ActiveFilterPillsView(
@@ -214,9 +271,24 @@ struct ExpensesView: View {
     }
     
     private func calculateSavings() -> Double {
-        // Get income from BudgetsViewModel or default to 0
-        let monthlyIncome = 2700.0  // This should come from user data
-        return monthlyIncome - totalExpenses
+        // Get income from Firebase user document
+        let monthlyIncome = UserDataManager.shared.userDocument?.income ?? 0
+        guard monthlyIncome > 0 else { return 0 }
+        
+        // Calculate pro-rata: what % of the month has passed?
+        let calendar = Calendar.current
+        let today = Date()
+        let day = calendar.component(.day, from: today)
+        let daysInMonth = calendar.range(of: .day, in: .month, for: today)?.count ?? 30
+        let monthProgress = Double(day) / Double(daysInMonth)
+        
+        // Expected spending so far = income * progress
+        // If we spent less than expected, we're "saving"
+        let expectedSpending = monthlyIncome * monthProgress
+        let actualSpending = totalExpenses
+        
+        // Positive = under budget (saving), Negative = over budget
+        return expectedSpending - actualSpending
     }
     
     private func updateFilteredExpenses() {
