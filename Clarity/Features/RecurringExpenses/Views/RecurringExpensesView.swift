@@ -17,6 +17,10 @@ struct RecurringExpensesView: View {
         expenses.filter { !$0.active }.sorted { $0.dayOfMonth < $1.dayOfMonth }
     }
     
+    private var totalActiveMonthly: Double {
+        activeExpenses.reduce(0) { $0 + $1.amount }
+    }
+    
     var body: some View {
         Group {
             if isLoading {
@@ -70,7 +74,7 @@ struct RecurringExpensesView: View {
             // Active
             if !activeExpenses.isEmpty {
                 Section {
-                    ForEach(activeExpenses) { expense in
+                    ForEach(activeExpenses, id: \.stableId) { expense in
                         NavigationLink {
                             RecurringExpenseDetailView(expense: expense) {
                                 loadExpenses()
@@ -85,8 +89,14 @@ struct RecurringExpensesView: View {
                         deleteExpenses(at: indexSet, from: activeExpenses)
                     }
                 } header: {
-                    Label("Activos", systemImage: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                    HStack {
+                        Label("Activos", systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                        Spacer()
+                        Text(Formatters.currency(totalActiveMonthly) + "/mes")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.clarityPrimary)
+                    }
                 } footer: {
                     Text("Se cargarán automáticamente el día indicado")
                         .font(.caption2)
@@ -96,7 +106,7 @@ struct RecurringExpensesView: View {
             // Paused
             if !pausedExpenses.isEmpty {
                 Section {
-                    ForEach(pausedExpenses) { expense in
+                    ForEach(pausedExpenses, id: \.stableId) { expense in
                         NavigationLink {
                             RecurringExpenseDetailView(expense: expense) {
                                 loadExpenses()

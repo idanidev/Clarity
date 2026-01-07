@@ -11,13 +11,15 @@ struct VoiceExpenseButton: View {
     
     @State private var showRecordingSheet = false
     @State private var showConfirmationSheet = false
+    @State private var showErrorAlert = false
+    @State private var errorMessage = ""
     @State private var pendingExpense: Expense?
     @State private var parsedData: ParsedExpense?
     @State private var settings = VoiceSettings.load()
     @State private var stats = VoiceStats.load()
     @State private var showSuccessToast = false
     @State private var savedExpenseName = ""
-    @State private var isProcessing = false // Debounce state
+    @State private var isProcessing = false
     
     var body: some View {
         Button {
@@ -26,51 +28,15 @@ struct VoiceExpenseButton: View {
             
             Task {
                 await handleButtonTap()
-                // 0.5s debounce to prevent double taps
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 isProcessing = false
             }
         } label: {
-            ZStack {
-                // Glow effect
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: speechManager.isListening ? [.red, .pink] : [.purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 70, height: 70)
-                    .blur(radius: 15)
-                    .opacity(0.6)
-                
-                // Main button
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: speechManager.isListening ? [.red, .pink] : [.purple, .blue],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 60, height: 60)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                    )
-                
-                // Icon
-                Image(systemName: speechManager.isListening ? "mic.fill" : "mic")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .scaleEffect(speechManager.isListening ? 1.1 : 1.0)
-            .animation(.bouncy(duration: 0.3), value: speechManager.isListening)
+            voiceButtonContent
         }
         .shadow(color: speechManager.isListening ? .red.opacity(0.5) : .purple.opacity(0.5), radius: 20)
         .accessibilityLabel("Grabar gasto por voz")
-        .accessibilityHint("Mantén presionado para hablar")
+        .accessibilityHint("Toca para empezar a hablar")
         .sheet(isPresented: $showRecordingSheet) {
             VoiceRecordingSheet(
                 speechManager: speechManager,
@@ -86,7 +52,9 @@ struct VoiceExpenseButton: View {
                     expense: $pendingExpense,
                     isPresented: $showConfirmationSheet,
                     categories: categories,
-                    wasFullyDetected: parsedData?.confidence ?? 0 > 0.7 && parsedData?.category != nil && parsedData?.subcategory != nil,
+                    wasFullyDetected: (parsedData?.confidence ?? 0) > 0.7 && 
+                                     parsedData?.category != nil && 
+                                     parsedData?.subcategory != nil,
                     onConfirm: { confirmed in
                         Task {
                             await addExpense(confirmed)
@@ -94,55 +62,105 @@ struct VoiceExpenseButton: View {
                     },
                     onCancel: {
                         pendingExpense = nil
+                        parsedData = nil
                     }
                 )
             }
         }
-        .onChange(of: speechManager.isListening) { oldValue, newValue in
+        .alert("Error de Voz", isPresented: $showErrorAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .onChange(of: speechManager.isListening) { _, newValue in
             if newValue {
-                // Haptic feedback when starting
-                let generator = UIImpactFeedbackGenerator(style: .medium)
-                generator.impactOccurred()
+                HapticManager.impact(.medium)
+            }
+        }
+        .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
+            if stopped && showRecordingSheet {
+                showRecordingSheet = false
+                // handleRecordingEnd() will be called via onDisappear
             }
         }
         .overlay(alignment: .top) {
-            // Success toast
-            if showSuccessToast {
-                VStack {
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(.green)
-                        
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Gasto guardado")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                            Text(savedExpenseName)
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                        
-                        Spacer()
-                    }
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(.ultraThinMaterial)
-                            .shadow(color: .black.opacity(0.2), radius: 10)
-                    )
-                    .padding(.horizontal)
-                    .padding(.top, 60)
-                }
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .zIndex(999)
-            }
+            successToastView
         }
     }
     
+    // MARK: - Button Content
+    
+    private var voiceButtonContent: some View {
+        ZStack {
+            // Glow effect
+            Circle()
+                .fill(buttonGradient)
+                .frame(width: 70, height: 70)
+                .blur(radius: 15)
+                .opacity(0.6)
+            
+            // Main button
+            Circle()
+                .fill(buttonGradient)
+                .frame(width: 60, height: 60)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                )
+            
+            // Icon
+            Image(systemName: speechManager.isListening ? "mic.fill" : "mic")
+                .font(.system(size: 24, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .scaleEffect(speechManager.isListening ? 1.1 : 1.0)
+        .animation(.bouncy(duration: 0.3), value: speechManager.isListening)
+    }
+    
+    private var buttonGradient: LinearGradient {
+        LinearGradient(
+            colors: speechManager.isListening ? [.red, .pink] : [.purple, .blue],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+    
+    // MARK: - Success Toast
+    
+    @ViewBuilder
+    private var successToastView: some View {
+        if showSuccessToast {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20))
+                    .foregroundColor(.green)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Gasto guardado")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text(savedExpenseName)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.9))
+                }
+                
+                Spacer()
+            }
+            .padding()
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: .black.opacity(0.2), radius: 10)
+            .padding(.horizontal)
+            .padding(.top, 60)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .zIndex(999)
+        }
+    }
+    
+    // MARK: - Actions
+    
     private func handleButtonTap() async {
         if speechManager.isListening {
-            // Stop recording
             speechManager.stopRecording()
             showRecordingSheet = false
         } else {
@@ -150,17 +168,23 @@ struct VoiceExpenseButton: View {
             if !speechManager.checkPermissions() {
                 let granted = await speechManager.requestPermissions()
                 guard granted else {
-                    // Show alert
+                    await MainActor.run {
+                        errorMessage = "Se necesitan permisos de micrófono y reconocimiento de voz. Actívalos en Ajustes."
+                        showErrorAlert = true
+                    }
                     return
                 }
             }
             
-            // Start recording
+            // Start recording with retry
             do {
-                try speechManager.startRecording()
+                try await speechManager.startRecordingWithRetry()
                 showRecordingSheet = true
             } catch {
-                print("Error starting recording: \(error)")
+                await MainActor.run {
+                    errorMessage = speechManager.lastError?.localizedDescription ?? error.localizedDescription
+                    showErrorAlert = true
+                }
             }
         }
     }
@@ -170,36 +194,38 @@ struct VoiceExpenseButton: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard !fullTranscript.isEmpty else {
+            print("⚠️ Empty transcript")
             return
         }
         
+        print("📝 Processing transcript: '\(fullTranscript)'")
+        
         // Parse the transcript
         guard let parsed = ExpenseParser.parse(fullTranscript, categories: categories) else {
-            // Failed to parse
             stats.recordFailure()
+            errorMessage = "No se pudo entender el gasto. Intenta decir algo como '25 en supermercado'."
+            showErrorAlert = true
             return
         }
         
         parsedData = parsed
         
-        // Create pending expense
+        // Create pending expense with proper date format
         pendingExpense = Expense(
             amount: parsed.amount,
             name: parsed.name,
             category: parsed.category ?? categories.first?.name ?? "Sin categoría",
             subcategory: parsed.subcategory,
-            date: Date().toString(format: "yyyy-MM-dd"),
+            date: Formatters.isoString(from: Date()),
             paymentMethod: "Tarjeta"
         )
         
         // Show confirmation or auto-confirm
         if settings.autoConfirm && parsed.subcategory != nil && parsed.confidence > 0.8 {
-            // High confidence: auto-confirm directly
             Task {
                 await addExpense(pendingExpense!)
             }
         } else {
-            // Show confirmation sheet
             showConfirmationSheet = true
         }
     }
@@ -209,26 +235,21 @@ struct VoiceExpenseButton: View {
             let repository = ExpenseRepository()
             _ = try await repository.addExpense(expense)
             
-            // Close confirmation sheet immediately
             await MainActor.run {
                 showConfirmationSheet = false
             }
             
-            // Reload expenses
             await viewModel.loadExpenses()
-            
-            // Update stats
             stats.recordSuccess()
             
-            // Show success toast
             await MainActor.run {
-                savedExpenseName = "\(String(format: "%.2f", expense.amount))€ - \(expense.name)"
+                savedExpenseName = "\(Formatters.currency(expense.amount)) - \(expense.name)"
                 withAnimation(.bouncy(duration: 0.4)) {
                     showSuccessToast = true
                 }
             }
             
-            // Auto-hide toast after 3 seconds
+            // Auto-hide toast
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             await MainActor.run {
                 withAnimation(.bouncy(duration: 0.4)) {
@@ -236,30 +257,29 @@ struct VoiceExpenseButton: View {
                 }
             }
             
-            // Haptic feedback
             if settings.vibration {
-                await MainActor.run {
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                }
+                HapticManager.notification(.success)
             }
             
-            // Reset state
             await MainActor.run {
                 pendingExpense = nil
+                parsedData = nil
                 speechManager.transcript = ""
                 speechManager.interimTranscript = ""
             }
         } catch {
-            print("Error adding expense: \(error)")
+            print("❌ Error adding expense: \(error)")
             stats.recordFailure()
             
+            await MainActor.run {
+                errorMessage = "Error al guardar el gasto. Inténtalo de nuevo."
+                showErrorAlert = true
+            }
+            
             if settings.vibration {
-                await MainActor.run {
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.error)
-                }
+                HapticManager.notification(.error)
             }
         }
     }
 }
+

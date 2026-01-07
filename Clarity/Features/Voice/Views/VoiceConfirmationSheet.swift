@@ -2,16 +2,13 @@
 // Expense confirmation dialog with editable fields
 
 import SwiftUI
-import Speech
-import AVFoundation
-import Combine
 
 struct VoiceConfirmationSheet: View {
     @Binding var expense: Expense?
     @Binding var isPresented: Bool
     
     let categories: [Category]
-    let wasFullyDetected: Bool // NEW: true if category, subcategory, amount all detected
+    let wasFullyDetected: Bool
     let onConfirm: (Expense) -> Void
     let onCancel: () -> Void
     
@@ -21,230 +18,163 @@ struct VoiceConfirmationSheet: View {
     @State private var selectedSubcategory: String = ""
     @State private var showNewSubcategory = false
     @State private var newSubcategoryName = ""
+    @State private var hasUserEdited = false
     
-    // NEW: Auto-confirm countdown
+    // Auto-confirm countdown
     @State private var countdownSeconds = 5
     @State private var countdownTimer: Timer?
-    @StateObject private var voiceConfirmListener = VoiceConfirmationListener()
+    
+    var settings = VoiceSettings.load()
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Header with countdown
-                    VStack(spacing: 12) {
-                        HStack {
-                            Text("Confirmar Gasto")
-                                .font(.system(size: 28, weight: .bold))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [.purple, .blue],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                            
-                            Spacer()
-                            
-                            // NEW: Countdown indicator
-                            if wasFullyDetected && countdownSeconds > 0 {
-                                ZStack {
-                                    Circle()
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 3)
-                                        .frame(width: 44, height: 44)
-                                    
-                                    Circle()
-                                        .trim(from: 0, to: CGFloat(countdownSeconds) / 5.0)
-                                        .stroke(
-                                            LinearGradient(
-                                                colors: [.green, .blue],
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            ),
-                                            style: StrokeStyle(lineWidth: 3, lineCap: .round)
-                                        )
-                                        .frame(width: 44, height: 44)
-                                        .rotationEffect(.degrees(-90))
-                                        .animation(.linear(duration: 1), value: countdownSeconds)
-                                    
-                                    Text("\(countdownSeconds)")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundColor(.green)
-                                }
-                            }
-                        }
-                        
-                        // NEW: Voice prompt
-                        if wasFullyDetected && countdownSeconds > 0 {
-                            Text("🎤 Di \"confirmar\" o espera \(countdownSeconds)s")
-                                .font(.system(size: 13))
-                                .foregroundColor(.green)
-                                .transition(.opacity)
-                        } else {
-                            Text("Revisa los datos antes de continuar")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .padding(.bottom)
-                    
-                    // Fields
+        NavigationStack {
+            Form {
+                // Status Badge Section
+                Section {
                     VStack(spacing: 16) {
-                        // Amount
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Cantidad (€)")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.secondary)
-                            
-                            TextField("0.00", text: $amount)
-                                .keyboardType(.decimalPad)
-                                .textFieldStyle(.roundedBorder)
-                                .font(.system(size: 16, weight: .bold))
+                        // Status badge
+                        HStack(spacing: 8) {
+                            Image(systemName: wasFullyDetected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                .foregroundStyle(wasFullyDetected ? .green : .orange)
+                            Text(wasFullyDetected ? "Detectado Completamente" : "Necesita Revisión")
+                                .font(.subheadline.weight(.medium))
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            (wasFullyDetected ? Color.green : Color.orange).opacity(0.15)
+                        )
+                        .clipShape(Capsule())
                         
-                        // Category
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Categoría")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.secondary)
-                            
-                            Picker("Categoría", selection: $selectedCategory) {
-                                Text("-- Selecciona --").tag(nil as Category?)
-                                ForEach(categories) { category in
-                                    Text(category.name).tag(category as Category?)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .onChange(of: selectedCategory) { oldValue, newValue in
-                                selectedSubcategory = ""
-                            }
-                        }
+                        // Amount preview
+                        Text(amount.isEmpty ? "€0.00" : "€\(amount)")
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.clarityPrimary)
                         
-                        // Subcategory
-                        if let category = selectedCategory {
-                            VStack(alignment: .leading, spacing: 8) {
-                                HStack {
-                                    Text("Subcategoría")
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.secondary)
-                                    
-                                    Text("*")
-                                        .foregroundColor(.red)
-                                    
-                                    Spacer()
-                                    
-                                    Button {
-                                        showNewSubcategory.toggle()
-                                        if showNewSubcategory {
-                                            newSubcategoryName = ""
-                                        }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: "plus")
-                                            Text("Nueva")
-                                        }
-                                        .font(.system(size: 10, weight: .medium))
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color.purple.opacity(0.2))
-                                        .foregroundColor(.purple)
-                                        .cornerRadius(8)
-                                    }
-                                }
-                                
-                                if showNewSubcategory {
-                                    HStack {
-                                        TextField("Nueva subcategoría", text: $newSubcategoryName)
-                                            .textFieldStyle(.roundedBorder)
-                                        
-                                        Button {
-                                            if !newSubcategoryName.isEmpty {
-                                                selectedSubcategory = newSubcategoryName
-                                                showNewSubcategory = false
-                                            }
-                                        } label: {
-                                            Image(systemName: "checkmark")
-                                                .foregroundColor(.white)
-                                                .padding(8)
-                                                .background(LinearGradient(colors: [.purple, .blue], startPoint: .leading, endPoint: .trailing))
-                                                .cornerRadius(8)
-                                        }
-                                        .disabled(newSubcategoryName.isEmpty)
-                                    }
-                                } else {
-                                    if category.subcategories.isEmpty {
-                                        Text("-- No hay subcategorías --")
-                                            .foregroundColor(.secondary)
-                                            .padding()
-                                            .frame(maxWidth: .infinity)
-                                            .background(Color(.systemGray6))
-                                            .cornerRadius(8)
-                                    } else {
-                                        Picker("Subcategoría", selection: $selectedSubcategory) {
-                                            Text("-- Selecciona --").tag("")
-                                            ForEach(category.subcategories, id: \.self) { sub in
-                                                Text(sub).tag(sub)
-                                            }
-                                        }
-                                        .pickerStyle(.menu)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Description
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Descripción")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.secondary)
-                            
-                            TextField("Descripción del gasto", text: $name)
-                                .textFieldStyle(.roundedBorder)
+                        // Countdown if applicable
+                        if wasFullyDetected && !hasUserEdited && countdownSeconds > 0 {
+                            Text("Auto-confirmando en \(countdownSeconds)s...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(16)
-                    
-                    // Buttons
-                    HStack(spacing: 12) {
-                        Button {
-                            onCancel()
-                            isPresented = false
-                        } label: {
-                            Text("Cancelar")
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color(.systemGray5))
-                                .foregroundColor(.primary)
-                                .cornerRadius(16)
-                        }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                }
+                .listRowBackground(Color.clear)
+                
+                // Amount Section
+                Section("Cantidad") {
+                    HStack {
+                        Text("€")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
                         
-                        Button {
-                            confirmExpense()
-                        } label: {
-                            Text("✅ Confirmar")
-                                .fontWeight(.semibold)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(
-                                    LinearGradient(
-                                        colors: [.green, Color(hex: "#10b981")!],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .foregroundColor(.white)
-                                .cornerRadius(16)
-                        }
-                        .disabled(!canConfirm)
-                        .opacity(canConfirm ? 1 : 0.5)
+                        TextField("0.00", text: $amount)
+                            .keyboardType(.decimalPad)
+                            .font(.title3.weight(.semibold))
+                            .onChange(of: amount) { _, _ in
+                                hasUserEdited = true
+                                stopCountdown()
+                            }
                     }
                 }
-                .padding()
+                
+                // Description Section
+                Section("Descripción") {
+                    TextField("Descripción del gasto", text: $name)
+                        .onChange(of: name) { _, _ in
+                            hasUserEdited = true
+                            stopCountdown()
+                        }
+                }
+                
+                // Category Section
+                Section("Categoría") {
+                    Picker("Categoría", selection: $selectedCategory) {
+                        Text("-- Selecciona --").tag(nil as Category?)
+                        ForEach(categories) { category in
+                            Text(category.name).tag(category as Category?)
+                        }
+                    }
+                    .onChange(of: selectedCategory) { old, new in
+                        hasUserEdited = true
+                        stopCountdown()
+                        if old?.id != new?.id {
+                            selectedSubcategory = ""
+                        }
+                    }
+                }
+                
+                // Subcategory Section
+                if let category = selectedCategory {
+                    Section {
+                        if showNewSubcategory {
+                            HStack {
+                                TextField("Nueva subcategoría", text: $newSubcategoryName)
+                                
+                                Button {
+                                    if !newSubcategoryName.isEmpty {
+                                        selectedSubcategory = newSubcategoryName
+                                        showNewSubcategory = false
+                                    }
+                                } label: {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                                .disabled(newSubcategoryName.isEmpty)
+                            }
+                        } else {
+                            Picker("Subcategoría", selection: $selectedSubcategory) {
+                                Text("-- Selecciona --").tag("")
+                                ForEach(category.subcategories, id: \.self) { sub in
+                                    Text(sub).tag(sub)
+                                }
+                            }
+                            .onChange(of: selectedSubcategory) { _, _ in
+                                hasUserEdited = true
+                                stopCountdown()
+                            }
+                        }
+                    } header: {
+                        HStack {
+                            Text("Subcategoría")
+                            Spacer()
+                            Button {
+                                showNewSubcategory.toggle()
+                                newSubcategoryName = ""
+                            } label: {
+                                Label("Nueva", systemImage: "plus")
+                                    .font(.caption)
+                            }
+                        }
+                    }
+                }
             }
-            .background(.ultraThinMaterial)
+            .navigationTitle("Confirmar Gasto")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancelar") {
+                        stopCountdown()
+                        onCancel()
+                        isPresented = false
+                    }
+                }
+                
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        confirmExpense()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark")
+                            Text("Confirmar")
+                        }
+                        .fontWeight(.semibold)
+                    }
+                    .disabled(!canConfirm)
+                }
+            }
         }
         .onAppear {
             if let expense = expense {
@@ -254,55 +184,13 @@ struct VoiceConfirmationSheet: View {
                 selectedSubcategory = expense.subcategory ?? ""
             }
             
-            // Start countdown and voice listener if fully detected
+            // Start countdown only if fully detected
             if wasFullyDetected && canConfirm {
                 startCountdown()
-                startVoiceConfirmationListener()
             }
         }
         .onDisappear {
             stopCountdown()
-            voiceConfirmListener.stopListening()
-        }
-        .onChange(of: voiceConfirmListener.detectedCommand) { oldValue, newValue in
-            guard let command = newValue else { return }
-            
-            switch command {
-            case .confirm:
-                // User said "sí", "ok", "confirmar"
-                stopCountdown()
-                confirmExpense()
-            case .cancel:
-                // User said "no", "cancelar"
-                stopCountdown()
-                onCancel()
-                isPresented = false
-            }
-        }
-        // NEW: Stop countdown if user manually edits any field
-        .onChange(of: selectedCategory) { _, _ in
-            if countdownTimer != nil {
-                stopCountdown()
-                voiceConfirmListener.stopListening()
-            }
-        }
-        .onChange(of: selectedSubcategory) { _, _ in
-            if countdownTimer != nil {
-                stopCountdown()
-                voiceConfirmListener.stopListening()
-            }
-        }
-        .onChange(of: amount) { _, _ in
-            if countdownTimer != nil {
-                stopCountdown()
-                voiceConfirmListener.stopListening()
-            }
-        }
-        .onChange(of: name) { _, _ in
-            if countdownTimer != nil {
-                stopCountdown()
-                voiceConfirmListener.stopListening()
-            }
         }
     }
     
@@ -326,24 +214,23 @@ struct VoiceConfirmationSheet: View {
             amount: amountValue,
             name: name.isEmpty ? "Gasto por voz" : name,
             category: category.name,
-            subcategory: selectedSubcategory,
-            date: Date().toString(format: "yyyy-MM-dd"),
+            subcategory: selectedSubcategory.isEmpty ? nil : selectedSubcategory,
+            date: Formatters.isoString(from: Date()),
             paymentMethod: "Tarjeta"
         )
         
+        stopCountdown()
         onConfirm(confirmed)
         isPresented = false
     }
     
-    // NEW: Countdown timer
     private func startCountdown() {
-        countdownSeconds = 5
+        countdownSeconds = Int(settings.autoConfirmDelay)
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
             if countdownSeconds > 0 {
                 countdownSeconds -= 1
             } else {
-                stopCountdown()
-                confirmExpense() // Auto-confirm
+                confirmExpense()
             }
         }
     }
@@ -351,12 +238,7 @@ struct VoiceConfirmationSheet: View {
     private func stopCountdown() {
         countdownTimer?.invalidate()
         countdownTimer = nil
-    }
-    
-    private func startVoiceConfirmationListener() {
-        Task {
-            await voiceConfirmListener.startListening()
-        }
+        countdownSeconds = 0
     }
 }
 
@@ -369,97 +251,3 @@ extension Date {
     }
 }
 
-// MARK: - Voice Confirmation Listener
-
-enum VoiceCommand {
-    case confirm
-    case cancel
-}
-
-class VoiceConfirmationListener: ObservableObject {
-    @Published var detectedCommand: VoiceCommand?
-    
-    private var speechRecognizer: SFSpeechRecognizer?
-    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private var audioEngine = AVAudioEngine()
-    
-    init() {
-        self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "es-ES"))
-    }
-    
-    func startListening() async {
-        do {
-            try startRecognition()
-        } catch {
-            print("Error starting voice confirmation listener: \(error)")
-        }
-    }
-    
-    func stopListening() {
-        audioEngine.stop()
-        audioEngine.inputNode.removeTap(onBus: 0)
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
-        
-        recognitionRequest = nil
-        recognitionTask = nil
-    }
-    
-    private func startRecognition() throws {
-        // Setup audio session
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.record, mode: .measurement, options: .duckOthers)
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        
-        recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else {
-            throw NSError(domain: "VoiceConfirmation", code: -1)
-        }
-        
-        recognitionRequest.shouldReportPartialResults = true
-        recognitionRequest.requiresOnDeviceRecognition = false
-        
-        let inputNode = audioEngine.inputNode
-        let recordingFormat = inputNode.outputFormat(forBus: 0)
-        
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            self.recognitionRequest?.append(buffer)
-        }
-        
-        audioEngine.prepare()
-        try audioEngine.start()
-        
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-            guard let self = self else { return }
-            
-            if let result = result {
-                let transcript = result.bestTranscription.formattedString.lowercased()
-                
-                // Check for confirm commands
-                let confirmWords = ["sí", "si", "ok", "vale", "confirmar", "confirma", "adelante"]
-                if confirmWords.contains(where: { transcript.contains($0) }) {
-                    DispatchQueue.main.async {
-                        self.detectedCommand = .confirm
-                    }
-                    self.stopListening()
-                    return
-                }
-                
-                // Check for cancel commands
-                let cancelWords = ["no", "cancelar", "cancela", "espera", "para", "detener"]
-                if cancelWords.contains(where: { transcript.contains($0) }) {
-                    DispatchQueue.main.async {
-                        self.detectedCommand = .cancel
-                    }
-                    self.stopListening()
-                    return
-                }
-            }
-            
-            if error != nil {
-                self.stopListening()
-            }
-        }
-    }
-}

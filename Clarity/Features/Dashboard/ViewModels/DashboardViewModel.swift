@@ -58,12 +58,20 @@ class DashboardViewModel {
     }
     
     func deleteExpense(_ expense: Expense) async {
-        guard let id = expense.id else { return }
+        guard let id = expense.id else {
+            print("❌ Cannot delete expense: ID is nil. Expense name: \(expense.name)")
+            errorMessage = "Error: No se puede eliminar el gasto (ID no encontrado)"
+            return
+        }
+        
+        print("🗑️ Deleting expense: \(id) - \(expense.name)")
         
         do {
             try await repository.deleteExpense(id: id)
             expenses.removeAll { $0.id == id }
+            print("✅ Expense deleted successfully")
         } catch {
+            print("❌ Delete failed: \(error)")
             errorMessage = error.localizedDescription
         }
     }

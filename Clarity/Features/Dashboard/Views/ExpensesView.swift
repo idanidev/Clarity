@@ -10,7 +10,6 @@ struct ExpensesView: View {
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     @State private var categoryGroups: [CategoryGroup] = []
     @State private var expenseToEdit: Expense?
-    @State private var showEditSheet = false
     
     // Cache for performance
     @State private var cachedFilteredExpenses: [Expense] = []
@@ -34,7 +33,9 @@ struct ExpensesView: View {
                 .onChange(of: filter) { _, _ in updateFilteredExpenses() }
                 .onChange(of: searchText) { _, _ in updateFilteredExpenses() }
                 .onChange(of: cachedFilteredExpenses) { _, _ in buildCategoryGroups() }
-                .sheet(isPresented: $showEditSheet) { editSheet }
+                .sheet(item: $expenseToEdit) { expense in
+                    editSheet(for: expense)
+                }
                 .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
         }
     }
@@ -42,28 +43,32 @@ struct ExpensesView: View {
     // MARK: - Main Content
     private var mainContent: some View {
         VStack(spacing: 0) {
-            segmentedPicker
-            
-            TabView(selection: $selectedView) {
-                tableContent
-                    .tag(0)
-                
-                VStack(spacing: 0) {
-                    filterBar
-                    DonutChartContent(viewModel: viewModel, filter: filter)
+            // Content based on selection - no TabView swipe to conflict with list swipes
+            Group {
+                switch selectedView {
+                case 0:
+                    tableContent
+                case 1:
+                    VStack(spacing: 0) {
+                        filterBar
+                        DonutChartContent(viewModel: viewModel, filter: filter)
+                    }
+                case 2:
+                    VStack(spacing: 0) {
+                        filterBar
+                        CalendarChartContent(viewModel: viewModel)
+                    }
+                default:
+                    tableContent
                 }
-                .tag(1)
-                
-                VStack(spacing: 0) {
-                    filterBar
-                    CalendarChartContent(viewModel: viewModel)
-                }
-                .tag(2)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(.easeInOut(duration: 0.2), value: selectedView)
             .onChange(of: selectedView) { _, _ in
                 HapticManager.selection()
             }
+            
+            // Picker at bottom - more accessible for thumb
+            segmentedPicker
         }
     }
     
@@ -76,8 +81,8 @@ struct ExpensesView: View {
         }
         .pickerStyle(.segmented)
         .padding(.horizontal)
-        .padding(.top, Spacing.sm)
-        .padding(.bottom, Spacing.xs)
+        .padding(.vertical, Spacing.sm)
+        .background(.ultraThinMaterial)
     }
     
     // MARK: - Filter Bar (for charts)
@@ -128,16 +133,13 @@ struct ExpensesView: View {
     }
     
     // MARK: - Sheets
-    @ViewBuilder
-    private var editSheet: some View {
-        if let expense = expenseToEdit {
-            EditExpenseSheet(expense: expense) {
-                Task { await viewModel.refresh() }
-                buildCategoryGroups()
-            }
-            .presentationDetents([.large])
-            .presentationBackground(.regularMaterial)
+    private func editSheet(for expense: Expense) -> some View {
+        EditExpenseSheet(expense: expense) {
+            Task { await viewModel.refresh() }
+            buildCategoryGroups()
         }
+        .presentationDetents([.large])
+        .presentationBackground(.regularMaterial)
     }
     
     private var addSheet: some View {
@@ -204,7 +206,6 @@ struct ExpensesView: View {
                 },
                 onEdit: { expense in
                     expenseToEdit = expense
-                    showEditSheet = true
                 },
                 onDuplicate: duplicateExpense,
                 onClearFilters: {

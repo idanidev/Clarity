@@ -5,19 +5,19 @@ import SwiftUI
 import UserNotifications
 
 struct NotificationsView: View {
-    @State private var pushEnabled = false
-    @State private var weeklyReminder = true
-    @State private var budgetAlerts = true
-    @State private var recurringReminders = true
-    @State private var customReminders = true
+    @AppStorage("notifications.pushEnabled") private var pushEnabled = false
+    @AppStorage("notifications.weeklyReminder") private var weeklyReminder = true
+    @AppStorage("notifications.budgetAlerts") private var budgetAlerts = true
+    @AppStorage("notifications.recurringReminders") private var recurringReminders = true
+    @AppStorage("notifications.customReminders") private var customReminders = true
     
-    @State private var weeklyDay = 5 // Friday
-    @State private var weeklyHour = 20
-    @State private var weeklyMinute = 0
+    @AppStorage("notifications.weeklyDay") private var weeklyDay = 5 // Friday
+    @AppStorage("notifications.weeklyHour") private var weeklyHour = 20
+    @AppStorage("notifications.weeklyMinute") private var weeklyMinute = 0
     
-    @State private var customHour = 20
-    @State private var customMinute = 0
-    @State private var customMessage = "No olvides registrar tus gastos"
+    @AppStorage("notifications.customHour") private var customHour = 20
+    @AppStorage("notifications.customMinute") private var customMinute = 0
+    @AppStorage("notifications.customMessage") private var customMessage = "No olvides registrar tus gastos"
     
     private let weekDays = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
     
@@ -29,6 +29,7 @@ struct NotificationsView: View {
                         if newValue {
                             requestNotificationPermission()
                         }
+                        HapticManager.selection()
                     }
             } footer: {
                 Text("Permite que Clarity te envíe notificaciones para recordatorios y alertas")
@@ -36,6 +37,7 @@ struct NotificationsView: View {
             
             Section {
                 Toggle("Recordatorio Semanal", isOn: $weeklyReminder)
+                    .onChange(of: weeklyReminder) { _, _ in HapticManager.selection() }
                 
                 if weeklyReminder {
                     Picker("Día de la semana", selection: $weeklyDay) {
@@ -43,6 +45,7 @@ struct NotificationsView: View {
                             Text(weekDays[index]).tag(index)
                         }
                     }
+                    .onChange(of: weeklyDay) { _, _ in HapticManager.selection() }
                     
                     HStack {
                         Text("Hora")
@@ -53,6 +56,7 @@ struct NotificationsView: View {
                 }
                 
                 Toggle("Recordatorios Personalizados", isOn: $customReminders)
+                    .onChange(of: customReminders) { _, _ in HapticManager.selection() }
                 
                 if customReminders {
                     TextField("Mensaje", text: $customMessage)
@@ -70,19 +74,13 @@ struct NotificationsView: View {
             
             Section {
                 Toggle("Alertas de Presupuesto", isOn: $budgetAlerts)
+                    .onChange(of: budgetAlerts) { _, _ in HapticManager.selection() }
                 Toggle("Gastos Recurrentes", isOn: $recurringReminders)
+                    .onChange(of: recurringReminders) { _, _ in HapticManager.selection() }
             } header: {
                 Text("Alertas")
             } footer: {
-                Text("Recibe alertas cuando te acerques o superes tus presupuestos, y recordatorios de gastos recurrentes próximos")
-            }
-            
-            Section {
-                Button("Guardar Configuración") {
-                    saveSettings()
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundStyle(Color.clarityPrimary)
+                Text("Los ajustes se guardan automáticamente")
             }
         }
         .navigationTitle("Notificaciones")
@@ -98,10 +96,5 @@ struct NotificationsView: View {
             }
         }
     }
-    
-    private func saveSettings() {
-        // TODO: Save to Firebase
-        print("Saving notification settings...")
-        HapticManager.notification(.success)
-    }
 }
+

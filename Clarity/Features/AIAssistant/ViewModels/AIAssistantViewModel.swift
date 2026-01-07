@@ -28,6 +28,27 @@ class AIAssistantViewModel {
     // MARK: - Dependencies
     private let functions = Functions.functions()
     
+    // MARK: - Init
+    init() {
+        loadUserQuotas()
+    }
+    
+    private func loadUserQuotas() {
+        // Access AuthViewModel to get user document
+        // Admin users get unlimited access
+        if let userDoc = UserDataManager.shared.userDocument {
+            if userDoc.role == "admin" {
+                isUnlimited = true
+                quotaRemaining = 999999
+                quotaTotal = 999999
+            } else if let quotas = userDoc.aiQuotas {
+                quotaRemaining = quotas.remaining
+                quotaTotal = quotas.monthly
+                isUnlimited = quotas.unlimited
+            }
+        }
+    }
+    
     // MARK: - Methods
     func sendMessage(_ text: String) {
         guard !text.isEmpty else { return }

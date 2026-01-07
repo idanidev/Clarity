@@ -5,15 +5,19 @@ import Foundation
 
 struct VoiceSettings: Codable {
     var autoConfirm: Bool
+    var autoConfirmDelay: TimeInterval  // Seconds before auto-confirm
     var vibration: Bool
     var showSuggestions: Bool
     var silenceTimeout: TimeInterval
+    var debugMode: Bool  // Show detailed logs
     
     static let `default` = VoiceSettings(
-        autoConfirm: true,
+        autoConfirm: false,  // Changed to false by default - less aggressive
+        autoConfirmDelay: 5.0,
         vibration: true,
         showSuggestions: true,
-        silenceTimeout: 2.5  // Auto-close after 2.5s of silence
+        silenceTimeout: 2.5,
+        debugMode: false
     )
     
     private static let storageKey = "voiceSettings"
@@ -32,3 +36,4 @@ struct VoiceSettings: Codable {
         }
     }
 }
+

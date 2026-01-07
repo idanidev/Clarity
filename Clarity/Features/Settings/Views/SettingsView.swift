@@ -3,10 +3,12 @@
 
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 
 struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @State private var showLogoutConfirm = false
+    @AppStorage("app.theme") private var selectedTheme: String = "system"
     
     var body: some View {
         NavigationStack {
@@ -46,6 +48,17 @@ struct SettingsView: View {
                     NavigationLink("Notificaciones") {
                         NotificationsView()
                     }
+                    
+                    // Theme Picker
+                    Picker("Tema", selection: $selectedTheme) {
+                        Label("Claro", systemImage: "sun.max.fill").tag("light")
+                        Label("Oscuro", systemImage: "moon.fill").tag("dark")
+                        Label("Sistema", systemImage: "iphone").tag("system")
+                    }
+                    .onChange(of: selectedTheme) { _, newTheme in
+                        applyTheme(newTheme)
+                        saveThemeToFirebase(newTheme)
+                    }
                 }
                 
                 // Data Section
@@ -63,15 +76,25 @@ struct SettingsView: View {
                     }
                     
                     Button {
-                        // TODO: Export PDF
+                        // PDF export - complex feature for future
+                        HapticManager.notification(.warning)
                     } label: {
                         Label("Generar Informe PDF", systemImage: "doc.richtext")
                     }
+                    .disabled(true)
+                    .opacity(0.5)
                 }
                 
                 // About Section
                 Section("Información") {
                     LabeledContent("Versión", value: "1.0.0")
+                    
+                    // DEBUG: Print user document (remove after debugging)
+                    Button {
+                        printUserDocument()
+                    } label: {
+                        Label("Debug: Exportar datos", systemImage: "doc.text")
+                    }
                     
                     Link(destination: URL(string: "https://clarity-gastos.web.app/privacy")!) {
                         Text("Política de Privacidad")
@@ -106,6 +129,9 @@ struct SettingsView: View {
                 }
                 Button("Cancelar", role: .cancel) { }
             }
+            .onAppear {
+                loadThemeFromFirebase()
+            }
         }
     }
     
@@ -120,8 +146,90 @@ struct SettingsView: View {
                     exportedFileURL = url
                     showingShareSheet = true
                 }
+            }
+        }
+    }
+    
+    // MARK: - Theme Functions
+    
+    private func applyTheme(_ theme: String) {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else { return }
+        
+        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
+            switch theme {
+            case "light":
+                window.overrideUserInterfaceStyle = .light
+            case "dark":
+                window.overrideUserInterfaceStyle = .dark
+            default:
+                window.overrideUserInterfaceStyle = .unspecified
+            }
+        }
+    }
+    
+    private func saveThemeToFirebase(_ theme: String) {
+        guard let userId = Auth.auth().currentUser?.uid else { return }
+        
+        Task {
+            do {
+                try await Firestore.firestore()
+                    .collection("users")
+                    .document(userId)
+                    .updateData(["settings.theme": theme])
+                print("✅ Theme saved to Firebase: \(theme)")
             } catch {
-                print("Error exporting CSV: \(error)")
+                print("❌ Error saving theme: \(error)")
+            }
+        }
+    }
+    
+    private func loadThemeFromFirebase() {
+        // Load from Firebase if available, otherwise use local
+        if let userTheme = authViewModel.userDocument?.settings?.theme {
+            selectedTheme = userTheme
+            applyTheme(userTheme)
+        } else {
+            applyTheme(selectedTheme)
+        }
+    }
+    
+    // DEBUG: Print user document to Xcode console
+    private func printUserDocument() {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            print("❌ No user logged in")
+            return
+        }
+        
+        Task {
+            do {
+                let doc = try await Firestore.firestore()
+                    .collection("users")
+                    .document(userId)
+                    .getDocument()
+                
+                if let data = doc.data() {
+                    print("\n" + String(repeating: "=", count: 50))
+                    print("📄 USER DOCUMENT FOR: \(userId)")
+                    print(String(repeating: "=", count: 50))
+                    
+                    // Pretty print JSON
+                    if let jsonData = try? JSONSerialization.data(withJSONObject: data, options: .prettyPrinted),
+                       let jsonString = String(data: jsonData, encoding: .utf8) {
+                        print(jsonString)
+                    } else {
+                        // Fallback to raw print
+                        for (key, value) in data {
+                            print("\(key): \(value)")
+                        }
+                    }
+                    
+                    print(String(repeating: "=", count: 50) + "\n")
+                    HapticManager.notification(.success)
+                }
+            } catch {
+                print("❌ Error fetching document: \(error)")
+                HapticManager.notification(.error)
             }
         }
     }
@@ -168,3 +276,4 @@ struct SubscriptionView: View {
     SettingsView()
         .environmentObject(AuthViewModel())
 }
+

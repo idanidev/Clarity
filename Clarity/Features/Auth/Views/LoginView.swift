@@ -2,6 +2,7 @@
 // Login screen
 
 import SwiftUI
+import AuthenticationServices
 
 struct LoginView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
@@ -105,9 +106,19 @@ struct LoginView: View {
                                 .foregroundStyle(.secondary.opacity(0.3))
                         }
                         
-                        // Google Sign In
+                        // Sign in with Apple
+                        SignInWithAppleButton(.signIn) { request in
+                            request.requestedScopes = [.fullName, .email]
+                        } onCompletion: { result in
+                            handleAppleSignIn(result)
+                        }
+                        .signInWithAppleButtonStyle(.white)
+                        .frame(height: Spacing.buttonHeight)
+                        .clipShape(RoundedRectangle(cornerRadius: Spacing.buttonRadius))
+                        
+                        // Google Sign In (placeholder)
                         Button {
-                            // TODO: Google Sign In
+                            // Google Sign In requires additional setup
                         } label: {
                             HStack {
                                 Image(systemName: "g.circle.fill")
@@ -170,6 +181,27 @@ struct LoginView: View {
             } catch {
                 // Error handled in ViewModel
             }
+            isLoading = false
+        }
+    }
+    
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        isLoading = true
+        
+        switch result {
+        case .success(let authorization):
+            if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                Task {
+                    do {
+                        try await authViewModel.signInWithApple(credential: appleIDCredential)
+                    } catch {
+                        // Error handled in ViewModel
+                    }
+                    isLoading = false
+                }
+            }
+        case .failure(let error):
+            print("❌ Apple Sign In error: \(error.localizedDescription)")
             isLoading = false
         }
     }

@@ -41,13 +41,11 @@ struct ExpandableExpenseList: View {
                     onExpenseEdit: onExpenseEdit,
                     onExpenseDuplicate: onExpenseDuplicate
                 )
-                .id(category.id) // Critical for diff performance
+                .id(category.id)
             }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
-        .background(.regularMaterial)
-        .environment(\.defaultMinListRowHeight, 0) // iOS 26 optimization
+        .listStyle(.insetGrouped)  // iOS native grouped style
+        .scrollContentBackground(.visible)  // Show native background
     }
 }
 
@@ -112,17 +110,7 @@ struct CategorySection: View {
             .accessibilityLabel("\(category.name), \(category.expenseCount) gastos, total \(formatCurrency(category.totalAmount))")
             .accessibilityHint(category.isExpanded ? "Toca para contraer" : "Toca para expandir")
         }
-        .listRowBackground(
-            Color(.secondarySystemBackground)
-                .overlay(
-                    Rectangle()
-                        .fill(category.color)
-                        .frame(width: 3),
-                    alignment: .leading
-                )
-        )
         .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
-        .listRowSeparator(.hidden)
     }
     
     private func formatCurrency(_ value: Double) -> String {
@@ -140,7 +128,7 @@ struct SubcategorySection: View {
     
     var body: some View {
         DisclosureGroup(isExpanded: $subcategory.isExpanded) {
-            ForEach(subcategory.expenses) { expense in
+            ForEach(subcategory.expenses, id: \.stableId) { expense in
                 ExpenseRow(
                     expense: expense,
                     categoryColor: categoryColor,
@@ -170,17 +158,7 @@ struct SubcategorySection: View {
             }
         }
         .tint(.secondary)
-        .listRowBackground(
-            Color(.tertiarySystemBackground)
-                .overlay(
-                    Rectangle()
-                        .fill(categoryColor.opacity(0.6))
-                        .frame(width: 3),
-                    alignment: .leading
-                )
-        )
         .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
-        .listRowSeparator(.hidden)
     }
     
     private func formatCurrency(_ value: Double) -> String {
@@ -267,17 +245,7 @@ struct ExpenseRow: View {
         .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
         .accessibilityHint("Desliza para editar o eliminar")
         .contentShape(Rectangle())
-        .listRowBackground(
-            Color(.systemBackground)
-                .overlay(
-                    Rectangle()
-                        .fill(categoryColor.opacity(0.4))
-                        .frame(width: 3),
-                    alignment: .leading
-                )
-        )
         .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 12))
-        .listRowSeparator(.hidden)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 HapticManager.notification(.warning)

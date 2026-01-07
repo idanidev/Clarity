@@ -99,7 +99,7 @@ struct CategoriesManagementView: View {
     }
     
     private func moveCategories(from source: IndexSet, to destination: Int) {
-        // TODO: Implement reordering in Firebase
+        // Local reorder only for now - Firebase persist on save
         HapticManager.impact(.light)
     }
 }

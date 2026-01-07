@@ -5,6 +5,7 @@ import Foundation
 import Speech
 import AVFoundation
 import Combine
+import os.log
 
 class SpeechRecognitionManager: ObservableObject {
     @Published var isListening = false
@@ -12,16 +13,28 @@ class SpeechRecognitionManager: ObservableObject {
     @Published var interimTranscript = ""
     @Published var audioLevel: Float = 0.0
     @Published var hasPermission = false
+    @Published var lastError: RecognitionError?
+    @Published var didStopDueToSilence = false  // Flag for UI to observe
     
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var audioEngine = AVAudioEngine()
     
-    private var silenceTimer: Timer?
+    // Use DispatchWorkItem instead of Timer for thread safety
+    private var silenceWorkItem: DispatchWorkItem?
     private var settings: VoiceSettings
+    
+    // Buffer management
     private var bufferCount: Int = 0
-    private let maxBuffers: Int = 1000  // Prevent OOM after ~10 seconds
+    private let maxBuffers: Int = 500  // ~5 seconds at 100 buffers/sec
+    
+    // Retry logic
+    private var retryCount = 0
+    private let maxRetries = 2
+    
+    // Logging
+    private let logger = Logger(subsystem: "com.clarity.app", category: "Voice")
     
     init(settings: VoiceSettings = .load()) {
         self.settings = settings
@@ -31,6 +44,8 @@ class SpeechRecognitionManager: ObservableObject {
     // MARK: - Permission Handling
     
     func requestPermissions() async -> Bool {
+        logger.info("🎤 Requesting permissions...")
+        
         // Request speech recognition permission
         let speechStatus = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { status in
@@ -45,6 +60,8 @@ class SpeechRecognitionManager: ObservableObject {
         await MainActor.run {
             self.hasPermission = granted
         }
+        
+        logger.info("🎤 Permissions: speech=\(speechStatus), mic=\(micStatus)")
         return granted
     }
     
@@ -59,17 +76,29 @@ class SpeechRecognitionManager: ObservableObject {
     // MARK: - Recording Control
     
     func startRecording() throws {
-        // Cancel any ongoing tasks
-        stopRecording()
+        logger.info("🎤 Starting recording...")
+        
+        // Reset silence flag
+        didStopDueToSilence = false
+        
+        // Cancel any ongoing tasks first
+        cleanupResources()
         
         // Reset state
         transcript = ""
         interimTranscript = ""
+        lastError = nil
+        bufferCount = 0
         
-        // Setup audio session - use .playAndRecord for better compatibility
-        let audioSession = AVAudioSession.sharedInstance()
-        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        // Setup audio session
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        } catch {
+            logger.error("❌ Audio session setup failed: \(error.localizedDescription)")
+            throw RecognitionError.audioEngineFailure
+        }
         
         // Create recognition request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
@@ -84,8 +113,11 @@ class SpeechRecognitionManager: ObservableObject {
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         
-        // Reset buffer count
-        bufferCount = 0
+        // Validate format
+        guard recordingFormat.sampleRate > 0 else {
+            logger.error("❌ Invalid audio format")
+            throw RecognitionError.microphoneUnavailable
+        }
         
         // Install tap with the input node's output format
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
@@ -97,15 +129,22 @@ class SpeechRecognitionManager: ObservableObject {
             self.bufferCount += 1
             if self.bufferCount > self.maxBuffers {
                 DispatchQueue.main.async {
-                    print("⚠️ Auto-stopping recording to prevent OOM")
+                    self.logger.warning("⚠️ Auto-stopping: buffer limit reached")
                     self.stopRecording()
                 }
             }
         }
         
-        // Prepare and start the audio engine AFTER installing the tap
+        // Prepare and start the audio engine
         audioEngine.prepare()
-        try audioEngine.start()
+        
+        do {
+            try audioEngine.start()
+        } catch {
+            logger.error("❌ Audio engine start failed: \(error.localizedDescription)")
+            cleanupResources()
+            throw RecognitionError.audioEngineFailure
+        }
         
         // Start recognition task
         recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
@@ -116,8 +155,10 @@ class SpeechRecognitionManager: ObservableObject {
                 
                 DispatchQueue.main.async {
                     if result.isFinal {
-                        self.transcript = (self.transcript + " " + bestTranscription.formattedString).trimmingCharacters(in: .whitespacesAndNewlines)
+                        self.transcript = (self.transcript + " " + bestTranscription.formattedString)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
                         self.interimTranscript = ""
+                        self.logger.info("✅ Final transcript: '\(self.transcript)'")
                     } else {
                         self.interimTranscript = bestTranscription.formattedString
                     }
@@ -127,54 +168,99 @@ class SpeechRecognitionManager: ObservableObject {
                 }
             }
             
-            if error != nil || result?.isFinal == true {
-                // Stop recognition if there's an error or final result
-                if error != nil {
-                    DispatchQueue.main.async {
-                        self.stopRecording()
-                    }
+            if let error = error {
+                self.logger.error("❌ Recognition error: \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self.lastError = .unknownError(error)
+                    self.stopRecording()
                 }
             }
         }
         
         isListening = true
+        retryCount = 0  // Reset retry count on successful start
+        logger.info("✅ Recording started successfully")
     }
     
     func stopRecording() {
-        // Reset buffer count
-        bufferCount = 0
+        logger.info("🛑 Stopping recording...")
+        cleanupResources()
+        logger.info("✅ Recording stopped. Transcript: '\(self.transcript)'")
+    }
+    
+    // MARK: - Cleanup
+    
+    private func cleanupResources() {
+        // 1. Cancel silence timer first
+        silenceWorkItem?.cancel()
+        silenceWorkItem = nil
         
-        // Stop silence timer
-        silenceTimer?.invalidate()
-        silenceTimer = nil
+        // 2. Stop recognition
+        recognitionTask?.cancel()
+        recognitionTask = nil
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
         
-        // Stop audio engine safely
+        // 3. Stop audio engine
         if audioEngine.isRunning {
             audioEngine.stop()
             audioEngine.inputNode.removeTap(onBus: 0)
         }
         
-        // Stop recognition
-        recognitionRequest?.endAudio()
-        recognitionTask?.cancel()
+        // 4. Deactivate audio session
+        let audioSession = AVAudioSession.sharedInstance()
+        try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         
-        recognitionRequest = nil
-        recognitionTask = nil
-        
+        // 5. Reset state
         isListening = false
         audioLevel = 0.0
+        bufferCount = 0
     }
     
-    // MARK: - Silence Detection
+    // MARK: - Retry Logic
     
-    private func resetSilenceTimer() {
-        silenceTimer?.invalidate()
-        
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: settings.silenceTimeout, repeats: false) { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.stopRecording()
+    func startRecordingWithRetry() async throws {
+        do {
+            try startRecording()
+            retryCount = 0
+        } catch {
+            lastError = .unknownError(error)
+            
+            if retryCount < maxRetries {
+                retryCount += 1
+                logger.warning("⚠️ Retry \(self.retryCount)/\(self.maxRetries)")
+                try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
+                try await startRecordingWithRetry()
+            } else {
+                logger.error("❌ Max retries reached")
+                throw error
             }
         }
+    }
+    
+    // MARK: - Silence Detection (Thread-safe with DispatchWorkItem)
+    
+    private func resetSilenceTimer() {
+        // Cancel previous work item
+        silenceWorkItem?.cancel()
+        
+        // Create new work item
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self = self else { return }
+            self.logger.info("🔇 Silence detected, stopping...")
+            DispatchQueue.main.async {
+                self.didStopDueToSilence = true
+            }
+            self.stopRecording()
+        }
+        
+        silenceWorkItem = workItem
+        
+        // Schedule on main queue
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + settings.silenceTimeout,
+            execute: workItem
+        )
     }
     
     // MARK: - Audio Level Extraction
@@ -203,9 +289,32 @@ class SpeechRecognitionManager: ObservableObject {
         self.settings = newSettings
     }
     
-    enum RecognitionError: Error {
+    // MARK: - Error Types
+    
+    enum RecognitionError: LocalizedError {
         case requestCreationFailed
         case audioEngineFailure
+        case microphoneUnavailable
+        case recognitionTimeout
         case permissionDenied
+        case unknownError(Error)
+        
+        var errorDescription: String? {
+            switch self {
+            case .requestCreationFailed:
+                return "No se pudo crear la solicitud de reconocimiento."
+            case .audioEngineFailure:
+                return "No se pudo iniciar el micrófono. Intenta de nuevo."
+            case .microphoneUnavailable:
+                return "Micrófono no disponible. Verifica los permisos."
+            case .recognitionTimeout:
+                return "Tiempo de espera agotado. Intenta hablar más claro."
+            case .permissionDenied:
+                return "Se necesitan permisos de micrófono y reconocimiento de voz."
+            case .unknownError(let error):
+                return error.localizedDescription
+            }
+        }
     }
 }
+

@@ -3,7 +3,6 @@
 
 import Foundation
 import FirebaseFirestore
-import FirebaseFirestore
 
 struct Expense: Identifiable, Hashable, Codable {
     @DocumentID var id: String?
@@ -20,6 +19,11 @@ struct Expense: Identifiable, Hashable, Codable {
     let recurringId: String?
     let createdAt: Date?
     let updatedAt: Date?
+    
+    // Guaranteed unique ID for ForEach (fallback if Firestore ID is nil)
+    var stableId: String {
+        id ?? "\(name)_\(date)_\(amount)"
+    }
     
     // Computed property for Date
     var dateAsDate: Date {

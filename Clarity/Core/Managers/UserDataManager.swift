@@ -24,6 +24,7 @@ final class UserDataManager: ObservableObject {
     @Published private(set) var paymentMethods: [String] = []
     @Published private(set) var isLoading = false
     @Published private(set) var error: Error?
+    @Published private(set) var userDocument: UserDocument?
     
     /// Indicates if initial data has been loaded
     var hasLoaded: Bool { !categories.isEmpty }
@@ -74,6 +75,28 @@ final class UserDataManager: ObservableObject {
         do {
             // Check version first
             let doc = try await db.collection("users").document(userId).getDocument()
+            
+            // Decode user document for role and quotas
+            if doc.exists {
+                userDocument = try? doc.data(as: UserDocument.self)
+                
+                // 🔍 DEBUG: Print full user document to console
+                if let data = doc.data() {
+                    logger.info("📄 ===== FULL USER DOCUMENT =====")
+                    // Convert Timestamps to strings for JSON serialization
+                    let cleanData = convertTimestampsToStrings(data)
+                    if let jsonData = try? JSONSerialization.data(withJSONObject: cleanData, options: .prettyPrinted),
+                       let jsonString = String(data: jsonData, encoding: .utf8) {
+                        print(jsonString)
+                    } else {
+                        // Fallback: print raw keys
+                        for (key, value) in data {
+                            print("  \(key): \(value)")
+                        }
+                    }
+                    logger.info("📄 ================================")
+                }
+            }
             
             var shouldReload = true
             
@@ -331,6 +354,24 @@ final class UserDataManager: ObservableObject {
                 updatedAt: nil
             )
         }
+    }
+    
+    // MARK: - Debug Helpers
+    
+    private func convertTimestampsToStrings(_ data: [String: Any]) -> [String: Any] {
+        var result: [String: Any] = [:]
+        for (key, value) in data {
+            if let timestamp = value as? Timestamp {
+                result[key] = timestamp.dateValue().description
+            } else if let nestedDict = value as? [String: Any] {
+                result[key] = convertTimestampsToStrings(nestedDict)
+            } else if let array = value as? [[String: Any]] {
+                result[key] = array.map { convertTimestampsToStrings($0) }
+            } else {
+                result[key] = value
+            }
+        }
+        return result
     }
 }
 

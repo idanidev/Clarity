@@ -5,6 +5,7 @@ import Foundation
 import FirebaseAuth
 import FirebaseFirestore
 import Combine
+import AuthenticationServices
 
 @MainActor
 class AuthViewModel: ObservableObject {
@@ -113,6 +114,54 @@ class AuthViewModel: ObservableObject {
     
     func resetPassword(email: String) async throws {
         try await Auth.auth().sendPasswordReset(withEmail: email)
+    }
+    
+    func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
+        errorMessage = nil
+        
+        guard let identityToken = credential.identityToken,
+              let tokenString = String(data: identityToken, encoding: .utf8) else {
+            errorMessage = "Error obteniendo token de Apple"
+            throw NSError(domain: "AppleSignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: "Token not available"])
+        }
+        
+        let firebaseCredential = OAuthProvider.appleCredential(
+            withIDToken: tokenString,
+            rawNonce: nil,
+            fullName: credential.fullName
+        )
+        
+        do {
+            let result = try await Auth.auth().signIn(with: firebaseCredential)
+            
+            // Check if this is a new user
+            let isNewUser = result.additionalUserInfo?.isNewUser ?? false
+            
+            if isNewUser {
+                // Get display name from Apple (only available on first sign in)
+                var displayName = ""
+                if let fullName = credential.fullName {
+                    let givenName = fullName.givenName ?? ""
+                    let familyName = fullName.familyName ?? ""
+                    displayName = "\(givenName) \(familyName)".trimmingCharacters(in: .whitespaces)
+                }
+                
+                if displayName.isEmpty {
+                    displayName = result.user.email?.components(separatedBy: "@").first ?? "Usuario"
+                }
+                
+                // Update display name
+                let changeRequest = result.user.createProfileChangeRequest()
+                changeRequest.displayName = displayName
+                try? await changeRequest.commitChanges()
+                
+                // Create user document
+                try await createUserDocument(user: result.user, displayName: displayName)
+            }
+        } catch {
+            errorMessage = mapAuthError(error)
+            throw error
+        }
     }
     
     private func mapAuthError(_ error: Error) -> String {

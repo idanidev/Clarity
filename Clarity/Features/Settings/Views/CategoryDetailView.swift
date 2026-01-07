@@ -28,43 +28,25 @@ struct CategoryDetailView: View {
     
     var body: some View {
         Form {
-            // Preview Section
-            Section {
-                HStack {
-                    Spacer()
-                    VStack(spacing: 16) {
-                        Circle()
-                            .fill(Color(hex: selectedColor) ?? .gray)
-                            .frame(width: 100, height: 100)
-                            .shadow(color: (Color(hex: selectedColor) ?? .gray).opacity(0.3), radius: 20)
-                        
-                        Text(name.isEmpty ? "Nueva Categoría" : name)
-                            .font(.title2.bold())
-                            .multilineTextAlignment(.center)
-                        
-                        Text("\(subcategories.count) subcategoría\(subcategories.count == 1 ? "" : "s")")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 20)
-                    Spacer()
+            // Name with inline preview
+            Section("Nombre") {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(Color(hex: selectedColor) ?? .gray)
+                        .frame(width: 44, height: 44)
+                    
+                    TextField("Nombre de la categoría", text: $name)
+                        .font(.body)
+                        .onChange(of: name) { _, _ in hasChanges = true }
                 }
             }
-            .listRowBackground(Color.clear)
             
-            // Name
-            Section("Nombre") {
-                TextField("Nombre de la categoría", text: $name)
-                    .font(.body)
-                    .onChange(of: name) { _, _ in hasChanges = true }
-            }
-            
-            // Color Picker
+            // Color Picker - more compact iOS style
             Section("Color") {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4), spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
                     ForEach(CategoryColors.allCases, id: \.self) { colorHex in
                         Button {
-                            withAnimation(.bouncy) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
                                 selectedColor = colorHex
                                 hasChanges = true
                             }
@@ -72,21 +54,19 @@ struct CategoryDetailView: View {
                         } label: {
                             Circle()
                                 .fill(Color(hex: colorHex) ?? .gray)
-                                .frame(height: 50)
+                                .frame(width: 36, height: 36)
                                 .overlay {
                                     if selectedColor == colorHex {
-                                        Circle()
-                                            .stroke(Color.white, lineWidth: 3)
-                                        Circle()
-                                            .stroke(Color(hex: colorHex) ?? .gray, lineWidth: 6)
-                                            .scaleEffect(1.2)
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 14, weight: .bold))
+                                            .foregroundStyle(.white)
                                     }
                                 }
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 4)
             }
             
             // Subcategories

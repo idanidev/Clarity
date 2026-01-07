@@ -105,20 +105,44 @@ struct SkeletonCircle: View {
     }
 }
 
-// MARK: - Category Colors
+// MARK: - Category Colors (Apple-style palette)
 enum CategoryColors {
     static let allCases = [
-        indigo, amber, violet, pink,
-        emerald, red, teal, blue
+        // Row 1: Vibrant
+        red, orange, yellow, green, mint, cyan,
+        // Row 2: Blues & Purples
+        blue, indigo, purple, pink, brown, gray,
+        // Row 3: Soft pastels
+        coral, peach, lavender, mint2, sky, slate
     ]
     
-    // Modern Palette
-    static let indigo = "#6366F1"
-    static let amber = "#F59E0B"
-    static let violet = "#8B5CF6"
-    static let pink = "#EC4899"
-    static let emerald = "#10B981"
-    static let red = "#EF4444"
-    static let teal = "#14B8A6"
-    static let blue = "#3B82F6"
+    // Vibrant Colors
+    static let red = "#FF3B30"
+    static let orange = "#FF9500"
+    static let yellow = "#FFCC00"
+    static let green = "#34C759"
+    static let mint = "#00C7BE"
+    static let cyan = "#32ADE6"
+    
+    // Blues & Purples
+    static let blue = "#007AFF"
+    static let indigo = "#5856D6"
+    static let purple = "#AF52DE"
+    static let pink = "#FF2D55"
+    static let brown = "#A2845E"
+    static let gray = "#8E8E93"
+    
+    // Soft Pastels
+    static let coral = "#FF6B6B"
+    static let peach = "#FFAB76"
+    static let lavender = "#B4A7D6"
+    static let mint2 = "#7FDBCA"
+    static let sky = "#87CEEB"
+    static let slate = "#708090"
+    
+    // Legacy aliases for backwards compatibility
+    static let amber = orange
+    static let violet = purple
+    static let emerald = green
+    static let teal = mint
 }

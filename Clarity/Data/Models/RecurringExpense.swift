@@ -11,8 +11,8 @@ struct RecurringExpense: Codable, Identifiable {
     let category: String
     let subcategory: String?
     let paymentMethod: String
-    var frequency: RecurringFrequency // Now has default in decoder
-    let dayOfMonth: Int // 1-31
+    var frequency: RecurringFrequency
+    let dayOfMonth: Int
     var active: Bool
     var icon: String?
     let startDate: String?
@@ -21,17 +21,24 @@ struct RecurringExpense: Codable, Identifiable {
     var createdAt: String?
     var updatedAt: String?
     
+    // Guaranteed unique ID for ForEach
+    var stableId: String {
+        id ?? "\(name)_\(dayOfMonth)_\(amount)"
+    }
+    
     enum CodingKeys: String, CodingKey {
+        case id  // Include id so @DocumentID can be decoded
         case amount, name, category, subcategory, paymentMethod
         case frequency, dayOfMonth, active, icon
         case startDate, endDate, lastCreated, createdAt, updatedAt
-        // Note: id is NOT included - @DocumentID handles it automatically
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         
-        // id is handled by @DocumentID - don't decode manually
+        // Decode id properly with DocumentID wrapper
+        _id = try container.decode(DocumentID<String>.self, forKey: .id)
+
         amount = try container.decode(Double.self, forKey: .amount)
         name = try container.decode(String.self, forKey: .name)
         category = try container.decode(String.self, forKey: .category)
