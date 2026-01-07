@@ -37,7 +37,7 @@ class AIAssistantViewModel {
         // Access AuthViewModel to get user document
         // Admin users get unlimited access
         if let userDoc = UserDataManager.shared.userDocument {
-            if userDoc.role == "admin" {
+            if userDoc.isAdmin {
                 isUnlimited = true
                 quotaRemaining = 999999
                 quotaTotal = 999999

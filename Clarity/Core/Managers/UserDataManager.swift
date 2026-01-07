@@ -79,23 +79,6 @@ final class UserDataManager: ObservableObject {
             // Decode user document for role and quotas
             if doc.exists {
                 userDocument = try? doc.data(as: UserDocument.self)
-                
-                // 🔍 DEBUG: Print full user document to console
-                if let data = doc.data() {
-                    logger.info("📄 ===== FULL USER DOCUMENT =====")
-                    // Convert Timestamps to strings for JSON serialization
-                    let cleanData = convertTimestampsToStrings(data)
-                    if let jsonData = try? JSONSerialization.data(withJSONObject: cleanData, options: .prettyPrinted),
-                       let jsonString = String(data: jsonData, encoding: .utf8) {
-                        print(jsonString)
-                    } else {
-                        // Fallback: print raw keys
-                        for (key, value) in data {
-                            print("  \(key): \(value)")
-                        }
-                    }
-                    logger.info("📄 ================================")
-                }
             }
             
             var shouldReload = true
@@ -292,31 +275,28 @@ final class UserDataManager: ObservableObject {
         return loadedCategories.sorted { $0.name < $1.name }
     }
     
-    /// Initializes default categories in Firebase for a new user
+    /// Initializes default categories in Firebase for a new user (as embedded map)
     private func initializeDefaultCategories(for userId: String) async throws {
         let defaults = createDefaultCategories()
         
-        logger.info("Initializing \(defaults.count) default categories in Firebase for user \(userId, privacy: .private)")
+        logger.info("Initializing \(defaults.count) default categories as embedded map for user \(userId, privacy: .private)")
         
-        let batch = db.batch()
-        let categoriesRef = db.collection("users").document(userId).collection("categories")
+        // Build categories map
+        var categoriesMap: [String: [String: Any]] = [:]
         
         for category in defaults {
-            let docRef = categoriesRef.document()
-            var categoryData = category
-            categoryData.id = docRef.documentID
-            categoryData.createdAt = Date()
-            categoryData.updatedAt = Date()
-            
-            do {
-                try batch.setData(from: categoryData, forDocument: docRef)
-            } catch {
-                logger.error("Failed to encode category \(category.name): \(error.localizedDescription)")
-            }
+            categoriesMap[category.name] = [
+                "color": category.color,
+                "subcategories": category.subcategories
+            ]
         }
         
-        try await batch.commit()
-        logger.info("✅ Default categories created in Firebase")
+        // Write to user document (embedded map)
+        try await db.collection("users").document(userId).setData([
+            "categories": categoriesMap
+        ], merge: true)
+        
+        logger.info("✅ Default categories created as embedded map in user document")
     }
     
     private func loadPaymentMethods(for userId: String) async throws -> Set<String> {

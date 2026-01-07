@@ -88,7 +88,6 @@ class AuthViewModel: ObservableObject {
     
     private func createUserDocument(user: User, displayName: String) async throws {
         let userDoc = UserDocument(
-            uid: user.uid,
             email: user.email ?? "",
             displayName: displayName,
             role: "user",

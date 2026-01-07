@@ -13,7 +13,7 @@ struct VoiceSettings: Codable {
     
     static let `default` = VoiceSettings(
         autoConfirm: false,  // Changed to false by default - less aggressive
-        autoConfirmDelay: 5.0,
+        autoConfirmDelay: 3.0, // Reduced from 5.0 to 3.0 for better UX
         vibration: true,
         showSuggestions: true,
         silenceTimeout: 2.5,

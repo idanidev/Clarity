@@ -1,12 +1,12 @@
 // Category.swift
-// Category data model
+// Category data model - stored as embedded map in user document
 
 import Foundation
 import FirebaseFirestore
 import SwiftUI
 
 struct Category: Codable, Identifiable, Hashable {
-    @DocumentID var id: String?
+    var id: String?  // For embedded map: id = category name
     var name: String
     var color: String // Hex color
     var subcategories: [String]

@@ -6,9 +6,10 @@ import Combine
 
 struct VoiceRecordingSheet: View {
     @ObservedObject var speechManager: SpeechRecognitionManager
-    @Binding var isPresented: Bool
+    var onComplete: (String) -> Void
     
     @State private var currentExampleIndex = 0
+    @State private var timer = Timer.publish(every: 3.0, on: .main, in: .common).autoconnect()
     
     private let examples = [
         "💡 \"25 en supermercado\"",
@@ -18,8 +19,6 @@ struct VoiceRecordingSheet: View {
         "💡 \"He gastado 12 en café\"",
         "💡 \"18€ en copas\""
     ]
-    
-    private let timer = Timer.publish(every: 2.5, on: .main, in: .common).autoconnect()
     
     var body: some View {
         VStack(spacing: 0) {
@@ -83,20 +82,23 @@ struct VoiceRecordingSheet: View {
                             .foregroundColor(.secondary)
                         
                         // Rotating examples
-                        ForEach(0..<examples.count, id: \.self) { index in
-                            Text(examples[index])
-                                .font(.system(size: 12))
-                                .foregroundColor(index == currentExampleIndex ? .purple : .secondary.opacity(0.3))
-                                .animation(.bouncy(duration: 0.3), value: currentExampleIndex)
-                        }
-                        .onReceive(timer) { _ in
-                            currentExampleIndex = (currentExampleIndex + 1) % examples.count
-                        }
+                        Text(examples[currentExampleIndex])
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.purple)
+                            .id("example-\(currentExampleIndex)")
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 } else {
                     Text(fullText)
                         .font(.system(size: 18))
                         .foregroundColor(.primary)
+                        .multilineTextAlignment(.leading)
+                    
+                    if !speechManager.isListening {
+                        Text("Pausado")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -110,22 +112,33 @@ struct VoiceRecordingSheet: View {
             
             // Stop button
             Button {
-                speechManager.stopRecording()
-                isPresented = false
+                finishRecording()
             } label: {
                 HStack {
                     Image(systemName: "stop.fill")
-                    Text("Detener grabación")
+                    Text("Terminar")
                         .fontWeight(.semibold)
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.red.opacity(0.2))
+                .background(Color.red.opacity(0.1))
                 .foregroundColor(.red)
                 .cornerRadius(16)
             }
             .padding()
         }
         .background(.ultraThinMaterial)
+        .onReceive(timer) { _ in
+            withAnimation {
+                currentExampleIndex = (currentExampleIndex + 1) % examples.count
+            }
+        }
+    }
+    
+    private func finishRecording() {
+        speechManager.stopRecording()
+        let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        onComplete(fullTranscript)
     }
 }

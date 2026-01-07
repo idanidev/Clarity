@@ -6,15 +6,35 @@ import FirebaseFirestore
 import FirebaseFirestore
 
 struct UserDocument: Codable {
-    let uid: String
-    let email: String
-    let displayName: String?
-    let role: String // "user" | "admin"
-    let createdAt: Date?
-    let updatedAt: Date?
-    let settings: UserSettings?
-    let aiQuotas: AIQuotas?
-    let subscription: Subscription?
+    // Core fields (optional since not all may exist in Firebase)
+    var email: String?
+    var displayName: String?
+    var role: String? // "user" | "admin" (default to "user" if missing)
+    var createdAt: Date?
+    var updatedAt: Date?
+    
+    // Flat settings (your Firebase has these at root level)
+    var theme: String?
+    var language: String?
+    var income: Double?
+    
+    // Nested objects
+    var settings: UserSettings?
+    var aiQuotas: AIQuotas?
+    var subscription: Subscription?
+    var goals: Goals?
+    
+    // Computed helpers
+    var isAdmin: Bool { role == "admin" }
+    var effectiveTheme: String { theme ?? settings?.theme ?? "system" }
+    var effectiveLanguage: String { language ?? settings?.language ?? "es" }
+}
+
+// MARK: - Goals (from your Firebase)
+struct Goals: Codable {
+    var monthlySavingsGoal: Double?
+    var totalSavingsGoal: Double?
+    var categoryGoals: [String: Double]?
 }
 
 struct UserSettings: Codable {

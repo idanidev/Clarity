@@ -4,11 +4,9 @@
 import SwiftUI
 
 struct VoiceConfirmationSheet: View {
-    @Binding var expense: Expense?
-    @Binding var isPresented: Bool
-    
-    let categories: [Category]
+    let expense: Expense
     let wasFullyDetected: Bool
+    let categories: [Category]
     let onConfirm: (Expense) -> Void
     let onCancel: () -> Void
     
@@ -18,13 +16,6 @@ struct VoiceConfirmationSheet: View {
     @State private var selectedSubcategory: String = ""
     @State private var showNewSubcategory = false
     @State private var newSubcategoryName = ""
-    @State private var hasUserEdited = false
-    
-    // Auto-confirm countdown
-    @State private var countdownSeconds = 5
-    @State private var countdownTimer: Timer?
-    
-    var settings = VoiceSettings.load()
     
     var body: some View {
         NavigationStack {
@@ -36,7 +27,7 @@ struct VoiceConfirmationSheet: View {
                         HStack(spacing: 8) {
                             Image(systemName: wasFullyDetected ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                                 .foregroundStyle(wasFullyDetected ? .green : .orange)
-                            Text(wasFullyDetected ? "Detectado Completamente" : "Necesita Revisión")
+                            Text(wasFullyDetected ? "Gasto detectado" : "Revisar detalles")
                                 .font(.subheadline.weight(.medium))
                         }
                         .padding(.horizontal, 16)
@@ -49,14 +40,7 @@ struct VoiceConfirmationSheet: View {
                         // Amount preview
                         Text(amount.isEmpty ? "€0.00" : "€\(amount)")
                             .font(.system(size: 42, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.clarityPrimary)
-                        
-                        // Countdown if applicable
-                        if wasFullyDetected && !hasUserEdited && countdownSeconds > 0 {
-                            Text("Auto-confirmando en \(countdownSeconds)s...")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                            .foregroundStyle(Color.primary)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
@@ -73,20 +57,12 @@ struct VoiceConfirmationSheet: View {
                         TextField("0.00", text: $amount)
                             .keyboardType(.decimalPad)
                             .font(.title3.weight(.semibold))
-                            .onChange(of: amount) { _, _ in
-                                hasUserEdited = true
-                                stopCountdown()
-                            }
                     }
                 }
                 
                 // Description Section
                 Section("Descripción") {
                     TextField("Descripción del gasto", text: $name)
-                        .onChange(of: name) { _, _ in
-                            hasUserEdited = true
-                            stopCountdown()
-                        }
                 }
                 
                 // Category Section
@@ -98,8 +74,6 @@ struct VoiceConfirmationSheet: View {
                         }
                     }
                     .onChange(of: selectedCategory) { old, new in
-                        hasUserEdited = true
-                        stopCountdown()
                         if old?.id != new?.id {
                             selectedSubcategory = ""
                         }
@@ -131,10 +105,6 @@ struct VoiceConfirmationSheet: View {
                                     Text(sub).tag(sub)
                                 }
                             }
-                            .onChange(of: selectedSubcategory) { _, _ in
-                                hasUserEdited = true
-                                stopCountdown()
-                            }
                         }
                     } header: {
                         HStack {
@@ -155,11 +125,7 @@ struct VoiceConfirmationSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") {
-                        stopCountdown()
-                        onCancel()
-                        isPresented = false
-                    }
+                    Button("Cancelar", action: onCancel)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
@@ -168,7 +134,7 @@ struct VoiceConfirmationSheet: View {
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "checkmark")
-                            Text("Confirmar")
+                            Text("Guardar")
                         }
                         .fontWeight(.semibold)
                     }
@@ -177,28 +143,21 @@ struct VoiceConfirmationSheet: View {
             }
         }
         .onAppear {
-            if let expense = expense {
-                amount = String(format: "%.2f", expense.amount)
-                name = expense.name
-                selectedCategory = categories.first { $0.name == expense.category }
-                selectedSubcategory = expense.subcategory ?? ""
-            }
-            
-            // Start countdown only if fully detected
-            if wasFullyDetected && canConfirm {
-                startCountdown()
-            }
+            initializeFields()
         }
-        .onDisappear {
-            stopCountdown()
-        }
+    }
+    
+    private func initializeFields() {
+        amount = String(format: "%.2f", expense.amount)
+        name = expense.name
+        selectedCategory = categories.first { $0.name == expense.category }
+        selectedSubcategory = expense.subcategory ?? ""
     }
     
     private var canConfirm: Bool {
         guard let amountValue = Double(amount.replacingOccurrences(of: ",", with: ".")),
               amountValue > 0,
-              selectedCategory != nil,
-              !selectedSubcategory.isEmpty else {
+              selectedCategory != nil else {
             return false
         }
         return true
@@ -210,44 +169,18 @@ struct VoiceConfirmationSheet: View {
             return
         }
         
+        let finalSubcategory = selectedSubcategory.isEmpty ? nil : selectedSubcategory
+        
         let confirmed = Expense(
             amount: amountValue,
             name: name.isEmpty ? "Gasto por voz" : name,
             category: category.name,
-            subcategory: selectedSubcategory.isEmpty ? nil : selectedSubcategory,
+            subcategory: finalSubcategory,
             date: Formatters.isoString(from: Date()),
             paymentMethod: "Tarjeta"
         )
         
-        stopCountdown()
         onConfirm(confirmed)
-        isPresented = false
-    }
-    
-    private func startCountdown() {
-        countdownSeconds = Int(settings.autoConfirmDelay)
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if countdownSeconds > 0 {
-                countdownSeconds -= 1
-            } else {
-                confirmExpense()
-            }
-        }
-    }
-    
-    private func stopCountdown() {
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-        countdownSeconds = 0
-    }
-}
-
-// Helper extension
-extension Date {
-    func toString(format: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = format
-        return formatter.string(from: self)
     }
 }
 

@@ -89,13 +89,6 @@ struct SettingsView: View {
                 Section("Información") {
                     LabeledContent("Versión", value: "1.0.0")
                     
-                    // DEBUG: Print user document (remove after debugging)
-                    Button {
-                        printUserDocument()
-                    } label: {
-                        Label("Debug: Exportar datos", systemImage: "doc.text")
-                    }
-                    
                     Link(destination: URL(string: "https://clarity-gastos.web.app/privacy")!) {
                         Text("Política de Privacidad")
                     }
@@ -186,51 +179,12 @@ struct SettingsView: View {
     
     private func loadThemeFromFirebase() {
         // Load from Firebase if available, otherwise use local
-        if let userTheme = authViewModel.userDocument?.settings?.theme {
+        if let userDoc = authViewModel.userDocument {
+            let userTheme = userDoc.effectiveTheme
             selectedTheme = userTheme
             applyTheme(userTheme)
         } else {
             applyTheme(selectedTheme)
-        }
-    }
-    
-    // DEBUG: Print user document to Xcode console
-    private func printUserDocument() {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            print("❌ No user logged in")
-            return
-        }
-        
-        Task {
-            do {
-                let doc = try await Firestore.firestore()
-                    .collection("users")
-                    .document(userId)
-                    .getDocument()
-                
-                if let data = doc.data() {
-                    print("\n" + String(repeating: "=", count: 50))
-                    print("📄 USER DOCUMENT FOR: \(userId)")
-                    print(String(repeating: "=", count: 50))
-                    
-                    // Pretty print JSON
-                    if let jsonData = try? JSONSerialization.data(withJSONObject: data, options: .prettyPrinted),
-                       let jsonString = String(data: jsonData, encoding: .utf8) {
-                        print(jsonString)
-                    } else {
-                        // Fallback to raw print
-                        for (key, value) in data {
-                            print("\(key): \(value)")
-                        }
-                    }
-                    
-                    print(String(repeating: "=", count: 50) + "\n")
-                    HapticManager.notification(.success)
-                }
-            } catch {
-                print("❌ Error fetching document: \(error)")
-                HapticManager.notification(.error)
-            }
         }
     }
 }
