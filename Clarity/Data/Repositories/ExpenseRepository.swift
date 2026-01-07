@@ -44,8 +44,6 @@ class ExpenseRepository: ObservableObject {
         
         let snapshot = try await query.getDocuments()
         
-        print("🔥 FIREBASE: Found \(snapshot.documents.count) documents (limit: \(limit ?? -1))")
-        
         return snapshot.documents.compactMap { doc in
             try? doc.data(as: Expense.self)
         }

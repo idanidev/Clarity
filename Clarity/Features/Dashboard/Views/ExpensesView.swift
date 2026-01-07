@@ -13,31 +13,39 @@ struct ExpensesView: View {
     
     // Cache for performance
     @State private var cachedFilteredExpenses: [Expense] = []
+    @State private var showFilterSheet = false
     
     
     var body: some View {
-        NavigationStack {
-            mainContent
-                .background(.regularMaterial)
-                .navigationTitle("Gastos")
-                .navigationBarTitleDisplayMode(.large)
-                .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-                .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
-                .toolbar { filterToolbar }
-                .refreshable { await viewModel.refresh() }
-                .task {
-                    await viewModel.loadExpenses()
-                    updateFilteredExpenses()
-                }
-                .onChange(of: viewModel.expenses) { _, _ in updateFilteredExpenses() }
-                .onChange(of: filter) { _, _ in updateFilteredExpenses() }
-                .onChange(of: searchText) { _, _ in updateFilteredExpenses() }
-                .onChange(of: cachedFilteredExpenses) { _, _ in buildCategoryGroups() }
-                .sheet(item: $expenseToEdit) { expense in
-                    editSheet(for: expense)
-                }
-                .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
-        }
+        mainContent
+            .background(.regularMaterial)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
+            .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
+            .refreshable { await viewModel.refresh() }
+            .task {
+                await viewModel.loadExpenses()
+                updateFilteredExpenses()
+            }
+            .onChange(of: viewModel.expenses) { _, _ in updateFilteredExpenses() }
+            .onChange(of: filter) { _, _ in updateFilteredExpenses() }
+            .onChange(of: searchText) { _, _ in updateFilteredExpenses() }
+            .onChange(of: cachedFilteredExpenses) { _, _ in buildCategoryGroups() }
+            .sheet(item: $expenseToEdit) { expense in
+                editSheet(for: expense)
+            }
+            .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
+            .sheet(isPresented: $showFilterSheet) {
+                FilterSheet(
+                    searchText: $searchText,
+                    filter: $filter,
+                    onApply: {
+                        updateFilteredExpenses()
+                        buildCategoryGroups()
+                    }
+                )
+            }
     }
     
     // MARK: - Main Content
@@ -50,12 +58,10 @@ struct ExpensesView: View {
                     tableContent
                 case 1:
                     VStack(spacing: 0) {
-                        filterBar
                         DonutChartContent(viewModel: viewModel, filter: filter)
                     }
                 case 2:
                     VStack(spacing: 0) {
-                        filterBar
                         CalendarChartContent(viewModel: viewModel)
                     }
                 default:
@@ -73,63 +79,58 @@ struct ExpensesView: View {
     }
     
     // MARK: - Segmented Picker
+    // MARK: - Bottom Toolbar (Filter + View Modes)
     private var segmentedPicker: some View {
-        Picker("Vista", selection: $selectedView) {
-            Text("Tabla").tag(0)
-            Text("Gráfico").tag(1)
-            Text("Calendario").tag(2)
+        HStack {
+            // Filter Button (Left)
+            Button {
+                showFilterSheet = true
+                HapticManager.selection()
+            } label: {
+                Image(systemName: "line.3.horizontal.decrease.circle" + (filter.hasActiveFilters || !searchText.isEmpty ? ".fill" : ""))
+                    .font(.system(size: 22))
+                    .foregroundStyle(filter.hasActiveFilters || !searchText.isEmpty ? Color.clarityPrimary : .secondary)
+            }
+            .padding(.leading, Spacing.sm)
+            
+            Spacer()
+            
+            // View Mode Selector (Icons)
+            HStack(spacing: 0) {
+                viewModeButton(icon: "list.bullet", index: 0)
+                viewModeButton(icon: "chart.pie.fill", index: 1)
+                viewModeButton(icon: "calendar", index: 2)
+            }
+            .background(Capsule().fill(Color.bgTertiary))
+            
+            Spacer()
+            
+            // Balance spacer to center the view mode selector relative to screen
+            // or we just let it be center-ish.
+            // Empty view of same size as filter button to perfectly center the middle part?
+            Color.clear.frame(width: 44, height: 44)
         }
-        .pickerStyle(.segmented)
         .padding(.horizontal)
         .padding(.vertical, Spacing.sm)
         .background(.ultraThinMaterial)
     }
     
-    // MARK: - Filter Bar (for charts)
-    private var filterBar: some View {
-        HStack {
-            Spacer()
-            
-            Menu {
-                Section("Período") {
-                    ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
-                        Button {
-                            filter.dateRange = range
-                            HapticManager.selection()
-                        } label: {
-                            HStack {
-                                Text(range.rawValue)
-                                if filter.dateRange == range {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(filter.dateRange.rawValue)
-                        .font(.subheadline)
-                    Image(systemName: "chevron.down")
-                        .font(.caption2)
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, Spacing.sm)
-                .padding(.vertical, Spacing.xs)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
+    private func viewModeButton(icon: String, index: Int) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedView = index
             }
+            HapticManager.selection()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: selectedView == index ? .semibold : .regular))
+                .foregroundStyle(selectedView == index ? Color.clarityPrimary : .secondary)
+                .frame(width: 50, height: 32)
         }
-        .padding(.horizontal)
-        .padding(.vertical, Spacing.xs)
-    }
-    
-    // MARK: - Filter Toolbar (empty for now)
-    @ToolbarContentBuilder
-    private var filterToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
-            EmptyView()
-        }
+        .background(
+             Capsule()
+                 .fill(selectedView == index ? Color.clarityPrimary.opacity(0.15) : Color.clear)
+        )
     }
     
     // MARK: - Sheets
@@ -175,20 +176,12 @@ struct ExpensesView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             
-            // Search Bar
-            SearchBarView(
-                searchText: $searchText,
-                filter: $filter,
-                onFilterChange: onBuildCategoryGroups
-            )
-            .padding(.horizontal)
-            .padding(.top, 4)
-            
-            // Active filter pills
+            // Active filter pills (kept for feedback)
             ActiveFilterPillsView(
                 filter: $filter,
                 onFilterChange: onBuildCategoryGroups
             )
+            .padding(.top, 4)
             
             // Content
             ExpenseListContent(
@@ -347,12 +340,12 @@ struct ExpensesView: View {
     }
     
     private func colorForCategory(_ categoryWithEmoji: String) -> Color {
-        // Categories in Firebase use full names like "Alimentacion🫄" 
+        // Categories in Firebase use full names like "Alimentacion🫄"
         // So we need to match the full original expense.category
         let userDataManager = UserDataManager.shared
         
         // First try exact match with the full category name from expense
-        if let category = userDataManager.categories.first(where: { 
+        if let category = userDataManager.categories.first(where: {
             $0.name.localizedCaseInsensitiveContains(categoryWithEmoji) ||
             categoryWithEmoji.localizedCaseInsensitiveContains($0.name.components(separatedBy: " ").first ?? $0.name)
         }) {
@@ -361,5 +354,88 @@ struct ExpensesView: View {
         
         // Fallback to default color
         return UserDataManager.shared.color(for: categoryWithEmoji)
+    }
+}
+
+// MARK: - Filter Sheet
+struct FilterSheet: View {
+    @Binding var searchText: String
+    @Binding var filter: ExpenseFilter
+    let onApply: () -> Void
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        NavigationStack {
+            Form {
+                // Search Section
+                Section {
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        TextField("Buscar gastos, categorías...", text: $searchText)
+                    }
+                } header: {
+                    Text("Búsqueda")
+                }
+                
+                // Date Range Section
+                Section {
+                    Picker("Periodo", selection: $filter.dateRange) {
+                        ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
+                            Text(range.rawValue).tag(range)
+                        }
+                    }
+                } header: {
+                    Text("Fecha")
+                }
+                
+                // Payment Method Section
+                Section {
+                    ForEach(["Tarjeta", "Efectivo", "Bizum", "Transferencia"], id: \.self) { method in
+                        Button {
+                            if filter.selectedPaymentMethods.contains(method) {
+                                filter.selectedPaymentMethods.remove(method)
+                            } else {
+                                filter.selectedPaymentMethods.insert(method)
+                            }
+                        } label: {
+                            HStack {
+                                Text(method)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                if filter.selectedPaymentMethods.contains(method) {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.clarityPrimary)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Método de Pago")
+                }
+                
+                // Categories would go here if needed, or rely on search
+                
+                if filter.hasActiveFilters || !searchText.isEmpty {
+                    Section {
+                        Button("Limpiar todos los filtros", role: .destructive) {
+                            filter = ExpenseFilter()
+                            searchText = ""
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Filtros")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Listo") {
+                        onApply()
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }

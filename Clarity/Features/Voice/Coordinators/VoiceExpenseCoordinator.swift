@@ -229,6 +229,8 @@ class VoiceExpenseCoordinator: ObservableObject {
         pendingExpense = nil
         wasFullyDetected = false
         isProcessing = false
+        showRecording = false
+        showConfirmation = false
     }
     
     func clearError() {

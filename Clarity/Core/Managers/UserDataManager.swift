@@ -91,7 +91,7 @@ final class UserDataManager: ObservableObject {
                 if version == categoriesVersion,
                    let lastUpdate = lastCategoriesUpdate,
                    Date().timeIntervalSince(lastUpdate) < 3600 {
-                    logger.info("✅ Categories cache hit, skipping reload")
+                    // Cache hit
                     shouldReload = false
                 } else {
                     categoriesVersion = version
@@ -102,7 +102,6 @@ final class UserDataManager: ObservableObject {
             if shouldReload {
                 let loadedCategories = try await loadCategories(for: userId)
                 categories = loadedCategories
-                logger.info("Loaded \(self.categories.count) categories")
             }
         } catch {
             logger.warning("Could not load user categories, using defaults: \(error.localizedDescription)")
@@ -115,7 +114,6 @@ final class UserDataManager: ObservableObject {
             var allMethods = Set(PaymentMethod.allCases.map { $0.rawValue })
             allMethods.formUnion(customMethods)
             paymentMethods = allMethods.sorted()
-            logger.info("Loaded \(self.paymentMethods.count) payment methods")
         } catch {
             logger.warning("Could not load payment methods, using defaults: \(error.localizedDescription)")
             paymentMethods = PaymentMethod.allCases.map { $0.rawValue }
@@ -155,7 +153,6 @@ final class UserDataManager: ObservableObject {
             "categoriesUpdatedAt": FieldValue.serverTimestamp()
         ])
         
-        logger.info("✅ Category '\(category.name)' added to user document map")
         await refreshCategories()
     }
     
@@ -183,7 +180,6 @@ final class UserDataManager: ObservableObject {
             "categoriesUpdatedAt": FieldValue.serverTimestamp()
         ])
         
-        logger.info("✅ Category '\(category.name)' updated in user document map")
         await refreshCategories()
     }
     
@@ -199,7 +195,6 @@ final class UserDataManager: ObservableObject {
             "categoriesUpdatedAt": FieldValue.serverTimestamp()
         ])
         
-        logger.info("✅ Category '\(id)' deleted from user document map")
         await refreshCategories()
     }
     
@@ -210,7 +205,6 @@ final class UserDataManager: ObservableObject {
         error = nil
         categoriesVersion = nil
         lastCategoriesUpdate = nil
-        logger.info("User data cache cleared")
     }
     
     // MARK: - Convenience Accessors
@@ -271,15 +265,12 @@ final class UserDataManager: ObservableObject {
             order += 1
         }
         
-        logger.info("✅ Loaded \(loadedCategories.count) categories from user document map")
         return loadedCategories.sorted { $0.name < $1.name }
     }
     
     /// Initializes default categories in Firebase for a new user (as embedded map)
     private func initializeDefaultCategories(for userId: String) async throws {
         let defaults = createDefaultCategories()
-        
-        logger.info("Initializing \(defaults.count) default categories as embedded map for user \(userId, privacy: .private)")
         
         // Build categories map
         var categoriesMap: [String: [String: Any]] = [:]
@@ -295,8 +286,6 @@ final class UserDataManager: ObservableObject {
         try await db.collection("users").document(userId).setData([
             "categories": categoriesMap
         ], merge: true)
-        
-        logger.info("✅ Default categories created as embedded map in user document")
     }
     
     private func loadPaymentMethods(for userId: String) async throws -> Set<String> {

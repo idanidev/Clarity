@@ -38,6 +38,7 @@ struct VoiceExpenseButton: View {
                     expense: expense,
                     wasFullyDetected: voiceCoordinator.wasFullyDetected,
                     categories: categories,
+                    speechManager: speechManager,
                     onConfirm: { confirmed in
                         Task {
                             await voiceCoordinator.saveExpense(

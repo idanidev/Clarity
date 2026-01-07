@@ -62,7 +62,6 @@ class BudgetsViewModel {
                     // Category goals
                     if let categoryGoals = goals["categoryGoals"] as? [String: Double] {
                         budgetLimits = categoryGoals
-                        print("✅ Loaded budgets from goals.categoryGoals: \(categoryGoals)")
                     }
                     
                     // Monthly savings goal
@@ -77,21 +76,18 @@ class BudgetsViewModel {
                         currentSavings = savings
                     }
                 } else {
-                    print("⚠️ No goals found")
                     budgetLimits = [:]
                 }
                 
                 // Load income (root level field)
                 if let userIncome = data["income"] as? Double {
                     income = userIncome
-                    print("✅ Loaded income: \(userIncome)")
                 }
             } else {
-                print("⚠️ User document does not exist")
                 budgetLimits = [:]
             }
         } catch {
-            print("❌ Error loading budgets: \(error)")
+            print("Error loading budgets: \(error.localizedDescription)")
         }
     }
     
@@ -141,7 +137,6 @@ class BudgetsViewModel {
                     ]
                 ], merge: true)
             
-            print("✅ Saved budgets to goals.categoryGoals")
             await calculateProgress()
         } catch {
             print("❌ Error saving budgets: \(error)")

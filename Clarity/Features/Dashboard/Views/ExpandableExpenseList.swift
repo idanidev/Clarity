@@ -176,6 +176,13 @@ struct ExpenseRow: View {
     
     var body: some View {
         HStack(spacing: Spacing.xs) {  // Reduced from sm
+            // Category Color Bar
+            Capsule()
+                .fill(categoryColor)
+                .frame(width: 4)
+                .padding(.vertical, 2)
+                .padding(.trailing, 4)
+            
             // Icon
             Image(systemName: "doc.text.fill")
                 .font(.system(size: IconSize.small))
