@@ -187,9 +187,11 @@ struct ExpenseFilterSheet: View {
                     }
                 }
                 .padding()
-                .padding(.bottom, 100)
             }
             .background(Color(.systemGroupedBackground))
+            .safeAreaInset(edge: .bottom) {
+                quickActionsSection
+            }
             .navigationTitle("Filtros")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -200,9 +202,6 @@ struct ExpenseFilterSheet: View {
                     Button("Aplicar") { applyFilters() }
                         .fontWeight(.semibold)
                 }
-            }
-            .overlay(alignment: .bottom) {
-                quickActionsSection
             }
         }
     }
@@ -316,15 +315,7 @@ struct ExpenseFilterSheet: View {
             }
         }
         .padding()
-        // Docked full-width panel style
-        .background {
-            ZStack {
-                Color(.systemBackground) // Solid opaque blocker
-                Color(.secondarySystemGroupedBackground)
-            }
-            .ignoresSafeArea() // Extend background to very bottom edge
-        }
-        .clipShape(Rectangle()) // Full width, no corners or top-only if preferred, keeping simple rectangle for dock
+        .background(Color(.secondarySystemGroupedBackground))
         .shadow(color: .black.opacity(0.1), radius: 5, y: -5)
     }
     

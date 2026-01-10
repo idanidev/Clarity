@@ -217,6 +217,32 @@ struct MainTabView: View {
         .task {
             await userDataManager.loadUserData()
         }
+        .onOpenURL { url in
+            if url.scheme == "clarity" && url.host == "add-expense" {
+                // Determine if we are in the middle of a transition or if menu is open
+                if showRadialMenu {
+                    closeMenu()
+                }
+                
+                // Parse optional input parameter
+                var inputPhrase: String?
+                if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
+                   let queryItems = components.queryItems {
+                    inputPhrase = queryItems.first(where: { $0.name == "input" })?.value
+                }
+                
+                // Small delay to ensure clean state transition if coming from background
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    if let phrase = inputPhrase, !phrase.isEmpty {
+                        // Use the existing voice logic to parse the text
+                        voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
+                    } else {
+                        // Fallback to manual entry
+                        showManualExpense = true
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - Radial Menu Overlay
