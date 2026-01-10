@@ -265,9 +265,13 @@ struct EditRecurringExpenseSheet: View {
     @State private var paymentMethod: String
     @State private var frequency: RecurringFrequency
     @State private var dayOfMonth: Int
+    @State private var billingMonth: Int
     @State private var selectedIcon: String
     @State private var showEmojiPicker = false
     @State private var isSaving = false
+    
+    private let monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                              "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     
     private var categories: [Category] { UserDataManager.shared.categories }
     private var paymentMethods: [String] { UserDataManager.shared.paymentMethods }
@@ -282,6 +286,7 @@ struct EditRecurringExpenseSheet: View {
         _paymentMethod = State(initialValue: expense.paymentMethod)
         _frequency = State(initialValue: expense.frequency)
         _dayOfMonth = State(initialValue: expense.dayOfMonth)
+        _billingMonth = State(initialValue: expense.billingMonth > 0 ? expense.billingMonth : Calendar.current.component(.month, from: Date()))
         _selectedIcon = State(initialValue: expense.icon ?? "💰")
     }
     
@@ -346,6 +351,23 @@ struct EditRecurringExpenseSheet: View {
                             Text("Día \(day)").tag(day)
                         }
                     }
+                    
+                    // Month picker - only for non-monthly frequencies
+                    if frequency.needsMonthSelection {
+                        Picker("Mes de cobro", selection: $billingMonth) {
+                            ForEach(1...12, id: \.self) { month in
+                                Text(monthNames[month - 1]).tag(month)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Programación")
+                } footer: {
+                    if frequency.needsMonthSelection {
+                        Text("Se cobrará el día \(dayOfMonth) de \(monthNames[billingMonth - 1])")
+                    } else {
+                        Text("Se cobrará el día \(dayOfMonth) de cada mes")
+                    }
                 }
             }
             .navigationTitle("Editar Recurrente")
@@ -391,6 +413,7 @@ struct EditRecurringExpenseSheet: View {
             paymentMethod: paymentMethod,
             frequency: frequency,
             dayOfMonth: dayOfMonth,
+            billingMonth: billingMonth,
             active: expense.active,
             icon: selectedIcon,
             startDate: expense.startDate,

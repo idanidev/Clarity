@@ -1,138 +1,90 @@
 // MainTabView.swift
-// Main tab navigation with native iOS TabView and center add button
+// Main tab navigation with integrated radial button - Swift 6 compliant
 
 import SwiftUI
 
+@MainActor
 struct MainTabView: View {
-    @State private var selectedTab = 0
-    @State private var previousTab = 0
-    @State private var showVoiceInput = false
-    @State private var showAddOptions = false
-    @State private var showManualExpense = false
-    @State private var showRecurring = false
-    @ObservedObject private var userDataManager = UserDataManager.shared
-    @State private var dashboardViewModel = DashboardViewModel()
     
-    // Voice components
+    // MARK: - State
+    @State private var selectedTab: TabType = .expenses
+    @State private var coordinator: ExpenseCoordinator
+    
+    // MARK: - Dependencies
     @StateObject private var speechManager = SpeechRecognitionManager()
     @StateObject private var voiceCoordinator = VoiceExpenseCoordinator()
+    @State private var dashboardViewModel = DashboardViewModel()
+    @State private var userDataManager = UserDataManager.shared
     
+    // MARK: - Init
+    init() {
+        let speech = SpeechRecognitionManager()
+        let voice = VoiceExpenseCoordinator()
+        _coordinator = State(initialValue: ExpenseCoordinator(
+            speechManager: speech,
+            voiceCoordinator: voice
+        ))
+        _speechManager = StateObject(wrappedValue: speech)
+        _voiceCoordinator = StateObject(wrappedValue: voice)
+    }
+    
+    // MARK: - Body
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // 5 tabs: Gastos | Metas | [+] | IA | Ajustes
-            TabView(selection: $selectedTab) {
-                NavigationStack {
-                    ExpensesView()
-                }
-                .tabItem {
-                    Image(systemName: "list.bullet")
-                    Text("Gastos")
-                }
-                .tag(0)
-                
-                NavigationStack {
-                    BudgetsView()
-                }
-                .tabItem {
-                    Image(systemName: "target")
-                    Text("Metas")
-                }
-                .tag(1)
-                
-                // Center add button (Primary Action = Voice)
-                Color.clear
-                    .tabItem {
-                        Image(systemName: "mic.badge.plus")
-                    }
-                    .tag(2)
-                
-                NavigationStack {
-                    AIAssistantView()
-                }
-                .tabItem {
-                    Image(systemName: "sparkles")
-                    Text("IA")
-                }
-                .tag(3)
-                
-                NavigationStack {
-                    SettingsView()
-                }
-                .tabItem {
-                    Image(systemName: "gearshape.fill")
-                    Text("Ajustes")
-                }
-                .tag(4)
+        TabView(selection: $selectedTab) {
+            // Tab 1: Expenses
+            NavigationStack {
+                ExpensesView()
             }
-            .tint(Color.clarityPrimary)
-        }
-        // Tab bar button actions handled by onChange
-        // Voice Recording Sheet
-        .sheet(isPresented: $voiceCoordinator.showRecording) {
-            VoiceRecordingSheet(
-                speechManager: speechManager,
-                onComplete: { transcript in
-                    voiceCoordinator.handleTranscript(
-                        transcript,
-                        categories: userDataManager.categories
-                    )
-                }
-            )
-        }
-        // Voice Confirmation Sheet
-        .sheet(isPresented: $voiceCoordinator.showConfirmation) {
-            if let expense = voiceCoordinator.pendingExpense {
-                VoiceConfirmationSheet(
-                    expense: expense,
-                    wasFullyDetected: voiceCoordinator.wasFullyDetected,
-                    categories: userDataManager.categories,
-                    speechManager: speechManager,
-                    onConfirm: { confirmed in
-                        Task {
-                            await voiceCoordinator.saveExpense(
-                                confirmed,
-                                viewModel: dashboardViewModel
-                            )
-                        }
-                    },
-                    onCancel: {
-                        voiceCoordinator.reset()
-                    }
+            .tabItem {
+                Label(TabType.expenses.title, systemImage: TabType.expenses.icon)
+            }
+            .tag(TabType.expenses)
+            
+            // Tab 2: Budgets
+            NavigationStack {
+                BudgetsView()
+            }
+            .tabItem {
+                Label(TabType.budgets.title, systemImage: TabType.budgets.icon)
+            }
+            .tag(TabType.budgets)
+            
+            // Tab 3: CENTER - Add Expense (Radial Button)
+            ZStack {
+                Color.clear
+                EnhancedVoiceButton(
+                    onVoiceTap: { Task { await coordinator.handleVoiceInput() } },
+                    onManualTap: coordinator.handleManualInput,
+                    onRecurringTap: coordinator.handleRecurringInput
                 )
             }
-        }
-        // Manual Expense Sheet
-        .sheet(isPresented: $showManualExpense) {
-            AddExpenseSheet {
-                Task { await dashboardViewModel.refresh() }
+            .tabItem {
+                Image(systemName: "mic.fill")
             }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
-            .presentationBackground(.regularMaterial)
-            .presentationCornerRadius(CornerRadius.large)
-        }
-        // Recurring Expenses Sheet
-        .sheet(isPresented: $showRecurring) {
+            .tag(TabType.addExpense)
+            
+            // Tab 4: Assistant
             NavigationStack {
-                RecurringExpensesView()
+                AIAssistantView()
             }
-            .presentationDetents([.large])
-            .presentationBackground(.regularMaterial)
+            .tabItem {
+                Label(TabType.assistant.title, systemImage: TabType.assistant.icon)
+            }
+            .tag(TabType.assistant)
+            
+            // Tab 5: Settings
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label(TabType.settings.title, systemImage: TabType.settings.icon)
+            }
+            .tag(TabType.settings)
         }
-        // Options Dialog (Long Press on +)
-        .confirmationDialog("Añadir gasto", isPresented: $showAddOptions, titleVisibility: .visible) {
-            Button("🎤 Añadir con voz") {
-                voiceCoordinator.handleButtonTap(speechManager: speechManager)
-            }
-            Button("✏️ Añadir manualmente") {
-                showManualExpense = true
-            }
-            Button("🔁 Gasto recurrente") {
-                showRecurring = true
-            }
-            Button("Cancelar", role: .cancel) {}
+        .tint(Color.clarityPrimary)
+        .sheet(item: $coordinator.activeSheet) { sheet in
+            sheetView(for: sheet)
         }
-        // Error Alert
         .alert("Error de Voz", isPresented: $voiceCoordinator.showError) {
             Button("OK", role: .cancel) {
                 voiceCoordinator.clearError()
@@ -140,44 +92,91 @@ struct MainTabView: View {
         } message: {
             Text(voiceCoordinator.errorMessage ?? "Error desconocido")
         }
-        // Handle Tab Change - show options when + is tapped
-        .onChange(of: selectedTab) { oldValue, newValue in
-            if newValue == 2 {
-                // Revert to previous tab and show options
-                selectedTab = oldValue
-                showAddOptions = true
-                HapticManager.selection()
-            } else {
-                previousTab = newValue
-            }
-        }
-        // Handle silence detection
-        .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
-            if stopped && voiceCoordinator.showRecording {
-                let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                
-                speechManager.stopRecording()
-                voiceCoordinator.showRecording = false
-                voiceCoordinator.handleTranscript(fullTranscript, categories: userDataManager.categories)
-            }
-        }
-        // Success Toast
         .overlay(alignment: .top) {
             if voiceCoordinator.showSuccessToast {
                 SuccessToast(message: voiceCoordinator.successMessage)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
+            handleSilenceDetection(stopped: stopped)
+        }
         .task {
             await userDataManager.loadUserData()
         }
     }
+    
+    // MARK: - Content Builders
+    @ViewBuilder
+    private func sheetView(for sheet: SheetType) -> some View {
+        switch sheet {
+        case .voiceRecording:
+            VoiceRecordingSheet(
+                speechManager: speechManager,
+                onComplete: { [weak voiceCoordinator, weak userDataManager] transcript in
+                    guard let voiceCoordinator, let userDataManager else { return }
+                    voiceCoordinator.handleTranscript(
+                        transcript,
+                        categories: userDataManager.categories
+                    )
+                }
+            )
+            
+        case .voiceConfirmation(let expense, let wasFullyDetected):
+            VoiceConfirmationSheet(
+                expense: expense,
+                wasFullyDetected: wasFullyDetected,
+                categories: userDataManager.categories,
+                speechManager: speechManager,
+                onConfirm: { [weak voiceCoordinator, weak dashboardViewModel] confirmed in
+                    guard let voiceCoordinator, let dashboardViewModel else { return }
+                    Task {
+                        await voiceCoordinator.saveExpense(
+                            confirmed,
+                            viewModel: dashboardViewModel
+                        )
+                    }
+                },
+                onCancel: { [weak voiceCoordinator] in
+                    voiceCoordinator?.reset()
+                }
+            )
+            
+        case .manualExpense:
+            AddExpenseSheet { [weak dashboardViewModel] in
+                guard let dashboardViewModel else { return }
+                Task { await dashboardViewModel.refresh() }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(.regularMaterial)
+            .presentationCornerRadius(CornerRadius.large)
+            
+        case .recurringExpenses:
+            NavigationStack {
+                RecurringExpensesView()
+            }
+            .presentationDetents([.large])
+            .presentationBackground(.regularMaterial)
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    private func handleSilenceDetection(stopped: Bool) {
+        guard stopped, voiceCoordinator.showRecording else { return }
+        
+        let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        speechManager.stopRecording()
+        voiceCoordinator.showRecording = false
+        voiceCoordinator.handleTranscript(fullTranscript, categories: userDataManager.categories)
+    }
 }
 
-
+// MARK: - Preview
 #Preview {
     MainTabView()
         .environmentObject(AuthViewModel())
 }
-

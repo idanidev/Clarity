@@ -16,9 +16,13 @@ struct AddRecurringExpenseSheet: View {
     @State private var paymentMethod = "Tarjeta"
     @State private var frequency: RecurringFrequency = .monthly
     @State private var dayOfMonth: Int = 1
+    @State private var billingMonth: Int = Calendar.current.component(.month, from: Date())  // Current month
     @State private var selectedIcon = "💰"
     @State private var showEmojiPicker = false
     @State private var isSaving = false
+    
+    private let monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+                              "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     
     // Cached data from singleton
     private var categories: [Category] { UserDataManager.shared.categories }
@@ -84,6 +88,23 @@ struct AddRecurringExpenseSheet: View {
                             Text("Día \(day)").tag(day)
                         }
                     }
+                    
+                    // Month picker - only for non-monthly frequencies
+                    if frequency.needsMonthSelection {
+                        Picker("Mes de cobro", selection: $billingMonth) {
+                            ForEach(1...12, id: \.self) { month in
+                                Text(monthNames[month - 1]).tag(month)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Programación")
+                } footer: {
+                    if frequency.needsMonthSelection {
+                        Text("Se cobrará el día \(dayOfMonth) de \(monthNames[billingMonth - 1])")
+                    } else {
+                        Text("Se cobrará el día \(dayOfMonth) de cada mes")
+                    }
                 }
             }
             .navigationTitle("Nuevo Recurrente")
@@ -121,6 +142,7 @@ struct AddRecurringExpenseSheet: View {
             paymentMethod: paymentMethod,
             frequency: frequency,
             dayOfMonth: dayOfMonth,
+            billingMonth: billingMonth,
             active: true,
             icon: selectedIcon,
             startDate: Formatters.isoString(from: Date()),

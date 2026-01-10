@@ -128,17 +128,6 @@ struct RecurringExpensesView: View {
                         .font(.caption2)
                 }
             }
-            
-            // Add button
-            Section {
-                Button {
-                    showAddSheet = true
-                } label: {
-                    Label("Añadir Gasto Recurrente", systemImage: "plus.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(Color.clarityPrimary)
-                }
-            }
         }
         .listStyle(.insetGrouped)
     }
@@ -231,48 +220,75 @@ struct RecurringExpenseRow: View {
             .opacity(expense.active ? 1.0 : 0.5)
             
             // Info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(expense.name)
-                    .font(.headline)
-                    .foregroundStyle(expense.active ? .primary : .secondary)
-                
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    // Frequency badge
-                    HStack(spacing: 4) {
-                        Image(systemName: "clock.fill")
-                            .font(.system(size: 10))
-                        Text(expense.frequency.displayName)
-                            .font(.caption2)
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.secondary.opacity(0.15))
-                    .clipShape(Capsule())
+                    Text(expense.name)
+                        .font(.headline)
+                        .foregroundStyle(expense.active ? .primary : .secondary)
+                        .lineLimit(1)
                     
-                    Text("•")
-                        .font(.caption2)
+                    // Warning indicator if invalid
+                    if !expense.isValid {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                }
+                
+                // Badges row - clean layout
+                HStack(spacing: 8) {
+                    // Frequency badge
+                    Text(expense.frequency.displayName)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(.secondary.opacity(0.12))
+                        .clipShape(Capsule())
                     
                     // Day badge
-                    HStack(spacing: 4) {
+                    HStack(spacing: 3) {
                         Image(systemName: "calendar")
-                            .font(.system(size: 10))
+                            .font(.system(size: 9))
                         Text("Día \(expense.dayOfMonth)")
-                            .font(.caption2)
+                            .font(.caption2.weight(.medium))
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.secondary.opacity(0.15))
+                    .foregroundStyle(expense.dayOfMonth == 0 ? .red : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(expense.dayOfMonth == 0 ? Color.red.opacity(0.15) : .secondary.opacity(0.12))
                     .clipShape(Capsule())
+                    
+                    // Month badge - ONLY for non-monthly with valid month
+                    if expense.frequency.needsMonthSelection && expense.billingMonth > 0 {
+                        HStack(spacing: 3) {
+                            Image(systemName: "calendar.badge.clock")
+                                .font(.system(size: 9))
+                            Text(monthName(expense.billingMonth))
+                                .font(.caption2.weight(.medium))
+                        }
+                        .foregroundStyle(Color.clarityPrimary)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.clarityPrimary.opacity(0.15))
+                        .clipShape(Capsule())
+                    }
+                    
+                    // Warning if non-monthly but missing month
+                    if expense.frequency.needsMonthSelection && expense.billingMonth == 0 {
+                        Image(systemName: "exclamationmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
-                .foregroundStyle(.secondary)
             }
             
             Spacer()
             
             // Amount & Toggle
-            VStack(alignment: .trailing, spacing: 8) {
+            VStack(alignment: .trailing, spacing: 6) {
                 Text(Formatters.currency(expense.amount))
-                    .font(.headline.monospacedDigit())
+                    .font(.system(size: 16, weight: .semibold).monospacedDigit())
                     .foregroundStyle(expense.active ? .primary : .secondary)
                 
                 Toggle("", isOn: Binding(
@@ -283,8 +299,14 @@ struct RecurringExpenseRow: View {
                 .tint(.green)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
+    }
+    
+    private func monthName(_ month: Int) -> String {
+        let names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+        guard month >= 1 && month <= 12 else { return "?" }
+        return names[month - 1]
     }
 }
 

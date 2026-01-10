@@ -12,7 +12,18 @@ struct RecurringExpense: Codable, Identifiable {
     let subcategory: String?
     let paymentMethod: String
     var frequency: RecurringFrequency
-    let dayOfMonth: Int
+    var dayOfMonth: Int  // 1-31, 0 means invalid/missing
+    var billingMonth: Int  // 1-12, 0 means not set (only needed for non-monthly)
+    
+    // Validation: returns true if all required fields are valid
+    var isValid: Bool {
+        let basicValid = dayOfMonth >= 1 && dayOfMonth <= 31 && !name.isEmpty && amount > 0
+        // Month is only required for non-monthly frequencies
+        if frequency.needsMonthSelection {
+            return basicValid && billingMonth >= 1 && billingMonth <= 12
+        }
+        return basicValid
+    }
     var active: Bool
     var icon: String?
     let startDate: String?
@@ -29,7 +40,7 @@ struct RecurringExpense: Codable, Identifiable {
     enum CodingKeys: String, CodingKey {
         case id  // Include id so @DocumentID can be decoded
         case amount, name, category, subcategory, paymentMethod
-        case frequency, dayOfMonth, active, icon
+        case frequency, dayOfMonth, billingMonth, active, icon
         case startDate, endDate, lastCreated, createdAt, updatedAt
     }
     
@@ -44,7 +55,18 @@ struct RecurringExpense: Codable, Identifiable {
         category = try container.decode(String.self, forKey: .category)
         subcategory = try container.decodeIfPresent(String.self, forKey: .subcategory)
         paymentMethod = try container.decode(String.self, forKey: .paymentMethod)
-        dayOfMonth = try container.decode(Int.self, forKey: .dayOfMonth)
+        // dayOfMonth: required but handle missing/invalid with 0 (invalid marker)
+        if let day = try? container.decode(Int.self, forKey: .dayOfMonth), day >= 1, day <= 31 {
+            dayOfMonth = day
+        } else {
+            dayOfMonth = 0  // Invalid - needs user attention
+        }
+        // billingMonth: required but handle missing/invalid with 0 (invalid marker)
+        if let month = try? container.decode(Int.self, forKey: .billingMonth), month >= 1, month <= 12 {
+            billingMonth = month
+        } else {
+            billingMonth = 0  // Invalid - needs user attention
+        }
         active = try container.decode(Bool.self, forKey: .active)
         icon = try container.decodeIfPresent(String.self, forKey: .icon)
         startDate = try container.decodeIfPresent(String.self, forKey: .startDate)
@@ -83,7 +105,7 @@ struct RecurringExpense: Codable, Identifiable {
     
     // Standard memberwise init for creating new expenses
     init(id: String?, amount: Double, name: String, category: String, subcategory: String?,
-         paymentMethod: String, frequency: RecurringFrequency, dayOfMonth: Int, active: Bool,
+         paymentMethod: String, frequency: RecurringFrequency, dayOfMonth: Int, billingMonth: Int, active: Bool,
          icon: String?, startDate: String?, endDate: String?, lastCreated: String?,
          createdAt: String?, updatedAt: String?) {
         self.id = id
@@ -94,6 +116,7 @@ struct RecurringExpense: Codable, Identifiable {
         self.paymentMethod = paymentMethod
         self.frequency = frequency
         self.dayOfMonth = dayOfMonth
+        self.billingMonth = billingMonth
         self.active = active
         self.icon = icon
         self.startDate = startDate
@@ -107,13 +130,23 @@ struct RecurringExpense: Codable, Identifiable {
 enum RecurringFrequency: String, Codable, CaseIterable {
     case monthly = "monthly"
     case quarterly = "quarterly"
+    case semestral = "semestral"  // Biannual (every 6 months)
     case yearly = "yearly"
     
     var displayName: String {
         switch self {
         case .monthly: return "Mensual"
         case .quarterly: return "Trimestral"
+        case .semestral: return "Semestral"
         case .yearly: return "Anual"
+        }
+    }
+    
+    /// Returns true if this frequency requires month selection
+    var needsMonthSelection: Bool {
+        switch self {
+        case .monthly: return false  // Happens every month, no need
+        case .quarterly, .semestral, .yearly: return true  // Need to know which month
         }
     }
 }
@@ -128,6 +161,7 @@ extension RecurringExpense {
         paymentMethod: "Tarjeta",
         frequency: .monthly,
         dayOfMonth: 15,
+        billingMonth: 1,  // January
         active: true,
         icon: "📺",
         startDate: nil,
