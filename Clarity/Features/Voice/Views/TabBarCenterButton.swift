@@ -1,21 +1,28 @@
-// CustomTabBar.swift
-// Custom TabBar with integrated center button
+// TabBarCenterButton.swift
+// Center button overlay for TabBar with radial menu
 
 import SwiftUI
 
-struct CustomTabBar: View {
-    @Binding var selectedTab: TabType
+@MainActor
+struct TabBarCenterButton: View {
     
+    // MARK: - Callbacks
     let onVoiceTap: () -> Void
     let onManualTap: () -> Void
     let onRecurringTap: () -> Void
     
-    @State private var isMenuExpanded = false
+    // MARK: - State
+    @State private var isExpanded = false
     @State private var selectedOption: MenuOption? = nil
+    @State private var isDragging = false
     
+    // MARK: - Constants
+    private let buttonSize: CGFloat = 56
+    private let optionSize: CGFloat = 50
     private let menuRadius: CGFloat = 80
     private let angleThreshold: Double = 35
     
+    // MARK: - Menu Options
     enum MenuOption: CaseIterable {
         case manual, voice, recurring
         
@@ -54,80 +61,53 @@ struct CustomTabBar: View {
     
     var body: some View {
         ZStack {
-            // Backdrop cuando menú abierto
-            if isMenuExpanded {
+            // MARK: - Backdrop
+            if isExpanded {
                 Color.black.opacity(0.3)
                     .ignoresSafeArea()
-                    .onTapGesture { closeMenu() }
+                    .onTapGesture {
+                        closeMenu()
+                    }
                     .transition(.opacity)
             }
             
-            VStack(spacing: 0) {
-                Spacer()
-                
-                ZStack {
-                    // Menú radial (aparece encima del TabBar)
-                    if isMenuExpanded {
-                        ForEach(MenuOption.allCases, id: \.self) { option in
-                            menuOptionButton(option)
-                                .offset(
-                                    x: sin(option.angle * .pi / 180) * menuRadius,
-                                    y: -cos(option.angle * .pi / 180) * menuRadius - 40
-                                )
-                        }
-                    }
-                    
-                    // TabBar
-                    HStack(spacing: 0) {
-                        // Tab: Gastos
-                        tabButton(.expenses)
-                        
-                        // Tab: Metas
-                        tabButton(.budgets)
-                        
-                        // Botón central
-                        centerButton
-                            .frame(width: 70)
-                        
-                        // Tab: IA
-                        tabButton(.assistant)
-                        
-                        // Tab: Ajustes
-                        tabButton(.settings)
-                    }
-                    .frame(height: 49)
-                    .background(.ultraThinMaterial)
-                    .overlay(alignment: .top) {
-                        Divider()
-                    }
+            // MARK: - Menu Options
+            if isExpanded {
+                ForEach(MenuOption.allCases, id: \.self) { option in
+                    optionButton(for: option)
+                        .offset(
+                            x: sin(option.angle * .pi / 180) * menuRadius,
+                            y: -cos(option.angle * .pi / 180) * menuRadius
+                        )
+                        .scaleEffect(selectedOption == option ? 1.15 : 1.0)
+                        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isExpanded)
+                        .animation(.spring(response: 0.2), value: selectedOption)
                 }
             }
+            
+            // MARK: - Main Button
+            mainButton
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isMenuExpanded)
         .sensoryFeedback(.selection, trigger: selectedOption)
     }
     
-    // MARK: - Tab Button
-    private func tabButton(_ tab: TabType) -> some View {
-        Button {
-            selectedTab = tab
-            HapticManager.selection()
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 20))
-                Text(tab.title)
-                    .font(.caption2)
-            }
-            .foregroundStyle(selectedTab == tab ? Color.clarityPrimary : .secondary)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.plain)
-    }
-    
-    // MARK: - Center Button
-    private var centerButton: some View {
+    // MARK: - Main Button
+    private var mainButton: some View {
         ZStack {
+            // Glow
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [Color.clarityPrimary.opacity(0.4), Color.clear],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 40
+                    )
+                )
+                .frame(width: buttonSize + 16, height: buttonSize + 16)
+                .blur(radius: 6)
+            
+            // Button
             Circle()
                 .fill(
                     LinearGradient(
@@ -136,15 +116,21 @@ struct CustomTabBar: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 56, height: 56)
-                .shadow(color: Color.clarityPrimary.opacity(0.4), radius: 8, y: 2)
+                .frame(width: buttonSize, height: buttonSize)
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                }
+                .shadow(color: Color.clarityPrimary.opacity(0.4), radius: 10, y: 4)
             
+            // Icon: + que rota a ×
             Image(systemName: "plus")
                 .font(.system(size: 24, weight: .semibold))
                 .foregroundStyle(.white)
-                .rotationEffect(.degrees(isMenuExpanded ? 45 : 0))
+                .rotationEffect(.degrees(isExpanded ? 45 : 0))
         }
-        .offset(y: -15) // Sobresale un poco
+        .scaleEffect(isExpanded ? 0.9 : 1.0)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isExpanded)
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
@@ -154,13 +140,16 @@ struct CustomTabBar: View {
                     handleDragEnd(value)
                 }
         )
-        .onTapGesture {
-            toggleMenu()
-        }
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded {
+                    toggleMenu()
+                }
+        )
     }
     
-    // MARK: - Menu Option Button
-    private func menuOptionButton(_ option: MenuOption) -> some View {
+    // MARK: - Option Button
+    private func optionButton(for option: MenuOption) -> some View {
         Button {
             selectOption(option)
         } label: {
@@ -168,41 +157,45 @@ struct CustomTabBar: View {
                 ZStack {
                     Circle()
                         .fill(selectedOption == option ? option.color.gradient : Color(.systemGray5).gradient)
-                        .frame(width: 50, height: 50)
+                        .frame(width: optionSize, height: optionSize)
                         .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
                     
                     Image(systemName: option.icon)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundStyle(selectedOption == option ? .white : .primary)
                 }
-                .scaleEffect(selectedOption == option ? 1.15 : 1.0)
                 
                 Text(option.label)
                     .font(.caption2.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(selectedOption == option ? .primary : .secondary)
             }
         }
         .buttonStyle(.plain)
-        .animation(.spring(response: 0.2), value: selectedOption)
     }
     
     // MARK: - Gesture Handlers
+    
     private func handleDrag(_ value: DragGesture.Value) {
         let distance = hypot(value.translation.width, value.translation.height)
         
-        if !isMenuExpanded && distance > 15 && value.translation.height < 0 {
+        // Abrir menú si arrastra hacia arriba
+        if !isExpanded && distance > 20 && value.translation.height < 0 {
             openMenu()
+            isDragging = true
         }
         
-        guard isMenuExpanded else { return }
+        guard isExpanded else { return }
         
-        if distance < 25 {
+        // Zona muerta central
+        if distance < 30 {
             selectedOption = nil
             return
         }
         
+        // Calcular ángulo
         let angle = atan2(value.translation.width, -value.translation.height) * 180 / .pi
         
+        // Detectar opción por ángulo
         if abs(angle - MenuOption.manual.angle) < angleThreshold {
             selectedOption = .manual
         } else if abs(angle - MenuOption.voice.angle) < angleThreshold {
@@ -215,14 +208,16 @@ struct CustomTabBar: View {
     }
     
     private func handleDragEnd(_ value: DragGesture.Value) {
-        if let option = selectedOption {
+        if isDragging, let option = selectedOption {
             selectOption(option)
         }
+        isDragging = false
     }
     
     // MARK: - Actions
+    
     private func toggleMenu() {
-        if isMenuExpanded {
+        if isExpanded {
             closeMenu()
         } else {
             openMenu()
@@ -230,25 +225,50 @@ struct CustomTabBar: View {
     }
     
     private func openMenu() {
-        isMenuExpanded = true
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            isExpanded = true
+        }
         HapticManager.impact(.medium)
     }
     
     private func closeMenu() {
-        isMenuExpanded = false
-        selectedOption = nil
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+            isExpanded = false
+            selectedOption = nil
+        }
     }
     
     private func selectOption(_ option: MenuOption) {
         HapticManager.notification(.success)
         
+        // Delay para feedback visual
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
             switch option {
-            case .manual: onManualTap()
-            case .voice: onVoiceTap()
-            case .recurring: onRecurringTap()
+            case .manual:
+                onManualTap()
+            case .voice:
+                onVoiceTap()
+            case .recurring:
+                onRecurringTap()
             }
             closeMenu()
+        }
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    ZStack {
+        Color(.systemBackground).ignoresSafeArea()
+        
+        VStack {
+            Spacer()
+            TabBarCenterButton(
+                onVoiceTap: { print("Voice") },
+                onManualTap: { print("Manual") },
+                onRecurringTap: { print("Recurring") }
+            )
+            .padding(.bottom, 80)
         }
     }
 }

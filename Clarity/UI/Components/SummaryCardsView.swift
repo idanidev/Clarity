@@ -34,7 +34,7 @@ struct SummaryCardsView: View {
                 title: "AHORRO",
                 value: formatCurrency(savings),
                 subtitle: "\(savingsPercentage)%",
-                valueColor: .green,
+                valueColor: savings >= 0 ? .green : .red,
                 iconColor: .yellow
             )
             
@@ -43,7 +43,7 @@ struct SummaryCardsView: View {
                 icon: "arrow.up.right",
                 title: "DISPONIBLE",
                 value: formatCurrency(available),
-                valueColor: .green
+                valueColor: available >= 0 ? .green : .red
             )
         }
     }
@@ -66,18 +66,12 @@ struct SummaryCard: View {
         VStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 16))
-            Image(systemName: icon)
-                .font(.system(size: 16))
                 .foregroundStyle(iconColor)
             
             Text(title)
                 .font(.system(size: 10, weight: .medium))
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(.secondary)
             
-            Text(value)
-                .font(.system(size: 14, weight: .bold))
             Text(value)
                 .font(.system(size: 14, weight: .bold))
                 .foregroundStyle(valueColor)
@@ -91,7 +85,6 @@ struct SummaryCard: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, Spacing.sm)
         .padding(.vertical, Spacing.sm)
         .background(.ultraThinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: Spacing.cardRadius))

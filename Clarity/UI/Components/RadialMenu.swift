@@ -1,20 +1,21 @@
-// CustomTabBar.swift
-// Custom TabBar with integrated center button
+// RadialMenu.swift
+// Radial fan menu overlay with drag-to-select
 
 import SwiftUI
 
-struct CustomTabBar: View {
-    @Binding var selectedTab: TabType
+struct RadialMenu: View {
+    @Binding var isPresented: Bool
     
     let onVoiceTap: () -> Void
     let onManualTap: () -> Void
     let onRecurringTap: () -> Void
     
-    @State private var isMenuExpanded = false
     @State private var selectedOption: MenuOption? = nil
+    @State private var isDragging = false
     
     private let menuRadius: CGFloat = 80
     private let angleThreshold: Double = 35
+    private let buttonSize: CGFloat = 56
     
     enum MenuOption: CaseIterable {
         case manual, voice, recurring
@@ -54,78 +55,39 @@ struct CustomTabBar: View {
     
     var body: some View {
         ZStack {
-            // Backdrop cuando menú abierto
-            if isMenuExpanded {
-                Color.black.opacity(0.3)
-                    .ignoresSafeArea()
-                    .onTapGesture { closeMenu() }
-                    .transition(.opacity)
-            }
+            // Backdrop
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    close()
+                }
             
-            VStack(spacing: 0) {
+            // Menu container
+            VStack {
                 Spacer()
                 
                 ZStack {
-                    // Menú radial (aparece encima del TabBar)
-                    if isMenuExpanded {
-                        ForEach(MenuOption.allCases, id: \.self) { option in
-                            menuOptionButton(option)
-                                .offset(
-                                    x: sin(option.angle * .pi / 180) * menuRadius,
-                                    y: -cos(option.angle * .pi / 180) * menuRadius - 40
-                                )
-                        }
+                    // Options in fan layout
+                    ForEach(MenuOption.allCases, id: \.self) { option in
+                        optionButton(option)
+                            .offset(
+                                x: sin(option.angle * .pi / 180) * menuRadius,
+                                y: -cos(option.angle * .pi / 180) * menuRadius
+                            )
                     }
                     
-                    // TabBar
-                    HStack(spacing: 0) {
-                        // Tab: Gastos
-                        tabButton(.expenses)
-                        
-                        // Tab: Metas
-                        tabButton(.budgets)
-                        
-                        // Botón central
-                        centerButton
-                            .frame(width: 70)
-                        
-                        // Tab: IA
-                        tabButton(.assistant)
-                        
-                        // Tab: Ajustes
-                        tabButton(.settings)
-                    }
-                    .frame(height: 49)
-                    .background(.ultraThinMaterial)
-                    .overlay(alignment: .top) {
-                        Divider()
-                    }
+                    // Center button with drag gesture
+                    centerButton
                 }
+                .padding(.bottom, 80)
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isMenuExpanded)
+        .transition(.opacity)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: isPresented)
         .sensoryFeedback(.selection, trigger: selectedOption)
     }
     
-    // MARK: - Tab Button
-    private func tabButton(_ tab: TabType) -> some View {
-        Button {
-            selectedTab = tab
-            HapticManager.selection()
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: tab.icon)
-                    .font(.system(size: 20))
-                Text(tab.title)
-                    .font(.caption2)
-            }
-            .foregroundStyle(selectedTab == tab ? Color.clarityPrimary : .secondary)
-            .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(.plain)
-    }
-    
-    // MARK: - Center Button
+    // MARK: - Center Button with Drag
     private var centerButton: some View {
         ZStack {
             Circle()
@@ -136,15 +98,14 @@ struct CustomTabBar: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 56, height: 56)
+                .frame(width: buttonSize, height: buttonSize)
                 .shadow(color: Color.clarityPrimary.opacity(0.4), radius: 8, y: 2)
             
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .semibold))
+            Image(systemName: "xmark")
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
-                .rotationEffect(.degrees(isMenuExpanded ? 45 : 0))
         }
-        .offset(y: -15) // Sobresale un poco
+        .scaleEffect(isDragging ? 0.9 : 1.0)
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .local)
                 .onChanged { value in
@@ -154,55 +115,61 @@ struct CustomTabBar: View {
                     handleDragEnd(value)
                 }
         )
-        .onTapGesture {
-            toggleMenu()
-        }
+        .simultaneousGesture(
+            TapGesture()
+                .onEnded {
+                    close()
+                }
+        )
     }
     
-    // MARK: - Menu Option Button
-    private func menuOptionButton(_ option: MenuOption) -> some View {
+    // MARK: - Option Button
+    private func optionButton(_ option: MenuOption) -> some View {
         Button {
             selectOption(option)
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 6) {
                 ZStack {
                     Circle()
                         .fill(selectedOption == option ? option.color.gradient : Color(.systemGray5).gradient)
-                        .frame(width: 50, height: 50)
-                        .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                        .frame(width: buttonSize, height: buttonSize)
+                        .shadow(
+                            color: selectedOption == option ? option.color.opacity(0.5) : .black.opacity(0.1),
+                            radius: selectedOption == option ? 10 : 4,
+                            y: 2
+                        )
                     
                     Image(systemName: option.icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(selectedOption == option ? .white : .primary)
                 }
                 .scaleEffect(selectedOption == option ? 1.15 : 1.0)
                 
                 Text(option.label)
-                    .font(.caption2.weight(.medium))
-                    .foregroundStyle(.primary)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(selectedOption == option ? .primary : .secondary)
             }
         }
         .buttonStyle(.plain)
         .animation(.spring(response: 0.2), value: selectedOption)
     }
     
-    // MARK: - Gesture Handlers
+    // MARK: - Drag Handlers
     private func handleDrag(_ value: DragGesture.Value) {
+        isDragging = true
+        
         let distance = hypot(value.translation.width, value.translation.height)
         
-        if !isMenuExpanded && distance > 15 && value.translation.height < 0 {
-            openMenu()
-        }
-        
-        guard isMenuExpanded else { return }
-        
+        // Dead zone in center
         if distance < 25 {
             selectedOption = nil
             return
         }
         
+        // Calculate angle (0 is up)
         let angle = atan2(value.translation.width, -value.translation.height) * 180 / .pi
         
+        // Match to option by angle
         if abs(angle - MenuOption.manual.angle) < angleThreshold {
             selectedOption = .manual
         } else if abs(angle - MenuOption.voice.angle) < angleThreshold {
@@ -215,31 +182,22 @@ struct CustomTabBar: View {
     }
     
     private func handleDragEnd(_ value: DragGesture.Value) {
+        isDragging = false
+        
         if let option = selectedOption {
             selectOption(option)
+        } else {
+            // If released in center, close
+            let distance = hypot(value.translation.width, value.translation.height)
+            if distance < 25 {
+                close()
+            }
         }
     }
     
     // MARK: - Actions
-    private func toggleMenu() {
-        if isMenuExpanded {
-            closeMenu()
-        } else {
-            openMenu()
-        }
-    }
-    
-    private func openMenu() {
-        isMenuExpanded = true
-        HapticManager.impact(.medium)
-    }
-    
-    private func closeMenu() {
-        isMenuExpanded = false
-        selectedOption = nil
-    }
-    
     private func selectOption(_ option: MenuOption) {
+        selectedOption = option
         HapticManager.notification(.success)
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -248,7 +206,14 @@ struct CustomTabBar: View {
             case .voice: onVoiceTap()
             case .recurring: onRecurringTap()
             }
-            closeMenu()
+            close()
         }
+    }
+    
+    private func close() {
+        withAnimation(.spring(response: 0.3)) {
+            isPresented = false
+        }
+        selectedOption = nil
     }
 }

@@ -151,6 +151,8 @@ struct ActiveFilterPillsView: View {
                 }
                 .padding(.horizontal)
             }
+
+            .fixedSize(horizontal: false, vertical: true)
             .padding(.vertical, 4) // Reduced padding
         }
     }

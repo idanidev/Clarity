@@ -37,9 +37,9 @@ struct ExpensesView: View {
             }
             .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
             .sheet(isPresented: $showFilterSheet) {
-                FilterSheet(
-                    searchText: $searchText,
+                ExpenseFilterSheet(
                     filter: $filter,
+                    availableCategories: Array(Set(viewModel.expenses.map { $0.category })),
                     onApply: {
                         updateFilteredExpenses()
                         buildCategoryGroups()
@@ -113,57 +113,14 @@ struct ExpensesView: View {
                     }
                 }
                 
-                Menu {
-                    Section("Período") {
-                        ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
-                            Button {
-                                filter.dateRange = range
-                                updateFilteredExpenses()
-                                HapticManager.selection()
-                            } label: {
-                                HStack {
-                                    Text(range.rawValue)
-                                    if filter.dateRange == range {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Section("Método de Pago") {
-                        ForEach(["Tarjeta", "Efectivo", "Bizum", "Transferencia"], id: \.self) { method in
-                            Button {
-                                if filter.selectedPaymentMethods.contains(method) {
-                                    filter.selectedPaymentMethods.remove(method)
-                                } else {
-                                    filter.selectedPaymentMethods.insert(method)
-                                }
-                                updateFilteredExpenses()
-                                HapticManager.selection()
-                            } label: {
-                                HStack {
-                                    Text(method)
-                                    if filter.selectedPaymentMethods.contains(method) {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    
-                    Divider()
-                    
                     Button {
                         showFilterSheet = true
+                        HapticManager.selection()
                     } label: {
-                        Label("Más filtros...", systemImage: "slider.horizontal.3")
+                        Image(systemName: "line.3.horizontal.decrease.circle" + (filter.hasActiveFilters || !searchText.isEmpty ? ".fill" : ""))
+                            .font(.system(size: 22))
+                            .foregroundStyle(filter.hasActiveFilters || !searchText.isEmpty ? Color.clarityPrimary : .secondary)
                     }
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle" + (filter.hasActiveFilters || !searchText.isEmpty ? ".fill" : ""))
-                        .font(.system(size: 22))
-                        .foregroundStyle(filter.hasActiveFilters || !searchText.isEmpty ? Color.clarityPrimary : .secondary)
-                }
             }
             .frame(width: 60)
         }
@@ -233,6 +190,30 @@ struct ExpensesView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             
+            // Search bar for table
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                
+                TextField("Buscar gastos...", text: $searchText)
+                    .textFieldStyle(.plain)
+                
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                        HapticManager.selection()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 16)
+            
             // Active filter pills (kept for feedback)
             ActiveFilterPillsView(
                 filter: $filter,
@@ -273,22 +254,10 @@ struct ExpensesView: View {
     private func calculateSavings() -> Double {
         // Get income from Firebase user document
         let monthlyIncome = UserDataManager.shared.userDocument?.income ?? 0
-        guard monthlyIncome > 0 else { return 0 }
         
-        // Calculate pro-rata: what % of the month has passed?
-        let calendar = Calendar.current
-        let today = Date()
-        let day = calendar.component(.day, from: today)
-        let daysInMonth = calendar.range(of: .day, in: .month, for: today)?.count ?? 30
-        let monthProgress = Double(day) / Double(daysInMonth)
-        
-        // Expected spending so far = income * progress
-        // If we spent less than expected, we're "saving"
-        let expectedSpending = monthlyIncome * monthProgress
-        let actualSpending = totalExpenses
-        
-        // Positive = under budget (saving), Negative = over budget
-        return expectedSpending - actualSpending
+        // Simple calculation: Income - Total Expenses = Savings
+        // Positive = money saved, Negative = over budget
+        return monthlyIncome - totalExpenses
     }
     
     private func updateFilteredExpenses() {
@@ -328,6 +297,35 @@ struct ExpensesView: View {
         // Payment method filter
         if !filter.selectedPaymentMethods.isEmpty {
             expenses = expenses.filter { filter.selectedPaymentMethods.contains($0.paymentMethod) }
+        }
+        
+        // Amount range filter
+        if let minAmount = filter.minAmount {
+            expenses = expenses.filter { $0.amount >= minAmount }
+        }
+        if let maxAmount = filter.maxAmount {
+            expenses = expenses.filter { $0.amount <= maxAmount }
+        }
+        
+        // Recurring-only filter
+        if filter.showOnlyRecurring {
+            expenses = expenses.filter { $0.isRecurring == true }
+        }
+        
+        // Sort
+        switch filter.sortBy {
+        case .dateDesc:
+            expenses.sort { $0.date > $1.date }
+        case .dateAsc:
+            expenses.sort { $0.date < $1.date }
+        case .amountDesc:
+            expenses.sort { $0.amount > $1.amount }
+        case .amountAsc:
+            expenses.sort { $0.amount < $1.amount }
+        case .nameAsc:
+            expenses.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        case .nameDesc:
+            expenses.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
         }
         
         self.cachedFilteredExpenses = expenses
@@ -426,88 +424,5 @@ struct ExpensesView: View {
         
         // Fallback to default color
         return UserDataManager.shared.color(for: categoryWithEmoji)
-    }
-}
-
-// MARK: - Filter Sheet
-struct FilterSheet: View {
-    @Binding var searchText: String
-    @Binding var filter: ExpenseFilter
-    let onApply: () -> Void
-    @Environment(\.dismiss) var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            Form {
-                // Search Section
-                Section {
-                    HStack {
-                        Image(systemName: "magnifyingglass")
-                            .foregroundStyle(.secondary)
-                        TextField("Buscar gastos, categorías...", text: $searchText)
-                    }
-                } header: {
-                    Text("Búsqueda")
-                }
-                
-                // Date Range Section
-                Section {
-                    Picker("Periodo", selection: $filter.dateRange) {
-                        ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
-                            Text(range.rawValue).tag(range)
-                        }
-                    }
-                } header: {
-                    Text("Fecha")
-                }
-                
-                // Payment Method Section
-                Section {
-                    ForEach(["Tarjeta", "Efectivo", "Bizum", "Transferencia"], id: \.self) { method in
-                        Button {
-                            if filter.selectedPaymentMethods.contains(method) {
-                                filter.selectedPaymentMethods.remove(method)
-                            } else {
-                                filter.selectedPaymentMethods.insert(method)
-                            }
-                        } label: {
-                            HStack {
-                                Text(method)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if filter.selectedPaymentMethods.contains(method) {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(Color.clarityPrimary)
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    Text("Método de Pago")
-                }
-                
-                // Categories would go here if needed, or rely on search
-                
-                if filter.hasActiveFilters || !searchText.isEmpty {
-                    Section {
-                        Button("Limpiar todos los filtros", role: .destructive) {
-                            filter = ExpenseFilter()
-                            searchText = ""
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Filtros")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Listo") {
-                        onApply()
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
     }
 }

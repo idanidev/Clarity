@@ -29,7 +29,7 @@ struct DonutChartView: View {
             VStack(spacing: Spacing.lg) {
                 donutChart
                 categoryGrid
-                selectedCategoryDetail
+                // selectedCategoryDetail - Removed as per user request ("lo quitaría")
             }
             .padding(.bottom, Spacing.xl)
         }
@@ -38,57 +38,71 @@ struct DonutChartView: View {
     
     // MARK: - Donut Chart Component
     
+    // MARK: - Donut Chart Component
+    
     private var donutChart: some View {
         ZStack {
             // Chart segments
-            ForEach(cachedSegments, id: \.data.id) { segment in
-                DonutSegment(
-                    startAngle: segment.start,
-                    endAngle: segment.end
-                )
-                .trim(from: 0, to: animationProgress)
-                .fill(segment.data.color)
-                .scaleEffect(selectedCategory == segment.data ? 1.05 : 1.0)
-                .onTapGesture {
-                    withAnimation(.bouncy(duration: 0.3)) {
-                        if selectedCategory == segment.data {
-                            selectedCategory = nil
-                        } else {
-                            selectedCategory = segment.data
+            // We use standard Circle().trim() to achieve a perfect "clock wipe" animation.
+            // This avoids any morphing artifacts from custom shapes.
+            ForEach(Array(cachedSegments.enumerated()), id: \.element.data.id) { index, segment in
+                let startPct = calculateStartPercentage(for: index)
+                let endPct = startPct + (segment.data.percentage / 100.0)
+                
+                // Determine how much of this segment is visible based on global animation (0...1)
+                // The trim endpoint logic:
+                // We want the segment to be drawn from its real start up to the CURRENT animation progress.
+                // But capped at its real end.
+                // And only if animation has passed the start.
+                let visibleEnd = min(endPct, max(startPct, Double(animationProgress)))
+                                
+                if animationProgress > startPct {
+                    Circle()
+                        .trim(from: startPct, to: visibleEnd)
+                        .stroke(segment.data.color, style: StrokeStyle(lineWidth: 35, lineCap: .butt))
+                        .rotationEffect(.degrees(-90))
+                        .scaleEffect(selectedCategory == segment.data ? 1.05 : 1.0)
+                        .onTapGesture {
+                            withAnimation(.bouncy(duration: 0.3)) {
+                                selectedCategory = selectedCategory == segment.data ? nil : segment.data
+                            }
                         }
-                    }
                 }
             }
             
-            // Center hole
-            Circle()
-                .fill(Color.bgPrimary)
-                .frame(width: 140, height: 140)
-            
             // Center text
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 Text("Total")
-                    .font(.system(size: 14))
+                    .font(.system(size: 13))
                     .foregroundColor(.gray)
-                    .opacity(animationProgress)
+                    .opacity(animationProgress > 0.1 ? 1 : 0)
                 
-                Text(formatCurrency(total * Double(animationProgress)))
-                    .font(.system(size: 26, weight: .bold))
+                Text(formatCurrency(total))
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
-                    .opacity(animationProgress)
+                    .opacity(animationProgress > 0.1 ? 1 : 0)
             }
         }
-        .frame(width: 260, height: 260)
-        .padding(.top, Spacing.md)
+        .frame(width: 200, height: 200)
+        .padding(.top, Spacing.xl)
         .onAppear {
             updateCachedSegments()
-            withAnimation(.bouncy(duration: 0.5)) {
+            animationProgress = 0
+            withAnimation(.linear(duration: 1.5)) {
                 animationProgress = 1.0
             }
         }
         .onChange(of: categoryData) { _, _ in
             updateCachedSegments()
+            animationProgress = 0
+            withAnimation(.linear(duration: 1.5)) {
+                animationProgress = 1.0
+            }
         }
+    }
+    
+    private func calculateStartPercentage(for index: Int) -> Double {
+        return categoryData.prefix(index).reduce(0) { $0 + $1.percentage } / 100.0
     }
     
     // MARK: - Category Grid Component
