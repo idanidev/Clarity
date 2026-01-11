@@ -228,7 +228,7 @@ struct RecurringExpenseDetailView: View {
         )
         
         do {
-            _ = try await ExpenseRepository().addExpense(newExpense)
+            _ = try await DependencyContainer.shared.expenseRepository.addExpense(newExpense)
             HapticManager.notification(.success)
             dismiss()
         } catch {

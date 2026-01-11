@@ -18,7 +18,7 @@ struct EditExpenseSheet: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     
-    private let repository = ExpenseRepository()
+    private let repository = DependencyContainer.shared.expenseRepository
     
     init(expense: Expense, onSave: @escaping () -> Void) {
         self.expense = expense

@@ -25,7 +25,7 @@ class AddExpenseViewModel {
     var errorMessage: String?
     
     // MARK: - Dependencies
-    private let repository = ExpenseRepository()
+    private let repository = DependencyContainer.shared.expenseRepository
     
     // MARK: - Validation
     var isValid: Bool {

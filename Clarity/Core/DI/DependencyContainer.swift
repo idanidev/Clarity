@@ -47,7 +47,8 @@ final class DependencyContainer {
     func makeHomeViewModel() -> HomeViewModel {
         HomeViewModel(
             getExpensesUseCase: makeGetExpensesUseCase(),
-            deleteExpenseUseCase: makeDeleteExpenseUseCase()
+            deleteExpenseUseCase: makeDeleteExpenseUseCase(),
+            addExpenseUseCase: makeAddExpenseUseCase()
         )
     }
 }

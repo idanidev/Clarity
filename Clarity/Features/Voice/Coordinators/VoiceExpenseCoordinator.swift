@@ -175,11 +175,11 @@ class VoiceExpenseCoordinator: ObservableObject {
         showConfirmation = true
     }
     
-    func saveExpense(_ expense: Expense, viewModel: DashboardViewModel) async {
+    func saveExpense(_ expense: Expense, viewModel: HomeViewModel) async {
         state = .saving
         
         do {
-            let repository = ExpenseRepository()
+            let repository = DependencyContainer.shared.expenseRepository
             _ = try await repository.addExpense(expense)
             
             // Success!

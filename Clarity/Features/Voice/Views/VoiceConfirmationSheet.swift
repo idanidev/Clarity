@@ -99,7 +99,11 @@ struct VoiceConfirmationSheet: View {
                     .onChange(of: selectedCategory) { old, new in
                         userDidInteract()
                         if old?.id != new?.id {
-                            selectedSubcategory = ""
+                            // Only clear if current subcategory is NOT valid for new category
+                            // This prevents clearing the voice-detected subcategory on initial load
+                            if let newCategory = new, !newCategory.subcategories.contains(selectedSubcategory) {
+                                selectedSubcategory = ""
+                            }
                         }
                     }
                     

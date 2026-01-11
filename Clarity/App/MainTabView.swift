@@ -12,7 +12,7 @@ struct MainTabView: View {
     @State private var dragOffset: CGSize = .zero
     @State private var selectedMenuOption: RadialMenuOption? = nil
     @ObservedObject private var userDataManager = UserDataManager.shared
-    @State private var dashboardViewModel = DashboardViewModel()
+    @StateObject private var homeViewModel = DependencyContainer.shared.makeHomeViewModel()
     
     // Voice components
     @StateObject private var speechManager = SpeechRecognitionManager()
@@ -64,7 +64,7 @@ struct MainTabView: View {
             // TabView
             TabView(selection: $selectedTab) {
                 NavigationStack {
-                    HomeView()
+                    HomeView(viewModel: homeViewModel)
                 }
                 .tabItem {
                     Image(systemName: "list.bullet")
@@ -113,11 +113,11 @@ struct MainTabView: View {
                 HStack {
                     Spacer()
                     Rectangle()
-                        .fill(Color.clear)
+                    .fill(Color.clear)
                         .frame(width: 70, height: 50)
                         .contentShape(Rectangle())
                         .gesture(
-                            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                            DragGesture(minimumDistance: 15, coordinateSpace: .local)
                                 .onChanged { value in
                                     handleCenterTabDrag(value)
                                 }
@@ -125,6 +125,23 @@ struct MainTabView: View {
                                     handleCenterTabDragEnd(value)
                                 }
                         )
+                        .simultaneousGesture(
+                            LongPressGesture(minimumDuration: 0.25)
+                                .onEnded { _ in
+                                    if !showRadialMenu {
+                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
+                                            showRadialMenu = true
+                                        }
+                                        HapticManager.impact(.medium)
+                                    }
+                                }
+                        )
+                        .onTapGesture {
+                            if !showRadialMenu {
+                                HapticManager.selection()
+                                showManualExpense = true
+                            }
+                        }
                     Spacer()
                 }
                 .padding(.bottom, 0)
@@ -158,7 +175,7 @@ struct MainTabView: View {
                         Task {
                             await voiceCoordinator.saveExpense(
                                 confirmed,
-                                viewModel: dashboardViewModel
+                                viewModel: homeViewModel
                             )
                         }
                     },
@@ -170,7 +187,7 @@ struct MainTabView: View {
         }
         .sheet(isPresented: $showManualExpense) {
             AddExpenseSheet {
-                Task { await dashboardViewModel.refresh() }
+                Task { await homeViewModel.refresh() }
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)

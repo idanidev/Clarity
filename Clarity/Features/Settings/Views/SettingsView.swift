@@ -134,7 +134,7 @@ struct SettingsView: View {
     private func exportCSV() {
         Task {
             do {
-                let expenses = try await ExpenseRepository().fetchExpenses()
+                let expenses = try await DependencyContainer.shared.expenseRepository.getExpenses()
                 if let url = ExportService.shared.generateCSV(from: expenses) {
                     exportedFileURL = url
                     showingShareSheet = true

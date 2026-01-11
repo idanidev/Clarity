@@ -204,36 +204,7 @@ struct SettingRow: View {
     }
 }
 
-struct StatCard: View {
-    let title: String
-    let value: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 6) {
-            Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 10)
-        .background(
-            ZStack {
-                color.opacity(0.12)
-                    .blendMode(.overlay)
-            }
-            .background(.ultraThinMaterial)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-    }
-}
+
 
 #Preview {
     VoiceSettingsPanel(settings: .constant(.default))

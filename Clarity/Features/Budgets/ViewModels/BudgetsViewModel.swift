@@ -18,7 +18,7 @@ class BudgetsViewModel {
     var isLoading = false
     
     private let db = Firestore.firestore()
-    private let expenseRepository = ExpenseRepository()
+    private let expenseRepository = DependencyContainer.shared.expenseRepository
     
     private var userId: String? {
         Auth.auth().currentUser?.uid
@@ -93,7 +93,11 @@ class BudgetsViewModel {
     
     private func calculateProgress() async {
         do {
-            let expenses = try await expenseRepository.fetchExpenses(for: currentMonth)
+            let allExpenses = try await expenseRepository.getExpenses()
+            
+            // Filter locally for current month
+            // Assuming currentMonth is "yyyy-MM" and expense.date is "yyyy-MM-dd"
+            let expenses = allExpenses.filter { $0.date.hasPrefix(currentMonth) }
             
             // Group by category
             var categoryTotals: [String: Double] = [:]

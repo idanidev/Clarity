@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct VoiceExpenseButton: View {
-    var viewModel: DashboardViewModel
+    var viewModel: HomeViewModel
     let categories: [Category]
     
     @StateObject private var speechManager = SpeechRecognitionManager()

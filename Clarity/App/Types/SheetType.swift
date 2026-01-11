@@ -20,4 +20,3 @@ enum SheetType: Identifiable, Sendable {
 }
 
 // MARK: - Sendable Conformance
-extension Expense: @unchecked Sendable {}

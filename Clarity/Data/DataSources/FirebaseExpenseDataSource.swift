@@ -20,11 +20,11 @@ actor FirebaseExpenseDataSource {
     func getExpenses() async throws -> [Expense] {
         guard let collection = expensesCollection else { throw URLError(.userAuthenticationRequired) }
         
-        // Fetch all (or implement pagination/filtering here if needed)
         let snapshot = try await collection.order(by: "date", descending: true).getDocuments()
         
         return snapshot.documents.compactMap { doc in
-            try? doc.data(as: Expense.self)
+            guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
+            return dto.toDomain(id: doc.documentID)
         }
     }
     
@@ -32,17 +32,15 @@ actor FirebaseExpenseDataSource {
         guard let collection = expensesCollection else { throw URLError(.userAuthenticationRequired) }
         
         let docRef = collection.document()
-        // Note: Expense needs to be Encodable. 
-        // We might need to ensure 'id' is nil so Firestore generates it, or use the generated docRef.documentID
-        var expenseToAdd = expense
-        // If Domain Expense is used directly, we handle mapping here or assuming Codable
-        try docRef.setData(from: expenseToAdd)
+        let dto = ExpenseDTO(from: expense)
+        try docRef.setData(from: dto)
         return docRef.documentID
     }
     
     func updateExpense(_ expense: Expense) async throws {
         guard let collection = expensesCollection, let id = expense.id else { throw URLError(.userAuthenticationRequired) }
-        try collection.document(id).setData(from: expense, merge: true)
+        let dto = ExpenseDTO(from: expense)
+        try collection.document(id).setData(from: dto, merge: true)
     }
     
     func deleteExpense(id: String) async throws {
@@ -50,3 +48,5 @@ actor FirebaseExpenseDataSource {
         try await collection.document(id).delete()
     }
 }
+
+

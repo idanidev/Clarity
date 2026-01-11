@@ -33,7 +33,7 @@ class DashboardViewModel {
     }
     
     // MARK: - Dependencies
-    private let repository = ExpenseRepository()
+    private let repository = DependencyContainer.shared.expenseRepository
     
     // MARK: - Init
     init() {
@@ -49,7 +49,7 @@ class DashboardViewModel {
         
         do {
             // Load without date filter - view will filter locally
-            expenses = try await repository.fetchExpenses(for: nil)
+            expenses = try await repository.getExpenses()
         } catch {
             errorMessage = error.localizedDescription
         }
