@@ -18,8 +18,8 @@ struct ExpenseDTO: Codable, Sendable {
     let createdAt: Date?
     let updatedAt: Date?
     
-    // Explicitly non-isolated mapping
-    func toDomain(id: String) -> Expense {
+    // Explicitly nonisolated mapping
+    nonisolated func toDomain(id: String) -> Expense {
         Expense(
             id: id,
             amount: amount,
@@ -38,7 +38,7 @@ struct ExpenseDTO: Codable, Sendable {
         )
     }
     
-    init(from domain: Expense) {
+    nonisolated init(from domain: Expense) {
         self.amount = domain.amount
         self.name = domain.name
         self.category = domain.category
@@ -77,8 +77,8 @@ struct ExpenseDTO: Codable, Sendable {
         isRecurring = try container.decodeIfPresent(Bool.self, forKey: .isRecurring)
         recurringId = try container.decodeIfPresent(String.self, forKey: .recurringId)
         
-        createdAt = try ExpenseDTO.decodeDate(from: container, forKey: .createdAt)
-        updatedAt = try ExpenseDTO.decodeDate(from: container, forKey: .updatedAt)
+        createdAt = Self.decodeDate(from: container, forKey: .createdAt)
+        updatedAt = Self.decodeDate(from: container, forKey: .updatedAt)
     }
     
     nonisolated func encode(to encoder: Encoder) throws {
@@ -99,8 +99,8 @@ struct ExpenseDTO: Codable, Sendable {
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }
     
-    // Helper for decoding Date/String/Timestamp
-    private static func decodeDate(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) throws -> Date? {
+    // Helper for decoding Date/String/Timestamp - must be nonisolated static
+    private nonisolated static func decodeDate(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Date? {
         if let date = try? container.decode(Date.self, forKey: key) {
             return date
         }

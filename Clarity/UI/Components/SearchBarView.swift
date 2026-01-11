@@ -32,8 +32,12 @@ struct SearchBarView: View {
             }
             .padding(.horizontal, Spacing.sm)
             .padding(.vertical, Spacing.xs + 2)
-            .background(Color.bgTertiary)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .background(Color(hex: "#0A0A0A")!) // Darker OLED background
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1) // Subtle border definition
+            )
             
             // Native iOS Filter Menu
             Menu {
@@ -177,7 +181,11 @@ struct FilterPill: View {
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, 6)
-        .background(Color.bgTertiary)
+        .background(Color(hex: "#0A0A0A")!) // Dark OLED
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
         .clipShape(Capsule())
     }
 }

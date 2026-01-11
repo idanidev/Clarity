@@ -9,11 +9,11 @@ extension Color {
     static let claritySecondary = Color(hex: "#A855F7")!  // Purple
     static let clarityAccent = Color(hex: "#6366F1")!     // Indigo
     
-    // MARK: - Background Colors (Dark Theme)
-    static let bgPrimary = Color(hex: "#0D0D1A")!         // Main background (darkest)
-    static let bgSecondary = Color(hex: "#1A1A2E")!       // Cards, sections
-    static let bgTertiary = Color(hex: "#1E1E2E")!        // Inputs, interactive elements
-    static let bgCard = Color(hex: "#12121F")!            // Subcategories
+    // MARK: - Background Colors (Dark Theme) - OLED UPDATED
+    static let bgPrimary = Color.black                 // Main background (OLED Pure Black)
+    static let bgSecondary = Color(hex: "#0A0A0A")!    // Cards, sections (Almost Black)
+    static let bgTertiary = Color(hex: "#121212")!     // Inputs, interactive elements
+    static let bgCard = Color(hex: "#050505")!         // Subcategories (Very dark)
     
     // Legacy aliases for compatibility
     static let cardBackground = bgSecondary

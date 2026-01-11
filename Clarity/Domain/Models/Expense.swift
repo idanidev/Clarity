@@ -31,7 +31,7 @@ struct Expense: Identifiable, Hashable, Sendable {
         return formatter.date(from: date) ?? Date()
     }
     
-    init(
+    nonisolated init(
         id: String? = nil,
         amount: Double,
         name: String,

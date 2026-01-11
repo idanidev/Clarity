@@ -6,6 +6,7 @@ import SwiftUI
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
+    @StateObject private var speechManager = SpeechRecognitionManager()
     let onSave: () -> Void
     
     var body: some View {
@@ -33,12 +34,24 @@ struct AddExpenseSheet: View {
                         .font(.clarityBody)
                         .accessibilityLabel("Descripción del gasto")
                     
-                    // Quick voice input button (placeholder)
+                    // Dictate button
                     Button {
-                        // TODO: Implement voice input
+                        if speechManager.isListening {
+                            speechManager.stopRecording()
+                        } else {
+                            HapticManager.impact(.medium)
+                            try? speechManager.startRecording()
+                        }
                     } label: {
-                        Label("Dictar", systemImage: "mic.fill")
-                            .foregroundStyle(Color.clarityPrimary)
+                        Label(speechManager.isListening ? "Escuchando..." : "Dictar", 
+                              systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill")
+                            .foregroundStyle(speechManager.isListening ? .red : Color.clarityPrimary)
+                            .symbolEffect(.pulse, isActive: speechManager.isListening)
+                    }
+                }
+                .onChange(of: speechManager.transcript) { _, newTranscript in
+                    if !newTranscript.isEmpty {
+                        viewModel.name = newTranscript
                     }
                 }
                 

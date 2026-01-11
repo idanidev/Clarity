@@ -18,6 +18,17 @@ struct MainTabView: View {
     @StateObject private var speechManager = SpeechRecognitionManager()
     @StateObject private var voiceCoordinator = VoiceExpenseCoordinator()
     
+    init() {
+        // Configure OLED Black Tab Bar
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = .black // OLED Pure Black
+        appearance.shadowColor = UIColor(Color.borderSubtle) // Subtle border
+        
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
+    }
+    
     // Menu geometry
     private let menuRadius: CGFloat = 80
     private let angleThreshold: Double = 35

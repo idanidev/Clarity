@@ -42,10 +42,14 @@ struct ExpandableExpenseList: View {
                     onExpenseDuplicate: onExpenseDuplicate
                 )
                 .id(category.id)
+                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear) // cleaner background
             }
         }
-        .listStyle(.insetGrouped)  // iOS native grouped style
-        .scrollContentBackground(.visible)  // Show native background
+        .listStyle(.plain) // Use plain list to avoid default inset group styling
+        .scrollContentBackground(.hidden)
+        .background(Color.black) // OLED Pure Black
     }
 }
 
@@ -57,65 +61,79 @@ struct CategorySection: View {
     let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
-        Section {
-            if category.isExpanded {
-                ForEach($category.subcategories) { $subcategory in
-                    SubcategorySection(
-                        subcategory: $subcategory,
-                        categoryColor: category.color,
-                        onExpenseDelete: onExpenseDelete,
-                        onExpenseEdit: onExpenseEdit,
-                        onExpenseDuplicate: onExpenseDuplicate
-                    )
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-            }
-        } header: {
+        VStack(spacing: 0) {
+            // Updated Header - Cleaner, less "grid" like
             Button {
-                withAnimation(.bouncy(duration: 0.25)) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     category.isExpanded.toggle()
                 }
                 HapticManager.selection()
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 16)
-                        .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
-                    
-                    Circle()
+                HStack(spacing: 12) {
+                    // Modern color pill indicator
+                    Capsule()
                         .fill(category.color)
-                        .frame(width: 10, height: 10)
+                        .frame(width: 4, height: 24)
                     
-                    Text("\(category.name)\(category.emoji)")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
+                    Text(category.emoji)
+                        .font(.title3)
                     
-                    Text("\(category.expenseCount) gasto\(category.expenseCount == 1 ? "" : "s")")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(category.name)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        
+                        Text("\(category.expenseCount) gastos")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     
                     Spacer()
                     
-                    Text(formatCurrency(category.totalAmount))
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                        .monospacedDigit()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(formatCurrency(category.totalAmount))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(.primary)
+                            .monospacedDigit()
+                        
+                        // Chevron
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
+                    }
                 }
-                .padding(.vertical, 0)
-                .contentShape(Rectangle())
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(hex: "#050505")!) // Almost pure black
+                        .overlay(
+                             RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.clarityPrimary.opacity(0.15), lineWidth: 1) // User's requested purple accent
+                        )
+                )
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(category.name), \(category.expenseCount) gastos, total \(formatCurrency(category.totalAmount))")
-            .accessibilityHint(category.isExpanded ? "Toca para contraer" : "Toca para expandir")
+            
+            // Expanded Content
+            if category.isExpanded {
+                VStack(spacing: 0) {
+                    ForEach($category.subcategories) { $subcategory in
+                        SubcategorySection(
+                            subcategory: $subcategory,
+                            categoryColor: category.color,
+                            onExpenseDelete: onExpenseDelete,
+                            onExpenseEdit: onExpenseEdit,
+                            onExpenseDuplicate: onExpenseDuplicate
+                        )
+                    }
+                }
+                .padding(.leading, 12) // Indent content slightly
+                .transition(.opacity)
+            }
         }
-        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
     }
     
     private func formatCurrency(_ value: Double) -> String {
@@ -132,7 +150,21 @@ struct SubcategorySection: View {
     let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
-        DisclosureGroup(isExpanded: $subcategory.isExpanded) {
+        // Removed DisclaimerGroup for cleaner look, just listing items
+        VStack(spacing: 0) {
+            // Optional Subheader if needed, otherwise just expenses
+            // The user wanted cleaner, so let's just show rows directly but maybe grouped visually
+            if !subcategory.name.isEmpty && subcategory.name != "Sin subcategoría" {
+               HStack {
+                   Text(subcategory.name)
+                       .font(.caption.weight(.semibold))
+                       .foregroundStyle(categoryColor.opacity(0.8))
+                       .padding(.vertical, 4)
+                       .padding(.leading, 12)
+                   Spacer()
+               }
+            }
+
             ForEach(subcategory.expenses, id: \.stableId) { expense in
                 ExpenseRow(
                     expense: expense,
@@ -141,37 +173,18 @@ struct SubcategorySection: View {
                     onEdit: { onExpenseEdit(expense) },
                     onDuplicate: { onExpenseDuplicate(expense) }
                 )
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Text(subcategory.name)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
-                
-                Text("\(subcategory.expenseCount)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                
-                Spacer()
-                
-                Text(formatCurrency(subcategory.totalAmount))
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
+                // Minimal separator
+                if expense.id != subcategory.expenses.last?.id {
+                     Divider()
+                         .padding(.leading, 20)
+                         .opacity(0.3)
+                }
             }
         }
-        .tint(.secondary)
-        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 16))
-    }
-    
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
     }
 }
 
-// MARK: - Expense Row (Level 3) with iOS 26 Design
+// MARK: - Expense Row (Level 3) - Clean Design
 struct ExpenseRow: View {
     let expense: Expense
     var categoryColor: Color = .gray
@@ -180,76 +193,41 @@ struct ExpenseRow: View {
     let onDuplicate: () -> Void
     
     var body: some View {
-        HStack(spacing: Spacing.sm) {
-            // Category Color Bar (more visible)
-            Capsule()
-                .fill(categoryColor.opacity(0.9))
-                .frame(width: 5)
-                .padding(.vertical, 2)
-            
-            // Content
-            VStack(alignment: .leading, spacing: 2) {  // Reduced spacing
-                HStack(spacing: Spacing.xxs) {
-                    Text(expense.name)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    
-                    if let subcategory = expense.subcategory, !subcategory.isEmpty {
-                        Text("·")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                        Text(subcategory)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
+        HStack(alignment: .center, spacing: 12) { // increased spacing
+            // Clean content without vertical bars
+            VStack(alignment: .leading, spacing: 4) {
+                Text(expense.name)
+                    .font(.body)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
                 
-                HStack(spacing: Spacing.xs) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 11))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.tertiary)
+                HStack(spacing: 6) {
                     Text(formattedDate)
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                     
+                    Text("•")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        
                     Text(expense.paymentMethod)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, Spacing.xs)
-                        .padding(.vertical, 2)
-                        .background(.quaternary)
-                        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.small / 2))
                 }
             }
             
             Spacer()
             
-            // Amount
-            VStack(alignment: .trailing, spacing: 2) {  // Reduced spacing
-                Text(formatCurrency(expense.amount))
-                    .font(.callout)
-                    .fontWeight(.bold)
-                    .foregroundStyle(.primary)
-                    .monospacedDigit()
-                
-                if expense.notes != nil {
-                    Image(systemName: "note.text")
-                        .font(.system(size: 11))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.tertiary)
-                }
-            }
+            Text(formatCurrency(expense.amount))
+                .font(.callout)
+                .fontWeight(.semibold)
+                .foregroundStyle(expense.amount > 50 ? .primary : .secondary) // Highlight big expenses
+                .monospacedDigit()
         }
-        .padding(.vertical, 8)  // Increased from 6
-        .padding(.leading, 4)    // Reduced from Spacing.xs (8)
-        .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
-        .accessibilityHint("Desliza para editar o eliminar")
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .background(Color.black) // Pure black for rows (OLED friendly)
         .contentShape(Rectangle())
-        .listRowInsets(EdgeInsets(top: 2, leading: 20, bottom: 2, trailing: 12))
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
                 HapticManager.notification(.warning)
@@ -275,16 +253,13 @@ struct ExpenseRow: View {
             }
             .tint(.blue)
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(expense.name), \(formatCurrency(expense.amount)), \(formattedDate)")
-        .accessibilityHint("Desliza para editar o eliminar")
     }
     
     private var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         guard let date = formatter.date(from: expense.date) else { return expense.date }
-        formatter.dateFormat = "dd/MM/yyyy"
+        formatter.dateFormat = "d MMM" // Short date format "2 Ene"
         return formatter.string(from: date)
     }
     
@@ -300,7 +275,7 @@ struct ExpenseRow: View {
             id: "1",
             amount: 4.50,
             name: "Café Starbucks",
-            category: "Alimentacion 🥗",
+            category: "Alimentacion",
             subcategory: "Cafeterías",
             date: "2026-01-02",
             paymentMethod: "Tarjeta"
@@ -309,7 +284,7 @@ struct ExpenseRow: View {
             id: "2",
             amount: 45.30,
             name: "Mercadona",
-            category: "Alimentacion 🥗",
+            category: "Alimentacion",
             subcategory: "Supermercado",
             date: "2026-01-01",
             paymentMethod: "Efectivo"
@@ -320,21 +295,15 @@ struct ExpenseRow: View {
         CategoryGroup(
             name: "Alimentación",
             emoji: "🥗",
-            color: Color(hex: "#6366F1")!,
+            color: .green,
             totalAmount: 49.80,
             expenseCount: 2,
             subcategories: [
                 SubcategoryGroup(
-                    name: "Cafeterías",
-                    totalAmount: 4.50,
-                    expenseCount: 1,
-                    expenses: [sampleExpenses[0]]
-                ),
-                SubcategoryGroup(
-                    name: "Supermercado",
-                    totalAmount: 45.30,
-                    expenseCount: 1,
-                    expenses: [sampleExpenses[1]]
+                    name: "General",
+                    totalAmount: 49.80,
+                    expenseCount: 2,
+                    expenses: sampleExpenses
                 )
             ]
         )
@@ -346,5 +315,6 @@ struct ExpenseRow: View {
         onExpenseEdit: { _ in },
         onExpenseDuplicate: { _ in }
     )
+    .background(Color.black)
     .preferredColorScheme(.dark)
 }

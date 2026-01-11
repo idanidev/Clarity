@@ -16,7 +16,7 @@ struct VoiceSettings: Codable {
         autoConfirmDelay: 3.0, // Reduced from 5.0 to 3.0 for better UX
         vibration: true,
         showSuggestions: true,
-        silenceTimeout: 2.5,
+        silenceTimeout: 4.0,
         debugMode: false
     )
     

@@ -26,11 +26,11 @@ struct DashboardView: View {
                 onBuildCategoryGroups: buildCategoryGroups,
                 onExpenseDuplicate: duplicateExpense
             )
-            .background(.regularMaterial)
+            .background(Color.black)
             .navigationTitle("Gastos")
             .navigationBarTitleDisplayMode(.large)
-            .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-            .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
+            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
             .refreshable {
                 await viewModel.refresh()
             }
@@ -209,8 +209,32 @@ struct DashboardView: View {
         return components.count > 1 ? components.last ?? "" : ""
     }
     
-    private func colorForCategory(_ name: String) -> Color {
-        Color.categoryColors[name] ?? Color(hex: "#6B7280")!
+    private func colorForCategory(_ categoryWithEmoji: String) -> Color {
+        // Categories in Firebase use full names like "Alimentacion🫄"
+        // So we need to match the full original expense.category
+        let userDataManager = UserDataManager.shared
+        
+        // 1. Clean the input (take first word/component to avoid emoji mismatch)
+         let cleanInput = categoryWithEmoji.components(separatedBy: " ").first ?? categoryWithEmoji
+        
+        // 2. Try to find a category where the clean name matches (robust against emoji differences)
+        if let category = userDataManager.categories.first(where: { 
+            let cleanStored = $0.name.components(separatedBy: " ").first ?? $0.name
+            return cleanStored.localizedCaseInsensitiveCompare(cleanInput) == .orderedSame
+        }) {
+            return Color(hex: category.color) ?? .gray
+        }
+
+        // 3. Fallback: Fuzzy containment scan
+        if let category = userDataManager.categories.first(where: {
+            $0.name.localizedCaseInsensitiveContains(cleanInput) ||
+            cleanInput.localizedCaseInsensitiveContains($0.name)
+        }) {
+             return Color(hex: category.color) ?? .gray
+        }
+        
+        // 4. Final fallback
+        return Color(hex: "#6B7280")!
     }
 }
 
