@@ -120,7 +120,7 @@ struct DashboardView: View {
             )
             
             do {
-                _ = try await ExpenseRepository().addExpense(duplicated)
+                _ = try await DependencyContainer.shared.expenseRepository.addExpense(duplicated)
                 await viewModel.refresh()
                 buildCategoryGroups()
                 HapticManager.notification(.success)
