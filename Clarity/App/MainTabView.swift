@@ -64,7 +64,7 @@ struct MainTabView: View {
             // TabView
             TabView(selection: $selectedTab) {
                 NavigationStack {
-                    ExpensesView()
+                    HomeView()
                 }
                 .tabItem {
                     Image(systemName: "list.bullet")

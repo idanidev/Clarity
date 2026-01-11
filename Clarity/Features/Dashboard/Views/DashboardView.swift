@@ -5,6 +5,7 @@ import SwiftUI
 
 struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
+    @ObservedObject private var userDataManager = UserDataManager.shared
     @State private var searchText = ""
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     @State private var categoryGroups: [CategoryGroup] = []
@@ -21,6 +22,7 @@ struct DashboardView: View {
                 expenseToEdit: $expenseToEdit,
                 showEditSheet: $showEditSheet,
                 filteredExpenses: filteredExpenses,
+                dateFilteredExpenses: dateFilteredExpenses,
                 onBuildCategoryGroups: buildCategoryGroups,
                 onExpenseDuplicate: duplicateExpense
             )
@@ -177,6 +179,25 @@ struct DashboardView: View {
         return expenses
     }
     
+    private var dateFilteredExpenses: [Expense] {
+        var expenses = viewModel.expenses
+        
+        // Deduplicate
+        var seen = Set<String>()
+        expenses = expenses.filter { expense in
+            guard let id = expense.id, !id.isEmpty else { return true }
+            if seen.contains(id) { return false }
+            seen.insert(id)
+            return true
+        }
+        
+        // Apply date range filter ONLY
+        let dateRange = filter.dateRangeForQuery()
+        return expenses.filter { expense in
+            expense.date >= dateRange.0 && expense.date <= dateRange.1
+        }
+    }
+    
     // MARK: - Helpers
     private func extractCategoryName(from category: String) -> String {
         let components = category.components(separatedBy: " ")
@@ -203,11 +224,28 @@ struct MainContent: View {
     @Binding var expenseToEdit: Expense?
     @Binding var showEditSheet: Bool
     let filteredExpenses: [Expense]
+    let dateFilteredExpenses: [Expense]
     let onBuildCategoryGroups: () -> Void
     let onExpenseDuplicate: (Expense) -> Void
     
+    // Total of expenses shown in list (respects all filters)
     private var filteredTotal: Double {
         filteredExpenses.reduce(0) { $0 + $1.amount }
+    }
+    
+    // Total of expenses in date range (ignores category/search)
+    private var dateFilteredTotal: Double {
+        dateFilteredExpenses.reduce(0) { $0 + $1.amount }
+    }
+    
+    // User Income
+    private var monthlyIncome: Double {
+        UserDataManager.shared.userDocument?.income ?? 0
+    }
+    
+    // Savings = Income - DateFilteredExpenses
+    private var savings: Double {
+        monthlyIncome - dateFilteredTotal
     }
     
     var body: some View {
@@ -216,9 +254,9 @@ struct MainContent: View {
             SummaryCardsView(
                 totalExpenses: filteredTotal,
                 expenseCount: filteredExpenses.count,
-                savings: max(0, 3000 - filteredTotal),
-                savingsPercentage: filteredTotal > 0 ? Int((3000 - filteredTotal) / 30) : 0,
-                available: max(0, 3000 - filteredTotal)
+                savings: savings,
+                savingsPercentage: monthlyIncome > 0 ? Int((savings / monthlyIncome) * 100) : 0,
+                available: savings // Available is typically same as savings (remaining budget)
             )
             .padding(.horizontal)
             .padding(.top, 4)

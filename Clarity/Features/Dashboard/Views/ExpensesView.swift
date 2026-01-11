@@ -13,6 +13,7 @@ struct ExpensesView: View {
     
     // Cache for performance
     @State private var cachedFilteredExpenses: [Expense] = []
+    @State private var cachedDateFilteredExpenses: [Expense] = [] // For Savings calculation (Date only)
     @State private var showFilterSheet = false
     
     
@@ -255,9 +256,11 @@ struct ExpensesView: View {
         // Get income from Firebase user document
         let monthlyIncome = UserDataManager.shared.userDocument?.income ?? 0
         
-        // Simple calculation: Income - Total Expenses = Savings
-        // Positive = money saved, Negative = over budget
-        return monthlyIncome - totalExpenses
+        // Calculate total expenses for the period (ignoring other filters)
+        let periodExpenses = cachedDateFilteredExpenses.reduce(0) { $0 + $1.amount }
+        
+        // Simple calculation: Income - Total Period Expenses = Savings
+        return monthlyIncome - periodExpenses
     }
     
     private func updateFilteredExpenses() {
@@ -273,8 +276,12 @@ struct ExpensesView: View {
         }
         
         // Date filter
+        // Date filter
         let dateRange = filter.dateRangeForQuery()
         expenses = expenses.filter { $0.date >= dateRange.0 && $0.date <= dateRange.1 }
+        
+        // Save expenses filtered ONLY by date for Savings calculation
+        self.cachedDateFilteredExpenses = expenses
         
         // Search filter
         if !searchText.isEmpty {

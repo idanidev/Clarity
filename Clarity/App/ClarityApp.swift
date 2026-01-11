@@ -10,6 +10,11 @@ struct ClarityApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authViewModel = AuthViewModel()
     
+    init() {
+        Task {
+            ClarityShortcuts.updateAppShortcutParameters()
+        }
+    }
     
     var body: some Scene {
         WindowGroup {
