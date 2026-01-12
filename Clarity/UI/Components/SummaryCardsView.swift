@@ -54,7 +54,7 @@ struct SummaryCardsView: View {
             SummaryCard(
                 icon: "",
                 title: "Total",
-                value: formatCurrency(totalExpenses),
+                value: totalExpenses.formattedCurrency,
                 valueColor: .clarityPrimary // User asked for primary purple
             )
             
@@ -70,15 +70,13 @@ struct SummaryCardsView: View {
             SummaryCard(
                 icon: "",
                 title: "Ahorro",
-                value: formatCurrency(savings),
+                value: savings.formattedCurrency,
                 valueColor: .green
             )
         }
     }
     
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
-    }
+
 }
 
 #Preview {

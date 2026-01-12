@@ -2,14 +2,13 @@
 // ViewModel for the main expense list/dashboard
 
 import Foundation
-import Combine
 import SwiftUI
 
 enum HomeViewState: Equatable {
     case idle
     case loading
     case loaded([Expense])
-    case error(String)
+    case error(AppError) // Changed from String
     case empty
     
     static func == (lhs: HomeViewState, rhs: HomeViewState) -> Bool {
@@ -23,22 +22,33 @@ enum HomeViewState: Equatable {
 }
 
 @MainActor
-final class HomeViewModel: ObservableObject {
+@Observable
+final class HomeViewModel {
     
     // Output
-    @Published private(set) var state: HomeViewState = .idle
-    @Published var selectedFilter: ExpenseFilter = ExpenseFilter() {
+    private(set) var state: HomeViewState = .idle
+    var selectedFilter: ExpenseFilter = ExpenseFilter() {
         didSet { applyFilters() }
     }
-    @Published var searchText: String = "" {
-        didSet { applyFilters() }
+    var searchText: String = "" {
+        didSet {
+            searchTask?.cancel()
+            searchTask = Task {
+                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
+                if !Task.isCancelled {
+                    applyFilters()
+                }
+            }
+        }
     }
     
+    private var searchTask: Task<Void, Never>?
+    
     // Data for View
-    @Published var categoryGroups: [CategoryGroup] = []
-    @Published var filteredExpenses: [Expense] = []
-    @Published var dateFilteredExpenses: [Expense] = [] // For Savings calculation
-    @Published var income: Double = 0
+    var categoryGroups: [CategoryGroup] = []
+    var filteredExpenses: [Expense] = []
+    var dateFilteredExpenses: [Expense] = [] // For Savings calculation
+    var income: Double = 0
     
     // Internal
     private let getExpensesUseCase: GetExpensesUseCase
@@ -76,10 +86,10 @@ final class HomeViewModel: ObservableObject {
         )
         
         do {
-            try await addExpenseUseCase.execute(duplicated)
+            _ = try await addExpenseUseCase.execute(duplicated)
             await loadExpenses()
         } catch {
-            state = .error("Error al duplicar: \(error.localizedDescription)")
+            state = .error(.savingFailed(error.localizedDescription))
         }
     }
     
@@ -89,7 +99,7 @@ final class HomeViewModel: ObservableObject {
             try await deleteExpenseUseCase.execute(id: id)
             await loadExpenses()
         } catch {
-            state = .error("Error al eliminar: \(error.localizedDescription)")
+            state = .error(.deletionFailed(error.localizedDescription))
         }
     }
     
@@ -105,12 +115,22 @@ final class HomeViewModel: ObservableObject {
             applyFilters()
             state = .loaded(filteredExpenses)
         } catch {
-            state = .error(error.localizedDescription)
+            state = .error(.dataLoadingFailed(error.localizedDescription))
         }
     }
     
     func refresh() async {
-        await loadExpenses()
+        // Pull-to-refresh should try network first
+        do {
+            let expenses = try await getExpensesUseCase.execute(filter: nil, policy: .networkFirst)
+            self.allExpenses = expenses
+            applyFilters()
+            state = .loaded(filteredExpenses)
+        } catch {
+            // Even with networkFirst, repo falls back to cache. 
+            // If we get here, both failed or critical error.
+            state = .error(.networkError(error.localizedDescription))
+        }
     }
     
     // MARK: - Logic

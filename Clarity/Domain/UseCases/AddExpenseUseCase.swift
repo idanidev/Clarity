@@ -10,13 +10,13 @@ struct AddExpenseUseCase {
         self.repository = repository
     }
     
-    func execute(_ expense: Expense) async throws {
+    func execute(_ expense: Expense) async throws -> String {
         // Business Rules
         guard expense.amount > 0 else {
             throw DomainError.invalidAmount
         }
         
-        try await repository.addExpense(expense)
+        return try await repository.addExpense(expense)
     }
 }
 

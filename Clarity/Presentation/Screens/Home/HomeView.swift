@@ -5,8 +5,8 @@
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject private var viewModel: HomeViewModel
-    @ObservedObject private var userDataManager = UserDataManager.shared
+    @State private var viewModel: HomeViewModel
+    private var userDataManager = UserDataManager.shared
     
     // UI State
     @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario
@@ -17,7 +17,7 @@ struct HomeView: View {
     @MainActor
     init(viewModel: HomeViewModel? = nil) {
         let vm = viewModel ?? DependencyContainer.shared.makeHomeViewModel()
-        _viewModel = StateObject(wrappedValue: vm)
+        _viewModel = State(initialValue: vm)
     }
     
     var body: some View {
@@ -78,7 +78,7 @@ struct HomeView: View {
             HStack(spacing: 12) {
                 StatCard(
                     title: "Total",
-                    value: formatCurrency(filteredTotal),
+                    value: filteredTotal.formattedCurrency,
                     color: Color.clarityPrimary
                 )
                 
@@ -90,7 +90,7 @@ struct HomeView: View {
                 
                 StatCard(
                     title: "Ahorro",
-                    value: formatCurrency(savings),
+                    value: savings.formattedCurrency,
                     color: savings >= 0 ? .green : .red
                 )
             }
@@ -131,13 +131,13 @@ struct HomeView: View {
             // List Content
             if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
                 loadingView
-            } else if case .error(let msg) = viewModel.state {
-                errorView(msg)
+            } else if case .error(let error) = viewModel.state {
+                errorView(error.localizedDescription)
             } else if viewModel.filteredExpenses.isEmpty {
                 emptyStateView
             } else {
                 ExpandableExpenseList(
-                    categories: $viewModel.categoryGroups,
+                    categories: viewModel.categoryGroups,
                     onExpenseDelete: { expense in
                         Task { await viewModel.deleteExpense(expense) }
                     },
@@ -266,14 +266,7 @@ struct HomeView: View {
         monthlyIncome - dateFilteredTotal
     }
     
-    private func formatCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencySymbol = "€"
-        formatter.maximumFractionDigits = 2
-        formatter.minimumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f €", value)
-    }
+
     
     private func buildChartData() -> [CategoryChartData] {
         var categoryTotals: [String: (amount: Double, color: Color)] = [:]
@@ -297,24 +290,7 @@ struct HomeView: View {
     
     // MARK: - View States
     private var loadingView: some View {
-        List {
-            ForEach(0..<5) { _ in
-                HStack {
-                    SkeletonView().frame(width: 40, height: 40).cornerRadius(20)
-                    VStack(alignment: .leading, spacing: 8) {
-                        SkeletonView().frame(width: 150, height: 16)
-                        SkeletonView().frame(width: 100, height: 12)
-                    }
-                    Spacer()
-                    SkeletonView().frame(width: 80, height: 20)
-                }
-                .padding(.vertical, 8)
-                .listRowBackground(Color.bgPrimary)
-                .listRowSeparator(.hidden)
-            }
-        }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
+        ExpenseListSkeleton()
     }
     
     private var emptyStateView: some View {

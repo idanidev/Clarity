@@ -9,8 +9,8 @@ struct GetExpensesUseCase {
         self.repository = repository
     }
     
-    func execute(filter: ExpenseFilter? = nil) async throws -> [Expense] {
-        let expenses = try await repository.getExpenses()
+    func execute(filter: ExpenseFilter? = nil, policy: CachePolicy = .cacheFirst()) async throws -> [Expense] {
+        let expenses = try await repository.getExpenses(policy: policy)
         
         // Apply Domain Filters if needed here, or pass to repo
         // For now, consistent with user proposal, we return all or handle filtering in VM

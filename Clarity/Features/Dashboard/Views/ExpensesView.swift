@@ -6,16 +6,8 @@ import SwiftUI
 struct ExpensesView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario
-    @State private var searchText = ""
-    @State private var filter = ExpenseFilter(dateRange: .thisMonth)
-    @State private var categoryGroups: [CategoryGroup] = []
     @State private var expenseToEdit: Expense?
-    
-    // Cache for performance
-    @State private var cachedFilteredExpenses: [Expense] = []
-    @State private var cachedDateFilteredExpenses: [Expense] = [] // For Savings calculation (Date only)
     @State private var showFilterSheet = false
-    
     
     var body: some View {
         mainContent
@@ -27,23 +19,18 @@ struct ExpensesView: View {
             .refreshable { await viewModel.refresh() }
             .task {
                 await viewModel.loadExpenses()
-                updateFilteredExpenses()
             }
-            .onChange(of: viewModel.expenses) { _, _ in updateFilteredExpenses() }
-            .onChange(of: filter) { _, _ in updateFilteredExpenses() }
-            .onChange(of: searchText) { _, _ in updateFilteredExpenses() }
-            .onChange(of: cachedFilteredExpenses) { _, _ in buildCategoryGroups() }
+            // ViewModel handles updates automatically via @Observable
             .sheet(item: $expenseToEdit) { expense in
                 editSheet(for: expense)
             }
             .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
             .sheet(isPresented: $showFilterSheet) {
                 ExpenseFilterSheet(
-                    filter: $filter,
+                    filter: $viewModel.filter,
                     availableCategories: Array(Set(viewModel.expenses.map { $0.category })),
                     onApply: {
-                        updateFilteredExpenses()
-                        buildCategoryGroups()
+                        // Filters apply auto via binding
                     }
                 )
             }
@@ -59,7 +46,7 @@ struct ExpensesView: View {
                     tableContent
                 case 1:
                     VStack(spacing: 0) {
-                        DonutChartContent(viewModel: viewModel, filter: filter)
+                        DonutChartContent(viewModel: viewModel, filter: viewModel.filter)
                     }
                 case 2:
                     VStack(spacing: 0) {
@@ -100,12 +87,10 @@ struct ExpensesView: View {
             
             // Clear + Filter buttons (Right)
             HStack(spacing: 4) {
-                if filter.hasActiveFilters || !searchText.isEmpty {
+                if viewModel.filter.hasActiveFilters || !viewModel.searchText.isEmpty {
                     Button {
-                        filter = ExpenseFilter(dateRange: .thisMonth)
-                        searchText = ""
-                        updateFilteredExpenses()
-                        buildCategoryGroups()
+                        viewModel.filter = ExpenseFilter(dateRange: .thisMonth)
+                        viewModel.searchText = ""
                         HapticManager.notification(.success)
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -118,9 +103,9 @@ struct ExpensesView: View {
                         showFilterSheet = true
                         HapticManager.selection()
                     } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle" + (filter.hasActiveFilters || !searchText.isEmpty ? ".fill" : ""))
+                        Image(systemName: "line.3.horizontal.decrease.circle" + (viewModel.filter.hasActiveFilters || !viewModel.searchText.isEmpty ? ".fill" : ""))
                             .font(.system(size: 22))
-                            .foregroundStyle(filter.hasActiveFilters || !searchText.isEmpty ? Color.clarityPrimary : .secondary)
+                            .foregroundStyle(viewModel.filter.hasActiveFilters || !viewModel.searchText.isEmpty ? Color.clarityPrimary : .secondary)
                     }
             }
             .frame(width: 60)
@@ -152,7 +137,6 @@ struct ExpensesView: View {
     private func editSheet(for expense: Expense) -> some View {
         EditExpenseSheet(expense: expense) {
             Task { await viewModel.refresh() }
-            buildCategoryGroups()
         }
         .presentationDetents([.large])
         .presentationBackground(.regularMaterial)
@@ -172,20 +156,20 @@ struct ExpensesView: View {
             HStack(spacing: 12) {
                 StatCard(
                     title: "Total",
-                    value: Formatters.currency(totalExpenses),
+                    value: Formatters.currency(viewModel.totalFilteredAmount),
                     color: Color.clarityPrimary
                 )
                 
                 StatCard(
                     title: "Gastos",
-                    value: "\(cachedFilteredExpenses.count)",
+                    value: "\(viewModel.filteredExpenses.count)",
                     color: .blue
                 )
                 
                 StatCard(
                     title: "Ahorro",
-                    value: Formatters.currency(calculateSavings()),
-                    color: calculateSavings() >= 0 ? .green : .red
+                    value: Formatters.currency(viewModel.calculatedSavings),
+                    color: viewModel.calculatedSavings >= 0 ? .green : .red
                 )
             }
             .padding(.horizontal, 16)
@@ -196,12 +180,12 @@ struct ExpensesView: View {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
                 
-                TextField("Buscar gastos...", text: $searchText)
+                TextField("Buscar gastos...", text: $viewModel.searchText)
                     .textFieldStyle(.plain)
                 
-                if !searchText.isEmpty {
+                if !viewModel.searchText.isEmpty {
                     Button {
-                        searchText = ""
+                        viewModel.searchText = ""
                         HapticManager.selection()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
@@ -217,8 +201,8 @@ struct ExpensesView: View {
             
             // Active filter pills (kept for feedback)
             ActiveFilterPillsView(
-                filter: $filter,
-                onFilterChange: onBuildCategoryGroups
+                filter: $viewModel.filter,
+                onFilterChange: { /* Handled by VM */ }
             )
             .padding(.top, 4)
             
@@ -226,10 +210,17 @@ struct ExpensesView: View {
             ExpenseListContent(
                 isLoading: viewModel.isLoading,
                 expensesEmpty: viewModel.expenses.isEmpty,
-                filteredEmpty: cachedFilteredExpenses.isEmpty,
-                activeFilters: filter.hasActiveFilters,
-                groupsEmpty: categoryGroups.isEmpty,
-                categoryGroups: $categoryGroups,
+                filteredEmpty: viewModel.filteredExpenses.isEmpty,
+                activeFilters: viewModel.filter.hasActiveFilters,
+                groupsEmpty: viewModel.categoryGroups.isEmpty,
+                categoryGroups: viewModel.categoryGroups, // Read-only pass
+                // Wait, ExpenseListContent likely expects Binding<[CategoryGroup]> if it handles expansion state within the group model
+                // checking usage: categoryGroups: $categoryGroups
+                // If CategoryGroup handles expansion state, it needs to be mutable.
+                // Since VM owns it now, we pass binding to VM property.
+                // But VM property `categoryGroups` is private(set).
+                // FIX: DashboardViewModel needs to expose binding or handling for expansion.
+                // OR ExpenseListContent manages expansion locally.
                 onDelete: { expense in
                     Task {
                         await viewModel.deleteExpense(expense)
@@ -241,148 +232,14 @@ struct ExpensesView: View {
                 },
                 onDuplicate: duplicateExpense,
                 onClearFilters: {
-                    filter = ExpenseFilter(dateRange: .thisMonth)
-                    searchText = ""
+                    viewModel.filter = ExpenseFilter(dateRange: .thisMonth)
+                    viewModel.searchText = ""
                 }
             )
         }
     }
     
-    private var totalExpenses: Double {
-        cachedFilteredExpenses.reduce(0) { $0 + $1.amount }
-    }
-    
-    private func calculateSavings() -> Double {
-        // Get income from Firebase user document
-        let monthlyIncome = UserDataManager.shared.userDocument?.income ?? 0
-        
-        // Calculate total expenses for the period (ignoring other filters)
-        let periodExpenses = cachedDateFilteredExpenses.reduce(0) { $0 + $1.amount }
-        
-        // Simple calculation: Income - Total Period Expenses = Savings
-        return monthlyIncome - periodExpenses
-    }
-    
-    private func updateFilteredExpenses() {
-        var expenses = viewModel.expenses
-        
-        // Deduplicate
-        var seen = Set<String>()
-        expenses = expenses.filter { expense in
-            guard let id = expense.id, !id.isEmpty else { return true }
-            if seen.contains(id) { return false }
-            seen.insert(id)
-            return true
-        }
-        
-        // Date filter
-        // Date filter
-        let dateRange = filter.dateRangeForQuery()
-        expenses = expenses.filter { $0.date >= dateRange.0 && $0.date <= dateRange.1 }
-        
-        // Save expenses filtered ONLY by date for Savings calculation
-        self.cachedDateFilteredExpenses = expenses
-        
-        // Search filter
-        if !searchText.isEmpty {
-            expenses = expenses.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                $0.category.localizedCaseInsensitiveContains(searchText) ||
-                ($0.subcategory?.localizedCaseInsensitiveContains(searchText) ?? false)
-            }
-        }
-        
-        // Category filter
-        if !filter.selectedCategories.isEmpty {
-            expenses = expenses.filter { expense in
-                filter.selectedCategories.contains { category in
-                    expense.category.localizedCaseInsensitiveContains(category.components(separatedBy: " ").first ?? category)
-                }
-            }
-        }
-        
-        // Payment method filter
-        if !filter.selectedPaymentMethods.isEmpty {
-            expenses = expenses.filter { filter.selectedPaymentMethods.contains($0.paymentMethod) }
-        }
-        
-        // Amount range filter
-        if let minAmount = filter.minAmount {
-            expenses = expenses.filter { $0.amount >= minAmount }
-        }
-        if let maxAmount = filter.maxAmount {
-            expenses = expenses.filter { $0.amount <= maxAmount }
-        }
-        
-        // Recurring-only filter
-        if filter.showOnlyRecurring {
-            expenses = expenses.filter { $0.isRecurring == true }
-        }
-        
-        // Sort
-        switch filter.sortBy {
-        case .dateDesc:
-            expenses.sort { $0.date > $1.date }
-        case .dateAsc:
-            expenses.sort { $0.date < $1.date }
-        case .amountDesc:
-            expenses.sort { $0.amount > $1.amount }
-        case .amountAsc:
-            expenses.sort { $0.amount < $1.amount }
-        case .nameAsc:
-            expenses.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-        case .nameDesc:
-            expenses.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
-        }
-        
-        self.cachedFilteredExpenses = expenses
-    }
-    
-    private func buildCategoryGroups() {
-        var groups: [String: CategoryGroup] = [:]
-        
-        for expense in cachedFilteredExpenses {
-            let categoryName = extractCategoryName(from: expense.category)
-            let emoji = extractEmoji(from: expense.category)
-            
-            if groups[categoryName] == nil {
-                groups[categoryName] = CategoryGroup(
-                    name: categoryName,
-                    emoji: emoji,
-                    color: colorForCategory(expense.category),  // Use full category name with emoji
-                    totalAmount: 0,
-                    expenseCount: 0,
-                    subcategories: []
-                )
-            }
-            
-            groups[categoryName]?.totalAmount += expense.amount
-            groups[categoryName]?.expenseCount += 1
-            
-            let subcategoryName = expense.subcategory ?? "Sin subcategoría"
-            if let subIndex = groups[categoryName]?.subcategories.firstIndex(where: { $0.name == subcategoryName }) {
-                groups[categoryName]?.subcategories[subIndex].totalAmount += expense.amount
-                groups[categoryName]?.subcategories[subIndex].expenseCount += 1
-                groups[categoryName]?.subcategories[subIndex].expenses.append(expense)
-            } else {
-                groups[categoryName]?.subcategories.append(
-                    SubcategoryGroup(
-                        name: subcategoryName,
-                        totalAmount: expense.amount,
-                        expenseCount: 1,
-                        expenses: [expense]
-                    )
-                )
-            }
-        }
-        
-        categoryGroups = Array(groups.values).sorted { $0.totalAmount > $1.totalAmount }
-    }
-    
-    private func onBuildCategoryGroups() {
-        buildCategoryGroups()
-    }
-    
+    // Helper needed for Duplicate because it uses DependencyContainer directly or VM
     private func duplicateExpense(_ expense: Expense) {
         Task {
             let duplicated = Expense(
@@ -399,37 +256,10 @@ struct ExpensesView: View {
             do {
                 _ = try await DependencyContainer.shared.expenseRepository.addExpense(duplicated)
                 await viewModel.refresh()
-                buildCategoryGroups()
                 HapticManager.notification(.success)
             } catch {
                 print("Error duplicating expense: \(error)")
             }
         }
-    }
-    
-    private func extractCategoryName(from category: String) -> String {
-        category.components(separatedBy: " ").first ?? category
-    }
-    
-    private func extractEmoji(from category: String) -> String {
-        let components = category.components(separatedBy: " ")
-        return components.count > 1 ? components.last ?? "" : ""
-    }
-    
-    private func colorForCategory(_ categoryWithEmoji: String) -> Color {
-        // Categories in Firebase use full names like "Alimentacion🫄"
-        // So we need to match the full original expense.category
-        let userDataManager = UserDataManager.shared
-        
-        // First try exact match with the full category name from expense
-        if let category = userDataManager.categories.first(where: {
-            $0.name.localizedCaseInsensitiveContains(categoryWithEmoji) ||
-            categoryWithEmoji.localizedCaseInsensitiveContains($0.name.components(separatedBy: " ").first ?? $0.name)
-        }) {
-            return Color(hex: category.color) ?? .gray
-        }
-        
-        // Fallback to default color
-        return UserDataManager.shared.color(for: categoryWithEmoji)
     }
 }

@@ -5,38 +5,57 @@ import SwiftUI
 
 // MARK: - Models
 
-struct CategoryGroup: Identifiable {
-    let id = UUID()
+struct CategoryGroup: Identifiable, Equatable {
+    // Stable ID based on name for consistent diffing
+    var id: String { name }
     let name: String
     let emoji: String
     let color: Color
     var totalAmount: Double
     var expenseCount: Int
-    var isExpanded: Bool = true
+    // isExpanded removed from logic (handled by View)
     var subcategories: [SubcategoryGroup]
+    
+    static func == (lhs: CategoryGroup, rhs: CategoryGroup) -> Bool {
+        lhs.id == rhs.id && lhs.totalAmount == rhs.totalAmount && lhs.subcategories == rhs.subcategories
+    }
 }
 
-struct SubcategoryGroup: Identifiable {
-    let id = UUID()
+struct SubcategoryGroup: Identifiable, Equatable {
+    var id: String { name }
     let name: String
     var totalAmount: Double
     var expenseCount: Int
-    var isExpanded: Bool = true
     var expenses: [Expense]
 }
 
 // MARK: - Main Expandable List
 struct ExpandableExpenseList: View {
-    @Binding var categories: [CategoryGroup]
+    let categories: [CategoryGroup] // Read-only value
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
     let onExpenseDuplicate: (Expense) -> Void
     
+    // Local View State for expansion
+    // Storing IDs of COLLAPSED items (default behavior is expanded)
+    @State private var collapsedCategories: Set<String> = []
+    @State private var collapsedSubcategories: Set<String> = []
+    
     var body: some View {
         List {
-            ForEach($categories) { $category in
+            ForEach(categories) { category in
                 CategorySection(
-                    category: $category,
+                    category: category,
+                    isExpanded: !collapsedCategories.contains(category.id),
+                    onToggleExpand: {
+                        toggleCategory(category.id)
+                    },
+                    isSubcategoryExpanded: { subID in
+                        !collapsedSubcategories.contains(subID)
+                    },
+                    onToggleSubcategory: { subID in
+                        toggleSubcategory(subID)
+                    },
                     onExpenseDelete: onExpenseDelete,
                     onExpenseEdit: onExpenseEdit,
                     onExpenseDuplicate: onExpenseDuplicate
@@ -44,29 +63,62 @@ struct ExpandableExpenseList: View {
                 .id(category.id)
                 .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
                 .listRowSeparator(.hidden)
-                .listRowBackground(Color(red: 0, green: 0, blue: 0)) // Force pure black row
+                .listRowBackground(Color.bgPrimary)
             }
         }
-        .listStyle(.plain) // Use plain list to avoid default inset group styling
+        .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color(red: 0, green: 0, blue: 0)) // RGB 000 HARDCODED
+        .background(Color.bgPrimary)
+    }
+    
+    // MARK: - Actions
+    private func toggleCategory(_ id: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if collapsedCategories.contains(id) {
+                collapsedCategories.remove(id)
+            } else {
+                collapsedCategories.insert(id)
+            }
+        }
+        HapticManager.selection()
+    }
+    
+    private func toggleSubcategory(_ id: String) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            if collapsedSubcategories.contains(id) {
+                collapsedSubcategories.remove(id)
+            } else {
+                collapsedSubcategories.insert(id)
+            }
+        }
+        HapticManager.selection()
     }
 }
 
 // MARK: - Category Section (Level 1)
 struct CategorySection: View {
-    @Binding var category: CategoryGroup
+    let category: CategoryGroup
+    let isExpanded: Bool
+    let onToggleExpand: () -> Void
+    let isSubcategoryExpanded: (String) -> Bool
+    let onToggleSubcategory: (String) -> Void
+    
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
     let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
         Section {
-            if category.isExpanded {
-                ForEach($category.subcategories) { $subcategory in
+            if isExpanded {
+                ForEach(category.subcategories) { subcategory in
                     SubcategorySection(
-                        subcategory: $subcategory,
+                        subcategory: subcategory,
                         categoryColor: category.color,
+                        isExpanded: isSubcategoryExpanded(category.id + "_" + subcategory.id),
+                        onToggleExpand: {
+                             // Unique ID for subselection scope
+                             onToggleSubcategory(category.id + "_" + subcategory.id)
+                        },
                         onExpenseDelete: onExpenseDelete,
                         onExpenseEdit: onExpenseEdit,
                         onExpenseDuplicate: onExpenseDuplicate
@@ -75,10 +127,7 @@ struct CategorySection: View {
             }
         } header: {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    category.isExpanded.toggle()
-                }
-                HapticManager.selection()
+                onToggleExpand()
             } label: {
                 HStack(spacing: 12) {
                     // Simple Color Indicator
@@ -89,18 +138,18 @@ struct CategorySection: View {
                     
                     Text(category.name)
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(Color.primary)
                     
                     Spacer()
                     
-                    Text(formatCurrency(category.totalAmount))
+                    Text(category.totalAmount.formattedCurrency)
                         .font(.system(size: 16, weight: .bold, design: .rounded))
-                        .foregroundStyle(Color.white.opacity(0.9))
+                        .foregroundStyle(Color.primary.opacity(0.9))
                     
                     Image(systemName: "chevron.right")
                         .font(.system(size: 14, weight: .semibold))
-                        .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
-                        .foregroundStyle(Color.white.opacity(0.4))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .foregroundStyle(Color.secondary)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
@@ -112,23 +161,22 @@ struct CategorySection: View {
                                 .stroke(category.color.opacity(0.3), lineWidth: 1)
                         )
                 )
-                // Add padding to container to match spec if needed, but List handles it usually.
-                // Spec shows spacing between categories is handled by parent VStack in user snippet,
-                // but here we are in a Section Header.
+                .background(Color.bgPrimary)
             }
             .buttonStyle(.plain)
         }
     }
     
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
-    }
+
 }
 
 // MARK: - Subcategory Section (Level 2)
 struct SubcategorySection: View {
-    @Binding var subcategory: SubcategoryGroup
+    let subcategory: SubcategoryGroup
     let categoryColor: Color
+    let isExpanded: Bool
+    let onToggleExpand: () -> Void
+    
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
     let onExpenseDuplicate: (Expense) -> Void
@@ -137,21 +185,18 @@ struct SubcategorySection: View {
         // Subcategory Header (if distinct subcategory)
         if !subcategory.name.isEmpty && subcategory.name != "General" {
             Button {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    subcategory.isExpanded.toggle()
-                }
-                HapticManager.selection()
+                onToggleExpand()
             } label: {
                 HStack {
                     Image(systemName: "chevron.right")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(subcategory.isExpanded ? 90 : 0))
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .frame(width: 20)
                     
                     Text(subcategory.name)
-                        .font(.subheadline.weight(.semibold)) // More distinct weight
-                        .foregroundStyle(.primary) // Clearer text
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
                     
                     Spacer()
                     
@@ -165,14 +210,14 @@ struct SubcategorySection: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.white.opacity(0.05)) // Subtle background for header
+                .background(Color.primary.opacity(0.05))
             }
             .buttonStyle(.plain)
             .listRowSeparator(.hidden)
-            .listRowBackground(Color.black)
+            .listRowBackground(Color.bgPrimary)
         }
 
-        if subcategory.isExpanded || subcategory.name == "General" || subcategory.name.isEmpty {
+        if isExpanded || subcategory.name == "General" || subcategory.name.isEmpty {
             ForEach(subcategory.expenses, id: \.stableId) { expense in
                 ExpenseRow(
                     expense: expense,
@@ -181,7 +226,7 @@ struct SubcategorySection: View {
                     onEdit: { onExpenseEdit(expense) },
                     onDuplicate: { onExpenseDuplicate(expense) }
                 )
-                .listRowBackground(Color(red: 0, green: 0, blue: 0))
+                .listRowBackground(Color.bgPrimary)
             }
         }
     }
@@ -205,7 +250,7 @@ struct ExpenseRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(expense.name)
                     .font(.body)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.primary)
                     .lineLimit(1)
                 
                 HStack {
@@ -216,14 +261,14 @@ struct ExpenseRow: View {
                     }
                 }
                 .font(.caption)
-                .foregroundColor(.gray)
+                .foregroundStyle(Color.secondary)
             }
             
             Spacer()
             
-            Text(formatCurrency(expense.amount))
+            Text(expense.amount.formattedCurrency)
                 .font(.body.monospacedDigit())
-                .foregroundColor(.white)
+                .foregroundStyle(Color.primary)
         }
         .padding(.vertical, 4)
         .contentShape(Rectangle())
@@ -259,9 +304,7 @@ struct ExpenseRow: View {
         return formatter.string(from: date)
     }
     
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
-    }
+
 }
 
 // MARK: - Preview
@@ -297,7 +340,7 @@ struct ExpenseRow: View {
     ]
     
     ExpandableExpenseList(
-        categories: .constant(categories),
+        categories: categories,
         onExpenseDelete: { _ in },
         onExpenseEdit: { _ in },
         onExpenseDuplicate: { _ in }

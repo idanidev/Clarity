@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct Expense: Identifiable, Hashable, Sendable {
+struct Expense: Identifiable, Hashable, Sendable, Codable {
     var id: String?
     let amount: Double
     let name: String

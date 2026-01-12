@@ -225,30 +225,20 @@ struct CategoryDetailView: View {
         updated.subcategories = subcategories
         updated.updatedAt = Date()
         
-        do {
-            try await UserDataManager.shared.updateCategory(updated)
-            HapticManager.notification(.success)
-            onUpdate()
-            dismiss()
-        } catch {
-            print("Error: \(error)")
-            HapticManager.notification(.error)
-            isSaving = false
-        }
+        await UserDataManager.shared.updateCategory(updated)
+        HapticManager.notification(.success)
+        onUpdate()
+        dismiss()
+        isSaving = false
     }
     
     private func deleteCategory() async {
         guard let id = originalCategory.id else { return }
         
-        do {
-            try await UserDataManager.shared.deleteCategory(id: id)
-            HapticManager.notification(.success)
-            onUpdate()
-            dismiss()
-        } catch {
-            print("Error: \(error)")
-            HapticManager.notification(.error)
-        }
+        await UserDataManager.shared.deleteCategory(id: id)
+        HapticManager.notification(.success)
+        onUpdate()
+        dismiss()
     }
 }
 

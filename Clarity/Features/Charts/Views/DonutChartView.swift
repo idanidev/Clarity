@@ -29,7 +29,7 @@ struct DonutChartView: View {
             VStack(spacing: Spacing.lg) {
                 donutChart
                 categoryGrid
-                // selectedCategoryDetail - Removed as per user request ("lo quitaría")
+
             }
             .padding(.bottom, Spacing.xl)
         }
@@ -77,7 +77,7 @@ struct DonutChartView: View {
                     .foregroundColor(.gray)
                     .opacity(animationProgress > 0.1 ? 1 : 0)
                 
-                Text(formatCurrency(total))
+                Text(total.formattedCurrency)
                     .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
                     .opacity(animationProgress > 0.1 ? 1 : 0)
@@ -138,15 +138,7 @@ struct DonutChartView: View {
         .padding(.horizontal)
     }
     
-    // MARK: - Selected Category Detail Component
-    
-    @ViewBuilder
-    private var selectedCategoryDetail: some View {
-        if let selected = selectedCategory {
-            SelectedCategoryDetailView(data: selected)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-        }
-    }
+
     
     // MARK: - Angle Calculations
     private func startAngle(for index: Int) -> Angle {
@@ -174,9 +166,7 @@ struct DonutChartView: View {
         cachedSegments = segments
     }
     
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
-    }
+
 }
 
 // MARK: - Donut Segment Shape
@@ -221,7 +211,7 @@ struct CategoryChartCard: View {
                 
                 // Amount + percentage
                 HStack(spacing: 4) {
-                    Text(formatCurrency(data.amount))
+                    Text(data.amount.formattedCurrency)
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.textSecondary)
                     
@@ -243,76 +233,12 @@ struct CategoryChartCard: View {
         )
     }
     
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
-    }
+
 }
 
-// MARK: - Selected Category Detail
-struct SelectedCategoryDetailView: View {
-    let data: CategoryChartData
-    @State private var isExpanded = true
     
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            Button {
-                withAnimation(.bouncy(duration: 0.2)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack {
-                    Circle()
-                        .fill(data.color)
-                        .frame(width: 10, height: 10)
-                    
-                    Text(data.name)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    
-                    Text("\(String(format: "%.1f", data.percentage))% del total")
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
-                    
-                    Spacer()
-                    
-                    Text(formatCurrency(data.amount))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                }
-                .padding(.horizontal, Spacing.md)
-                .padding(.vertical, Spacing.rowPadding)
-            }
-            .background(Color.bgSecondary)
-            
-            // Placeholder for expense list (would show expenses for this category)
-            if isExpanded {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    Text("Gastos de esta categoría aparecerán aquí")
-                        .font(.system(size: 13))
-                        .foregroundColor(.gray)
-                        .padding()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.bgCard)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.cardRadius))
-        .overlay(
-            RoundedRectangle(cornerRadius: Spacing.cardRadius)
-                .stroke(data.color.opacity(0.5), lineWidth: 1)
-        )
-        .padding(.horizontal)
-    }
-    
-    private func formatCurrency(_ value: Double) -> String {
-        String(format: "%.2f €", value)
-    }
-}
+
+
 
 // MARK: - Preview
 #Preview {

@@ -9,11 +9,22 @@ extension Color {
     static let claritySecondary = Color(hex: "#A855F7")!  // Purple
     static let clarityAccent = Color(hex: "#6366F1")!     // Indigo
     
-    // MARK: - Background Colors (Dark Theme) - OLED UPDATED
-    static let bgPrimary = Color.black                 // Main background (OLED Pure Black)
-    static let bgSecondary = Color(hex: "#0A0A0A")!    // Cards, sections (Almost Black)
-    static let bgTertiary = Color(hex: "#121212")!     // Inputs, interactive elements
-    static let bgCard = Color(hex: "#050505")!         // Subcategories (Very dark)
+    // MARK: - Background Colors (Adaptive: OLED Dark vs Standard Light)
+    static let bgPrimary = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark ? .black : .systemBackground
+    })
+    
+    static let bgSecondary = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark ? UIColor(red: 0.04, green: 0.04, blue: 0.04, alpha: 1) : .secondarySystemBackground
+    })
+    
+    static let bgTertiary = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark ? UIColor(red: 0.07, green: 0.07, blue: 0.07, alpha: 1) : .tertiarySystemBackground
+    })
+    
+    static let bgCard = Color(UIColor { trait in
+        trait.userInterfaceStyle == .dark ? UIColor(red: 0.02, green: 0.02, blue: 0.02, alpha: 1) : .secondarySystemGroupedBackground
+    })
     
     // Legacy aliases for compatibility
     static let cardBackground = bgSecondary

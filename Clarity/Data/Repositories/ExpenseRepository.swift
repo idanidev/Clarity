@@ -2,38 +2,82 @@
 // Data layer implementation of the repository contract
 
 import Foundation
+import OSLog
 
 final class ExpenseRepository: ExpenseRepositoryProtocol {
     private let remoteDataSource: FirebaseExpenseDataSource
     private let localDataSource: LocalExpenseDataSource
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "ExpenseRepo")
     
     init(remote: FirebaseExpenseDataSource, local: LocalExpenseDataSource) {
         self.remoteDataSource = remote
         self.localDataSource = local
     }
     
-    func getExpenses() async throws -> [Expense] {
-        // Strategy: Return cache if available, but always background sync? 
-        // Or User logic: "Primero caché local, luego sincroniza" implies return local if exists, else fetch.
-        // But for strict "observable" update, typically we return a stream. 
-        // For async/await, we usually just fetch fresh.
-        // Let's implementation the user's snippet logic:
-        
-        let cached = try await localDataSource.getExpenses()
-        if !cached.isEmpty {
-            return cached
+    // MARK: - Read
+    
+    func getExpenses(policy: CachePolicy) async throws -> [Expense] {
+        switch policy {
+        case .cacheFirst(let maxAge):
+            // Check local cache
+            let cached = await localDataSource.getExpenses()
+            let lastUpdate = await localDataSource.lastUpdateTimestamp()
+            
+            let isFresh = if let lastUpdate {
+                Date().timeIntervalSince(lastUpdate) < maxAge
+            } else {
+                false
+            }
+            
+            if !cached.isEmpty && isFresh {
+                logger.debug("Returning cached expenses (fresh)")
+                
+                // Trigger background sync safely
+                Task {
+                    try? await syncFromRemote()
+                }
+                
+                return cached
+            }
+            
+            // varied: if cache is stale or empty, try network, fallback to cache
+            logger.debug("Cache stale or empty, fetching remote")
+            return try await fetchAndCache()
+            
+        case .networkFirst:
+            do {
+                return try await fetchAndCache()
+            } catch {
+                logger.warning("Network failed, checking cache: \(error.localizedDescription)")
+                let cached = await localDataSource.getExpenses()
+                if !cached.isEmpty {
+                    return cached
+                }
+                throw error
+            }
+            
+        case .cacheOnly:
+            return await localDataSource.getExpenses()
         }
-        
-        let remote = try await remoteDataSource.getExpenses()
-        try await localDataSource.save(remote)
-        return remote
     }
     
-    func addExpense(_ expense: Expense) async throws {
-        // 1. Add to remote
-        let _ = try await remoteDataSource.addExpense(expense)
-        // 2. Add to local (optimistic or confirmed)
-        try await localDataSource.add(expense)
+    /// Default convenience: Cache First (5 min)
+    func getExpenses() async throws -> [Expense] {
+        try await getExpenses(policy: .cacheFirst(maxAge: 300))
+    }
+    
+    // MARK: - Write
+    
+    func addExpense(_ expense: Expense) async throws -> String {
+        // 1. Add to remote (Truth)
+        let id = try await remoteDataSource.addExpense(expense)
+        
+        // 2. Add to local with specific ID returned by Firestore
+        var expenseWithId = expense
+        expenseWithId.id = id
+        try await localDataSource.add(expenseWithId)
+        
+        return id
     }
     
     func deleteExpense(id: String) async throws {
@@ -43,8 +87,21 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     
     func updateExpense(_ expense: Expense) async throws {
         try await remoteDataSource.updateExpense(expense)
-        // Refresh cache or update local item
-        // For simplicity allow next fetch to update or simpler update
-        try await localDataSource.add(expense) // Simplistic update
+        try await localDataSource.update(expense)
+    }
+    
+    // MARK: - Helpers
+    
+    private func fetchAndCache() async throws -> [Expense] {
+        let remote = try await remoteDataSource.getExpenses()
+        try await localDataSource.save(remote, timestamp: Date())
+        return remote
+    }
+    
+    private func syncFromRemote() async throws {
+        logger.debug("Backgound syncing...")
+        let remote = try await remoteDataSource.getExpenses()
+        try await localDataSource.save(remote, timestamp: Date())
+        logger.debug("Background sync complete")
     }
 }

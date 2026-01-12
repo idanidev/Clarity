@@ -11,8 +11,8 @@ struct MainTabView: View {
     @State private var showRecurring = false
     @State private var dragOffset: CGSize = .zero
     @State private var selectedMenuOption: RadialMenuOption? = nil
-    @ObservedObject private var userDataManager = UserDataManager.shared
-    @StateObject private var homeViewModel = DependencyContainer.shared.makeHomeViewModel()
+    private var userDataManager = UserDataManager.shared
+    @State private var homeViewModel = DependencyContainer.shared.makeHomeViewModel()
     
     // Voice components
     @StateObject private var speechManager = SpeechRecognitionManager()

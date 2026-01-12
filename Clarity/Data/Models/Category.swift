@@ -3,7 +3,7 @@
 
 import Foundation
 import FirebaseFirestore
-import SwiftUI
+
 
 struct Category: Codable, Identifiable, Hashable {
     var id: String?  // For embedded map: id = category name
@@ -14,13 +14,11 @@ struct Category: Codable, Identifiable, Hashable {
     var createdAt: Date?
     var updatedAt: Date?
     
-    var uiColor: Color {
-        Color(hex: color) ?? .gray
-    }
+
 }
 
 // MARK: - Default Categories
-enum DefaultCategory: String, CaseIterable {
+enum DefaultCategory: String, CaseIterable, Sendable {
     case alimentacion = "Alimentacion🫄"
     case ocio = "Ocio 🍻"
     case vivienda = "Vivienda🏡"
@@ -32,7 +30,7 @@ enum DefaultCategory: String, CaseIterable {
     case viajes = "Viajes🗺️"
     case otros = "Otros📦"
     
-    var defaultSubcategories: [String] {
+    nonisolated var defaultSubcategories: [String] {
         switch self {
         case .alimentacion:
             return ["Supermercado", "Restaurantes", "Cafeterías", "Delivery"]
@@ -57,7 +55,7 @@ enum DefaultCategory: String, CaseIterable {
         }
     }
     
-    var defaultColor: String {
+    nonisolated var defaultColor: String {
         switch self {
         case .alimentacion: return "#6366F1"
         case .ocio: return "#F59E0B"
@@ -72,9 +70,7 @@ enum DefaultCategory: String, CaseIterable {
         }
     }
     
-    var color: Color {
-        Color(hex: defaultColor) ?? .gray
-    }
+
 }
 
 // MARK: - Payment Methods
@@ -92,33 +88,5 @@ enum PaymentMethod: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
     
-    var icon: String {
-        switch self {
-        case .efectivo: return "banknote"
-        case .tarjeta: return "creditcard"
-        case .tarjetaCredito: return "creditcard"
-        case .tarjetaDebito: return "creditcard.fill"
-        case .transferencia: return "arrow.left.arrow.right"
-        case .paypal: return "p.circle"
-        case .bizum: return "b.circle"
-        case .applePay: return "apple.logo"
-        case .googlePay: return "g.circle"
-        case .otro: return "ellipsis.circle"
-        }
-    }
-    
-    var color: Color {
-        switch self {
-        case .efectivo: return .green
-        case .tarjeta: return .purple
-        case .tarjetaCredito: return .purple
-        case .tarjetaDebito: return .indigo
-        case .transferencia: return .blue
-        case .paypal: return .yellow
-        case .bizum: return .cyan
-        case .applePay: return .gray
-        case .googlePay: return .red
-        case .otro: return .secondary
-        }
-    }
+
 }

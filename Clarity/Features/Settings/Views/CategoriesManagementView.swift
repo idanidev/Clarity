@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct CategoriesManagementView: View {
-    @ObservedObject private var userDataManager = UserDataManager.shared
+    private var userDataManager = UserDataManager.shared
     @State private var showAddCategory = false
     @State private var showDeleteAlert = false
     @State private var categoryToDelete: Category?
@@ -57,13 +57,8 @@ struct CategoriesManagementView: View {
         .sheet(isPresented: $showAddCategory) {
             AddCategoryView { newCategory in
                 Task {
-                    do {
-                        try await userDataManager.addCategory(newCategory)
-                        HapticManager.notification(.success)
-                    } catch {
-                        print("Error adding category: \(error)")
-                        HapticManager.notification(.error)
-                    }
+                    await userDataManager.addCategory(newCategory)
+                    HapticManager.notification(.success)
                 }
             }
         }
@@ -87,13 +82,8 @@ struct CategoriesManagementView: View {
         guard let category = categoryToDelete, let id = category.id else { return }
         
         Task {
-            do {
-                try await userDataManager.deleteCategory(id: id)
+                await userDataManager.deleteCategory(id: id)
                 HapticManager.notification(.success)
-            } catch {
-                print("Error deleting category: \(error)")
-                HapticManager.notification(.error)
-            }
         }
         categoryToDelete = nil
     }
