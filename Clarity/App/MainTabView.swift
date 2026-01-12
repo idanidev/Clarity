@@ -22,9 +22,10 @@ struct MainTabView: View {
         // Configure OLED Black Tab Bar
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = .black // OLED Pure Black
-        appearance.shadowColor = UIColor(Color.borderSubtle) // Subtle border
+        appearance.backgroundColor = UIColor(red: 0, green: 0, blue: 0, alpha: 1.0) // HARDCODED PURE BLACK
+        appearance.shadowColor = UIColor.white.withAlphaComponent(0.1) // Subtle border
         
+        // Ensure strictly black in all modes
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
@@ -124,9 +125,9 @@ struct MainTabView: View {
                 HStack {
                     Spacer()
                     Rectangle()
-                    .fill(Color.clear)
+                        .fill(Color.clear)
                         .frame(width: 70, height: 50)
-                        .contentShape(Rectangle())
+                        .contentShape(Rectangle()) // Ensure hit testing works
                         .gesture(
                             DragGesture(minimumDistance: 15, coordinateSpace: .local)
                                 .onChanged { value in
@@ -155,7 +156,7 @@ struct MainTabView: View {
                         }
                     Spacer()
                 }
-                .padding(.bottom, 0)
+                .padding(.bottom, 0) // Adjust if needed for safe area
             }
             
             // Radial Menu Overlay

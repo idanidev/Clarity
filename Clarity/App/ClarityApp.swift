@@ -10,6 +10,8 @@ struct ClarityApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authViewModel = AuthViewModel()
     
+    @AppStorage("app.theme") private var selectedTheme: String = "system"
+    
     init() {
         Task {
             ClarityShortcuts.updateAppShortcutParameters()
@@ -20,6 +22,15 @@ struct ClarityApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(authViewModel)
+                .preferredColorScheme(colorScheme)
+        }
+    }
+    
+    private var colorScheme: ColorScheme? {
+        switch selectedTheme {
+        case "light": return .light
+        case "dark": return .dark
+        default: return nil
         }
     }
 }

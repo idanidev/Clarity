@@ -23,11 +23,11 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             mainContent
-                .background(.regularMaterial)
+                .background(Color.black) // Nuclear Black option
                 .navigationTitle("") // Hidden title as requested
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-                .toolbarBackgroundVisibility(.automatic, for: .navigationBar)
+                .toolbarBackground(Color.black, for: .navigationBar)
+                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
                 .refreshable { await viewModel.refresh() }
                 .task { await viewModel.loadExpenses() }
                 .sheet(isPresented: $showEditSheet) {
@@ -117,7 +117,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
+            .background(Color.black) // Hardcoded Black
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding(.horizontal, 16)
             
@@ -228,7 +228,7 @@ struct HomeView: View {
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.sm)
-        .background(.ultraThinMaterial)
+        .background(Color.black) // Hardcoded Black, NO material
     }
     
     private func viewModeButton(icon: String, index: Int) -> some View {

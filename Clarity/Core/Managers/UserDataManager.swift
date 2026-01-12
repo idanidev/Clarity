@@ -223,9 +223,22 @@ final class UserDataManager: ObservableObject {
     
     /// Returns the color hex for a category
     func colorHex(for categoryName: String) -> String {
-        categories
-            .first { $0.name.localizedCaseInsensitiveContains(categoryName) }?
-            .color ?? "#6B7280"
+        // 1. Check user categories (Custom/Saved)
+        if let userCat = categories.first(where: { $0.name.localizedCaseInsensitiveContains(categoryName) }) {
+            return userCat.color
+        }
+        
+        // 2. Check Theme Defaults (Colors.swift)
+        // Fuzzy match against the static map keys to handle casing/emojis
+        if let match = Color.categoryColors.keys.first(where: { 
+            $0.localizedCaseInsensitiveContains(categoryName) || 
+            categoryName.localizedCaseInsensitiveContains($0)
+        }), let color = Color.categoryColors[match] {
+            return color.hexString
+        }
+        
+        // 3. Fallback
+        return "#6B7280"
     }
     
     /// Returns a SwiftUI Color for a category

@@ -230,6 +230,6 @@ final class HomeViewModel: ObservableObject {
     }
     
     private func colorForCategory(_ name: String) -> Color {
-        Color.categoryColors[name] ?? Color(hex: "#6B7280")!
+        UserDataManager.shared.color(for: name)
     }
 }

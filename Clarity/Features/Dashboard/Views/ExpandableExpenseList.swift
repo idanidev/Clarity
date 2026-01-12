@@ -44,12 +44,12 @@ struct ExpandableExpenseList: View {
                 .id(category.id)
                 .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
                 .listRowSeparator(.hidden)
-                .listRowBackground(Color.clear) // cleaner background
+                .listRowBackground(Color(red: 0, green: 0, blue: 0)) // Force pure black row
             }
         }
         .listStyle(.plain) // Use plain list to avoid default inset group styling
         .scrollContentBackground(.hidden)
-        .background(Color.black) // OLED Pure Black
+        .background(Color(red: 0, green: 0, blue: 0)) // RGB 000 HARDCODED
     }
 }
 
@@ -61,8 +61,19 @@ struct CategorySection: View {
     let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Updated Header - Cleaner, less "grid" like
+        Section {
+            if category.isExpanded {
+                ForEach($category.subcategories) { $subcategory in
+                    SubcategorySection(
+                        subcategory: $subcategory,
+                        categoryColor: category.color,
+                        onExpenseDelete: onExpenseDelete,
+                        onExpenseEdit: onExpenseEdit,
+                        onExpenseDuplicate: onExpenseDuplicate
+                    )
+                }
+            }
+        } header: {
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                     category.isExpanded.toggle()
@@ -70,69 +81,42 @@ struct CategorySection: View {
                 HapticManager.selection()
             } label: {
                 HStack(spacing: 12) {
-                    // Modern color pill indicator
-                    Capsule()
+                    // Simple Color Indicator
+                    Circle()
                         .fill(category.color)
-                        .frame(width: 4, height: 24)
+                        .frame(width: 12, height: 12)
+                        .shadow(color: category.color.opacity(0.5), radius: 4, x: 0, y: 0)
                     
-                    Text(category.emoji)
-                        .font(.title3)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(category.name)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
-                        
-                        Text("\(category.expenseCount) gastos")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(category.name)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundStyle(Color.white)
                     
                     Spacer()
                     
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text(formatCurrency(category.totalAmount))
-                            .font(.subheadline)
-                            .fontWeight(.bold)
-                            .foregroundStyle(.primary)
-                            .monospacedDigit()
-                        
-                        // Chevron
-                        Image(systemName: "chevron.right")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.tertiary)
-                            .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
-                    }
+                    Text(formatCurrency(category.totalAmount))
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color.white.opacity(0.9))
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .rotationEffect(.degrees(category.isExpanded ? 90 : 0))
+                        .foregroundStyle(Color.white.opacity(0.4))
                 }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(hex: "#050505")!) // Almost pure black
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(category.color.opacity(0.15))
                         .overlay(
-                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.clarityPrimary.opacity(0.15), lineWidth: 1) // User's requested purple accent
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(category.color.opacity(0.3), lineWidth: 1)
                         )
                 )
+                // Add padding to container to match spec if needed, but List handles it usually.
+                // Spec shows spacing between categories is handled by parent VStack in user snippet,
+                // but here we are in a Section Header.
             }
             .buttonStyle(.plain)
-            
-            // Expanded Content
-            if category.isExpanded {
-                VStack(spacing: 0) {
-                    ForEach($category.subcategories) { $subcategory in
-                        SubcategorySection(
-                            subcategory: $subcategory,
-                            categoryColor: category.color,
-                            onExpenseDelete: onExpenseDelete,
-                            onExpenseEdit: onExpenseEdit,
-                            onExpenseDuplicate: onExpenseDuplicate
-                        )
-                    }
-                }
-                .padding(.leading, 12) // Indent content slightly
-                .transition(.opacity)
-            }
         }
     }
     
@@ -150,21 +134,45 @@ struct SubcategorySection: View {
     let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
-        // Removed DisclaimerGroup for cleaner look, just listing items
-        VStack(spacing: 0) {
-            // Optional Subheader if needed, otherwise just expenses
-            // The user wanted cleaner, so let's just show rows directly but maybe grouped visually
-            if !subcategory.name.isEmpty && subcategory.name != "Sin subcategoría" {
-               HStack {
-                   Text(subcategory.name)
-                       .font(.caption.weight(.semibold))
-                       .foregroundStyle(categoryColor.opacity(0.8))
-                       .padding(.vertical, 4)
-                       .padding(.leading, 12)
-                   Spacer()
-               }
+        // Subcategory Header (if distinct subcategory)
+        if !subcategory.name.isEmpty && subcategory.name != "General" {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    subcategory.isExpanded.toggle()
+                }
+                HapticManager.selection()
+            } label: {
+                HStack {
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(subcategory.isExpanded ? 90 : 0))
+                        .frame(width: 20)
+                    
+                    Text(subcategory.name)
+                        .font(.subheadline.weight(.semibold)) // More distinct weight
+                        .foregroundStyle(.primary) // Clearer text
+                    
+                    Spacer()
+                    
+                    Text("\(subcategory.expenses.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color(.tertiarySystemFill))
+                        .clipShape(Capsule())
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.white.opacity(0.05)) // Subtle background for header
             }
+            .buttonStyle(.plain)
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.black)
+        }
 
+        if subcategory.isExpanded || subcategory.name == "General" || subcategory.name.isEmpty {
             ForEach(subcategory.expenses, id: \.stableId) { expense in
                 ExpenseRow(
                     expense: expense,
@@ -173,18 +181,13 @@ struct SubcategorySection: View {
                     onEdit: { onExpenseEdit(expense) },
                     onDuplicate: { onExpenseDuplicate(expense) }
                 )
-                // Minimal separator
-                if expense.id != subcategory.expenses.last?.id {
-                     Divider()
-                         .padding(.leading, 20)
-                         .opacity(0.3)
-                }
+                .listRowBackground(Color(red: 0, green: 0, blue: 0))
             }
         }
     }
 }
 
-// MARK: - Expense Row (Level 3) - Clean Design
+// MARK: - Expense Row (Standard Version)
 struct ExpenseRow: View {
     let expense: Expense
     var categoryColor: Color = .gray
@@ -193,63 +196,56 @@ struct ExpenseRow: View {
     let onDuplicate: () -> Void
     
     var body: some View {
-        HStack(alignment: .center, spacing: 12) { // increased spacing
-            // Clean content without vertical bars
+        HStack(spacing: 12) {
+            // Marker
+            Circle()
+                .fill(categoryColor)
+                .frame(width: 8, height: 8)
+            
             VStack(alignment: .leading, spacing: 4) {
                 Text(expense.name)
                     .font(.body)
-                    .foregroundStyle(.primary)
+                    .foregroundColor(.white)
                     .lineLimit(1)
                 
-                HStack(spacing: 6) {
+                HStack {
                     Text(formattedDate)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    
-                    Text("•")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        
-                    Text(expense.paymentMethod)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    if !expense.paymentMethod.isEmpty {
+                        Text("•")
+                            Text(expense.paymentMethod)
+                    }
                 }
+                .font(.caption)
+                .foregroundColor(.gray)
             }
             
             Spacer()
             
             Text(formatCurrency(expense.amount))
-                .font(.callout)
-                .fontWeight(.semibold)
-                .foregroundStyle(expense.amount > 50 ? .primary : .secondary) // Highlight big expenses
-                .monospacedDigit()
+                .font(.body.monospacedDigit())
+                .foregroundColor(.white)
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .background(Color.black) // Pure black for rows (OLED friendly)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
             Button(role: .destructive) {
-                HapticManager.notification(.warning)
                 onDelete()
             } label: {
-                Label("Eliminar", systemImage: "trash.fill")
+                Label("Eliminar", systemImage: "trash")
             }
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+        .swipeActions(edge: .leading) {
             Button {
-                HapticManager.impact(.light)
                 onEdit()
             } label: {
                 Label("Editar", systemImage: "pencil")
             }
-            .tint(Color.accentColor)
+            .tint(.orange)
             
             Button {
-                HapticManager.impact(.light)
                 onDuplicate()
             } label: {
-                Label("Duplicar", systemImage: "doc.on.doc.fill")
+                Label("Duplicar", systemImage: "doc.on.doc")
             }
             .tint(.blue)
         }
@@ -259,7 +255,7 @@ struct ExpenseRow: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         guard let date = formatter.date(from: expense.date) else { return expense.date }
-        formatter.dateFormat = "d MMM" // Short date format "2 Ene"
+        formatter.dateFormat = "d MMM"
         return formatter.string(from: date)
     }
     
@@ -279,15 +275,6 @@ struct ExpenseRow: View {
             subcategory: "Cafeterías",
             date: "2026-01-02",
             paymentMethod: "Tarjeta"
-        ),
-        Expense(
-            id: "2",
-            amount: 45.30,
-            name: "Mercadona",
-            category: "Alimentacion",
-            subcategory: "Supermercado",
-            date: "2026-01-01",
-            paymentMethod: "Efectivo"
         )
     ]
     
@@ -315,6 +302,5 @@ struct ExpenseRow: View {
         onExpenseEdit: { _ in },
         onExpenseDuplicate: { _ in }
     )
-    .background(Color.black)
     .preferredColorScheme(.dark)
 }

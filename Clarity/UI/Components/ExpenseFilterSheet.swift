@@ -105,83 +105,14 @@ struct ExpenseFilterSheet: View {
                 )
                 
                 quickActionChip(
-                    title: "Solo tarjeta",
-                    icon: "creditcard.fill",
-                    isActive: filter.selectedPaymentMethods == ["Tarjeta"],
-                    action: {
-                        if filter.selectedPaymentMethods == ["Tarjeta"] {
-                            filter.selectedPaymentMethods = []
-                        } else {
-                            filter.selectedPaymentMethods = ["Tarjeta"]
-                        }
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Solo efectivo",
-                    icon: "banknote.fill",
-                    isActive: filter.selectedPaymentMethods == ["Efectivo"],
-                    action: {
-                        if filter.selectedPaymentMethods == ["Efectivo"] {
-                            filter.selectedPaymentMethods = []
-                        } else {
-                            filter.selectedPaymentMethods = ["Efectivo"]
-                        }
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Gastos grandes",
-                    icon: "arrow.up.circle.fill",
-                    isActive: filter.minAmount == 50,
-                    action: {
-                        if filter.minAmount == 50 {
-                            filter.minAmount = nil
-                            minAmountText = ""
-                        } else {
-                            filter.minAmount = 50
-                            minAmountText = "50"
-                        }
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Gastos pequeños",
-                    icon: "arrow.down.circle.fill",
-                    isActive: filter.maxAmount == 20,
-                    action: {
-                        if filter.maxAmount == 20 {
-                            filter.maxAmount = nil
-                            maxAmountText = ""
-                        } else {
-                            filter.maxAmount = 20
-                            maxAmountText = "20"
-                        }
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Recurrentes",
-                    icon: "arrow.triangle.2.circlepath",
-                    isActive: filter.showOnlyRecurring,
-                    action: { 
-                        filter.showOnlyRecurring.toggle()
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Limpiar todo",
+                    title: "Limpiar filtros",
                     icon: "xmark.circle.fill",
                     isActive: false,
                     isDestructive: true,
                     action: { 
-                        resetFilters() 
-                        // Intentionally keeping open on reset as per previous thought
+                        resetFilters()
+                        applyFilters()
+                        HapticManager.notification(.success)
                     }
                 )
             }

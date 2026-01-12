@@ -105,15 +105,12 @@ struct SkeletonCircle: View {
     }
 }
 
-// MARK: - Category Colors (Apple-style palette)
+// MARK: - Category Colors (Curated Palette)
 enum CategoryColors {
+    // A simplified palette of 12 distinct, vibrant colors
     static let allCases = [
-        // Row 1: Vibrant
         red, orange, yellow, green, mint, cyan,
-        // Row 2: Blues & Purples
-        blue, indigo, purple, pink, brown, gray,
-        // Row 3: Soft pastels
-        coral, peach, lavender, mint2, sky, slate
+        blue, indigo, purple, pink, brown, gray
     ]
     
     // Vibrant Colors
@@ -124,25 +121,11 @@ enum CategoryColors {
     static let mint = "#00C7BE"
     static let cyan = "#32ADE6"
     
-    // Blues & Purples
+    // Blues & Purples & Neutrals
     static let blue = "#007AFF"
     static let indigo = "#5856D6"
     static let purple = "#AF52DE"
     static let pink = "#FF2D55"
     static let brown = "#A2845E"
     static let gray = "#8E8E93"
-    
-    // Soft Pastels
-    static let coral = "#FF6B6B"
-    static let peach = "#FFAB76"
-    static let lavender = "#B4A7D6"
-    static let mint2 = "#7FDBCA"
-    static let sky = "#87CEEB"
-    static let slate = "#708090"
-    
-    // Legacy aliases for backwards compatibility
-    static let amber = orange
-    static let violet = purple
-    static let emerald = green
-    static let teal = mint
 }

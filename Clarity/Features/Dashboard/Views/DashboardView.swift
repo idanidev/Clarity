@@ -26,7 +26,15 @@ struct DashboardView: View {
                 onBuildCategoryGroups: buildCategoryGroups,
                 onExpenseDuplicate: duplicateExpense
             )
-            .background(Color.black)
+            .background {
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    
+                    // Ambient Glow Removed per user request (Pure Black)
+                    // No gradients.
+                    .ignoresSafeArea()
+                }
+            }
             .navigationTitle("Gastos")
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(Color.black, for: .navigationBar)
@@ -212,12 +220,17 @@ struct DashboardView: View {
     private func colorForCategory(_ categoryWithEmoji: String) -> Color {
         // Categories in Firebase use full names like "Alimentacion🫄"
         // So we need to match the full original expense.category
+        
+        // 1. Clean the input (take first word/component to ensure matching)
+        let cleanInput = categoryWithEmoji.components(separatedBy: " ").first ?? categoryWithEmoji
+        
+        // 2. Check static map first (Design System Authority)
+        if let staticColor = Color.categoryColors[cleanInput] {
+            return staticColor
+        }
+        
+        // 3. Fallback: UserDataManager (Dynamic/User Defined)
         let userDataManager = UserDataManager.shared
-        
-        // 1. Clean the input (take first word/component to avoid emoji mismatch)
-         let cleanInput = categoryWithEmoji.components(separatedBy: " ").first ?? categoryWithEmoji
-        
-        // 2. Try to find a category where the clean name matches (robust against emoji differences)
         if let category = userDataManager.categories.first(where: { 
             let cleanStored = $0.name.components(separatedBy: " ").first ?? $0.name
             return cleanStored.localizedCaseInsensitiveCompare(cleanInput) == .orderedSame
@@ -225,7 +238,7 @@ struct DashboardView: View {
             return Color(hex: category.color) ?? .gray
         }
 
-        // 3. Fallback: Fuzzy containment scan
+        // 4. Fuzzy containment scan
         if let category = userDataManager.categories.first(where: {
             $0.name.localizedCaseInsensitiveContains(cleanInput) ||
             cleanInput.localizedCaseInsensitiveContains($0.name)
@@ -233,8 +246,8 @@ struct DashboardView: View {
              return Color(hex: category.color) ?? .gray
         }
         
-        // 4. Final fallback
-        return Color(hex: "#6B7280")!
+        // 5. Final fallback
+        return Color(hex: "#6B7280")! // Cool Gray
     }
 }
 

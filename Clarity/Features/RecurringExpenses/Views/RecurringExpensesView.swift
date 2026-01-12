@@ -18,7 +18,16 @@ struct RecurringExpensesView: View {
     }
     
     private var totalActiveMonthly: Double {
-        activeExpenses.reduce(0) { $0 + $1.amount }
+        activeExpenses.reduce(0) { total, expense in
+            let monthlyAmount: Double
+            switch expense.frequency {
+            case .monthly: monthlyAmount = expense.amount
+            case .quarterly: monthlyAmount = expense.amount / 3
+            case .semestral: monthlyAmount = expense.amount / 6
+            case .yearly: monthlyAmount = expense.amount / 12
+            }
+            return total + monthlyAmount
+        }
     }
     
     var body: some View {
