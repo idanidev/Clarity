@@ -31,7 +31,7 @@ struct NotificationsView: View {
                         } else {
                             cancelAllNotifications()
                         }
-                        HapticManager.selection()
+                        HapticManager.shared.selection()
                     }
                 
                 if notificationStatus == .denied {
@@ -55,7 +55,7 @@ struct NotificationsView: View {
             Section {
                 Toggle("Recordatorio Diario", isOn: $dailyReminder)
                     .onChange(of: dailyReminder) { _, newValue in
-                        HapticManager.selection()
+                        HapticManager.shared.selection()
                         if newValue && pushEnabled {
                             scheduleDailyReminder()
                         } else {
@@ -107,9 +107,9 @@ struct NotificationsView: View {
             // Other Alerts
             Section {
                 Toggle("Alertas de Presupuesto", isOn: $budgetAlerts)
-                    .onChange(of: budgetAlerts) { _, _ in HapticManager.selection() }
+                    .onChange(of: budgetAlerts) { _, _ in HapticManager.shared.selection() }
                 Toggle("Gastos Recurrentes", isOn: $recurringReminders)
-                    .onChange(of: recurringReminders) { _, _ in HapticManager.selection() }
+                    .onChange(of: recurringReminders) { _, _ in HapticManager.shared.selection() }
             } header: {
                 Text("Alertas")
             } footer: {
@@ -162,7 +162,7 @@ struct NotificationsView: View {
                             if dailyReminder && pushEnabled {
                                 scheduleDailyReminder()
                             }
-                            HapticManager.notification(.success)
+                            HapticManager.shared.notification(.success)
                         }
                         .fontWeight(.semibold)
                     }
@@ -265,7 +265,7 @@ struct NotificationsView: View {
         UNUserNotificationCenter.current().add(request) { error in
             if error == nil {
                 print("✅ Test notification scheduled (3 seconds)")
-                HapticManager.notification(.success)
+                HapticManager.shared.notification(.success)
             }
         }
     }

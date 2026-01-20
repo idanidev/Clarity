@@ -5,7 +5,7 @@ import SwiftUI
 
 struct RegisterView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) var authViewModel
     
     @State private var name = ""
     @State private var email = ""
@@ -149,5 +149,5 @@ struct RegisterView: View {
 
 #Preview {
     RegisterView()
-        .environmentObject(AuthViewModel())
+        .environment(AuthViewModel())
 }

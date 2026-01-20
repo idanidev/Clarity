@@ -8,7 +8,7 @@ struct VoiceConfirmationSheet: View {
     let expense: Expense
     let wasFullyDetected: Bool
     let categories: [Category]
-    @ObservedObject var speechManager: SpeechRecognitionManager
+    var speechManager: SpeechRecognitionManager
     let onConfirm: (Expense) -> Void
     let onCancel: () -> Void
     
@@ -259,7 +259,7 @@ struct VoiceConfirmationSheet: View {
     private func userDidInteract() {
         if isTimerActive {
             stopTimer()
-            HapticManager.selection()
+            HapticManager.shared.selection()
         }
     }
     

@@ -4,14 +4,48 @@
 import Foundation
 import OSLog
 
+@MainActor
 final class ExpenseRepository: ExpenseRepositoryProtocol {
     private let remoteDataSource: FirebaseExpenseDataSource
-    private let localDataSource: LocalExpenseDataSource
+    private let swiftDataSource: SwiftDataExpenseDataSource
+    private let legacyDataSource: LocalExpenseDataSource? // Optional for migration
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "ExpenseRepo")
     
-    init(remote: FirebaseExpenseDataSource, local: LocalExpenseDataSource) {
+    init(remote: FirebaseExpenseDataSource, swiftData: SwiftDataExpenseDataSource, legacy: LocalExpenseDataSource? = nil) {
         self.remoteDataSource = remote
-        self.localDataSource = local
+        self.swiftDataSource = swiftData
+        self.legacyDataSource = legacy
+        
+        Task { await checkMigration() }
+    }
+    
+    // MARK: - Migration
+    
+    private func checkMigration() async {
+        let key = "didMigrateToSwiftData_v1"
+        guard !UserDefaults.standard.bool(forKey: key), let legacy = legacyDataSource else { return }
+        
+        logger.info("Starting migration from JSON to SwiftData...")
+        
+        let legacyExpenses = await legacy.getExpenses()
+        guard !legacyExpenses.isEmpty else {
+            UserDefaults.standard.set(true, forKey: key)
+            return
+        }
+        
+        do {
+            for expense in legacyExpenses {
+                try swiftDataSource.upsertExpense(expense)
+            }
+            UserDefaults.standard.set(true, forKey: key)
+            logger.info("Migration successful. Moved \(legacyExpenses.count) items.")
+            
+            // Optional: Clear legacy? 
+            // try? await legacy.clear() 
+            // Keeping it for safety for now.
+        } catch {
+            logger.error("Migration failed: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Read
@@ -19,20 +53,16 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     func getExpenses(policy: CachePolicy) async throws -> [Expense] {
         switch policy {
         case .cacheFirst(let maxAge):
-            // Check local cache
-            let cached = await localDataSource.getExpenses()
-            let lastUpdate = await localDataSource.lastUpdateTimestamp()
+            // Check SwiftData
+            let cached = try swiftDataSource.fetchExpenses()
             
-            let isFresh = if let lastUpdate {
-                Date().timeIntervalSince(lastUpdate) < maxAge
-            } else {
-                false
-            }
+            // "Freshness" in SwiftData is tricky without a metadata table.
+            // For now, we assume if we have data, it's good, but we trigger sync.
+            // Improve: Store last sync timestamp in UserDefaults.
             
-            if !cached.isEmpty && isFresh {
-                logger.debug("Returning cached expenses (fresh)")
+            if !cached.isEmpty {
+                logger.debug("Returning SwiftData expenses")
                 
-                // Trigger background sync safely
                 Task {
                     try? await syncFromRemote()
                 }
@@ -40,16 +70,15 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
                 return cached
             }
             
-            // varied: if cache is stale or empty, try network, fallback to cache
-            logger.debug("Cache stale or empty, fetching remote")
+            logger.debug("SwiftData empty, fetching remote")
             return try await fetchAndCache()
             
         case .networkFirst:
             do {
                 return try await fetchAndCache()
             } catch {
-                logger.warning("Network failed, checking cache: \(error.localizedDescription)")
-                let cached = await localDataSource.getExpenses()
+                logger.warning("Network failed, checking SwiftData: \(error.localizedDescription)")
+                let cached = try swiftDataSource.fetchExpenses()
                 if !cached.isEmpty {
                     return cached
                 }
@@ -57,51 +86,80 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
             }
             
         case .cacheOnly:
-            return await localDataSource.getExpenses()
+            return try swiftDataSource.fetchExpenses()
         }
     }
     
-    /// Default convenience: Cache First (5 min)
     func getExpenses() async throws -> [Expense] {
         try await getExpenses(policy: .cacheFirst(maxAge: 300))
+    }
+    
+    // MARK: - Paginated Fetch
+    
+    func getExpensesPaginated(page: Int) async throws -> PageResult {
+        if page == 0 {
+            let result = try await remoteDataSource.getFirstPage()
+            if !result.expenses.isEmpty {
+                try await saveToLocal(result.expenses)
+            }
+            return result
+        } else {
+            let result = try await remoteDataSource.getNextPage()
+            if !result.expenses.isEmpty {
+                // Append to local
+                try await saveToLocal(result.expenses)
+            }
+            return result
+        }
+    }
+    
+    func resetPagination() async {
+        await remoteDataSource.resetPagination()
     }
     
     // MARK: - Write
     
     func addExpense(_ expense: Expense) async throws -> String {
-        // 1. Add to remote (Truth)
+        // 1. Add to remote
         let id = try await remoteDataSource.addExpense(expense)
         
-        // 2. Add to local with specific ID returned by Firestore
+        // 2. Add to local
         var expenseWithId = expense
         expenseWithId.id = id
-        try await localDataSource.add(expenseWithId)
+        try swiftDataSource.addExpense(expenseWithId)
         
         return id
     }
     
     func deleteExpense(id: String) async throws {
         try await remoteDataSource.deleteExpense(id: id)
-        try await localDataSource.delete(id)
+        try swiftDataSource.deleteExpense(id)
     }
     
     func updateExpense(_ expense: Expense) async throws {
         try await remoteDataSource.updateExpense(expense)
-        try await localDataSource.update(expense)
+        try swiftDataSource.updateExpense(expense)
     }
     
     // MARK: - Helpers
     
     private func fetchAndCache() async throws -> [Expense] {
         let remote = try await remoteDataSource.getExpenses()
-        try await localDataSource.save(remote, timestamp: Date())
+        try await saveToLocal(remote)
         return remote
     }
     
     private func syncFromRemote() async throws {
-        logger.debug("Backgound syncing...")
+        logger.debug("Background syncing...")
         let remote = try await remoteDataSource.getExpenses()
-        try await localDataSource.save(remote, timestamp: Date())
+        try await saveToLocal(remote)
         logger.debug("Background sync complete")
+    }
+    
+    private func saveToLocal(_ expenses: [Expense]) async throws {
+        // Sync strategy: Insert or Update
+        for expense in expenses {
+           try swiftDataSource.upsertExpense(expense) 
+        }
     }
 }

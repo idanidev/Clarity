@@ -40,7 +40,7 @@ struct AddCategoryView: View {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     selectedColor = colorHex
                                 }
-                                HapticManager.selection()
+                                HapticManager.shared.selection()
                             } label: {
                                 Circle()
                                     .fill(Color(hex: colorHex) ?? .gray)
@@ -80,7 +80,7 @@ struct AddCategoryView: View {
                                     subcategories.append(newSubcategoryName)
                                     newSubcategoryName = ""
                                     showAddSubcategory = false
-                                    HapticManager.impact(.light)
+                                    HapticManager.shared.impact(.light)
                                 }
                             } label: {
                                 Image(systemName: "checkmark.circle.fill")

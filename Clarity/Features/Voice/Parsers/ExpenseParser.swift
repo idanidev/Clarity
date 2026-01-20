@@ -13,6 +13,184 @@ struct ParsedExpense {
 
 class ExpenseParser {
     
+    // MARK: - Quick Category Suggestion (for typing auto-fill)
+    
+    /// Suggests category and subcategory based on expense name (simplified version without amount parsing)
+    static func suggestCategory(for name: String) -> (category: String, subcategory: String?)? {
+        let text = name.lowercased()
+        let words = Set(text.split(separator: " ").map { String($0) })
+        
+        // Use the same keywords dictionary as voice parsing
+        let keywords = categoryKeywords
+        
+        for word in words {
+            if let match = keywords[word] {
+                return (match.category, match.subcategory)
+            }
+        }
+        
+        // Also check for partial matches (contains)
+        for (keyword, match) in keywords {
+            if text.contains(keyword) {
+                return (match.category, match.subcategory)
+            }
+        }
+        
+        return nil
+    }
+    
+    // Shared keywords dictionary
+    private static let categoryKeywords: [String: (category: String, subcategory: String?)] = [
+        // Alimentación / Supermercados
+        "supermercado": ("🛒 Compras", "Supermercado"),
+        "mercado": ("🛒 Compras", "Supermercado"),
+        "mercadona": ("🛒 Compras", "Supermercado"),
+        "carrefour": ("🛒 Compras", "Supermercado"),
+        "lidl": ("🛒 Compras", "Supermercado"),
+        "aldi": ("🛒 Compras", "Supermercado"),
+        "dia": ("🛒 Compras", "Supermercado"),
+        "alcampo": ("🛒 Compras", "Supermercado"),
+        "eroski": ("🛒 Compras", "Supermercado"),
+        "consum": ("🛒 Compras", "Supermercado"),
+        "ahorramas": ("🛒 Compras", "Supermercado"),
+        
+        // Restaurantes
+        "restaurante": ("🍻 Ocio", "Restaurantes"),
+        "cena": ("🍻 Ocio", "Restaurantes"),
+        "almuerzo": ("🍻 Ocio", "Restaurantes"),
+        "comida": ("🍻 Ocio", "Restaurantes"),
+        "pizza": ("🍻 Ocio", "Restaurantes"),
+        "burguer": ("🍻 Ocio", "Restaurantes"),
+        "hamburguesa": ("🍻 Ocio", "Restaurantes"),
+        "sushi": ("🍻 Ocio", "Restaurantes"),
+        "mcdonalds": ("🍻 Ocio", "Restaurantes"),
+        "burger king": ("🍻 Ocio", "Restaurantes"),
+        "telepizza": ("🍻 Ocio", "Restaurantes"),
+        "just eat": ("🍻 Ocio", "Restaurantes"),
+        "glovo": ("🍻 Ocio", "Restaurantes"),
+        "uber eats": ("🍻 Ocio", "Restaurantes"),
+        
+        // Cafeterías
+        "café": ("🍻 Ocio", "Cafeterías"),
+        "cafetería": ("🍻 Ocio", "Cafeterías"),
+        "starbucks": ("🍻 Ocio", "Cafeterías"),
+        "desayuno": ("🍻 Ocio", "Cafeterías"),
+        
+        // Transporte
+        "gasolina": ("🚎 Transporte", "Gasolina"),
+        "combustible": ("🚎 Transporte", "Gasolina"),
+        "diesel": ("🚎 Transporte", "Gasolina"),
+        "gasolinera": ("🚎 Transporte", "Gasolina"),
+        "repsol": ("🚎 Transporte", "Gasolina"),
+        "cepsa": ("🚎 Transporte", "Gasolina"),
+        "bp": ("🚎 Transporte", "Gasolina"),
+        "shell": ("🚎 Transporte", "Gasolina"),
+        "parking": ("🚎 Transporte", "Parking"),
+        "aparcamiento": ("🚎 Transporte", "Parking"),
+        "taxi": ("🚎 Transporte", "Taxi"),
+        "uber": ("🚎 Transporte", "Taxi"),
+        "cabify": ("🚎 Transporte", "Taxi"),
+        "bolt": ("🚎 Transporte", "Taxi"),
+        "metro": ("🚎 Transporte", "Transporte público"),
+        "autobús": ("🚎 Transporte", "Transporte público"),
+        "autobus": ("🚎 Transporte", "Transporte público"),
+        "bus": ("🚎 Transporte", "Transporte público"),
+        "tren": ("🚎 Transporte", "Transporte público"),
+        "renfe": ("🚎 Transporte", "Transporte público"),
+        "cercanías": ("🚎 Transporte", "Transporte público"),
+        "peaje": ("🚎 Transporte", "Peajes"),
+        
+        // Ocio
+        "cine": ("🍻 Ocio", "Cine"),
+        "película": ("🍻 Ocio", "Cine"),
+        "cerveza": ("🍻 Ocio", "Bares"),
+        "birra": ("🍻 Ocio", "Bares"),
+        "copas": ("🍻 Ocio", "Bares"),
+        "bar": ("🍻 Ocio", "Bares"),
+        "discoteca": ("🍻 Ocio", "Bares"),
+        "concierto": ("🍻 Ocio", "Eventos"),
+        "teatro": ("🍻 Ocio", "Eventos"),
+        "fiesta": ("🍻 Ocio", "Eventos"),
+        
+        // Suscripciones
+        "netflix": ("📺 Suscripciones", "Streaming"),
+        "spotify": ("📺 Suscripciones", "Streaming"),
+        "hbo": ("📺 Suscripciones", "Streaming"),
+        "disney": ("📺 Suscripciones", "Streaming"),
+        "amazon prime": ("📺 Suscripciones", "Streaming"),
+        "dazn": ("📺 Suscripciones", "Streaming"),
+        "apple music": ("📺 Suscripciones", "Streaming"),
+        "youtube premium": ("📺 Suscripciones", "Streaming"),
+        "icloud": ("📺 Suscripciones", "Apps"),
+        "chatgpt": ("📺 Suscripciones", "Apps"),
+        
+        // Salud
+        "farmacia": ("🏥 Salud", "Farmacia"),
+        "medicinas": ("🏥 Salud", "Farmacia"),
+        "medicina": ("🏥 Salud", "Farmacia"),
+        "médico": ("🏥 Salud", "Médico"),
+        "medico": ("🏥 Salud", "Médico"),
+        "doctor": ("🏥 Salud", "Médico"),
+        "dentista": ("🏥 Salud", "Dentista"),
+        "hospital": ("🏥 Salud", "Hospital"),
+        "gimnasio": ("🏥 Salud", "Gimnasio"),
+        "gym": ("🏥 Salud", "Gimnasio"),
+        
+        // Vivienda
+        "alquiler": ("🏡 Vivienda", "Alquiler"),
+        "hipoteca": ("🏡 Vivienda", "Hipoteca"),
+        "luz": ("🏡 Vivienda", "Luz"),
+        "electricidad": ("🏡 Vivienda", "Luz"),
+        "iberdrola": ("🏡 Vivienda", "Luz"),
+        "endesa": ("🏡 Vivienda", "Luz"),
+        "agua": ("🏡 Vivienda", "Agua"),
+        "gas": ("🏡 Vivienda", "Gas"),
+        "internet": ("🏡 Vivienda", "Internet"),
+        "wifi": ("🏡 Vivienda", "Internet"),
+        "movistar": ("🏡 Vivienda", "Internet"),
+        "vodafone": ("🏡 Vivienda", "Internet"),
+        "orange": ("🏡 Vivienda", "Internet"),
+        "teléfono": ("🏡 Vivienda", "Teléfono"),
+        "telefono": ("🏡 Vivienda", "Teléfono"),
+        "móvil": ("🏡 Vivienda", "Teléfono"),
+        "movil": ("🏡 Vivienda", "Teléfono"),
+        
+        // Compras / Ropa
+        "ropa": ("🛒 Compras", "Ropa"),
+        "zapatos": ("🛒 Compras", "Ropa"),
+        "zapatillas": ("🛒 Compras", "Ropa"),
+        "zara": ("🛒 Compras", "Ropa"),
+        "hm": ("🛒 Compras", "Ropa"),
+        "h&m": ("🛒 Compras", "Ropa"),
+        "primark": ("🛒 Compras", "Ropa"),
+        "mango": ("🛒 Compras", "Ropa"),
+        "bershka": ("🛒 Compras", "Ropa"),
+        "pull&bear": ("🛒 Compras", "Ropa"),
+        "decathlon": ("🛒 Compras", "Ropa"),
+        
+        // Tecnología
+        "apple store": ("🛒 Compras", "Tecnología"),
+        "mediamarkt": ("🛒 Compras", "Tecnología"),
+        "pccomponentes": ("🛒 Compras", "Tecnología"),
+        "amazon": ("🛒 Compras", "Tecnología"),
+        
+        // Educación
+        "curso": ("📖 Educación", "Cursos"),
+        "udemy": ("📖 Educación", "Cursos"),
+        "libro": ("📖 Educación", "Libros"),
+        
+        // Viajes
+        "vuelo": ("🗺️ Viajes", nil),
+        "hotel": ("🗺️ Viajes", nil),
+        "airbnb": ("🗺️ Viajes", nil),
+        "booking": ("🗺️ Viajes", nil),
+        
+        // Otros
+        "tabaco": ("🎲 Otros", "Varios"),
+        "cigarro": ("🎲 Otros", "Varios"),
+        "regalo": ("🎲 Otros", "Regalos"),
+    ]
+    
     // MARK: - Public Methods
     
     static func parse(_ text: String, categories: [Category]) -> ParsedExpense? {
@@ -139,115 +317,12 @@ class ExpenseParser {
             }
         }
         
-        // 4. Keyword-based matching (expanded dictionary)
-        let keywords: [String: (category: String, subcategory: String?)] = [
-            // Alimentación
-            "supermercado": ("Alimentacion", "Supermercado"),
-            "mercado": ("Alimentacion", "Supermercado"),
-            "mercadona": ("Alimentacion", "Supermercado"),
-            "carrefour": ("Alimentacion", "Supermercado"),
-            "lidl": ("Alimentacion", "Supermercado"),
-            "aldi": ("Alimentacion", "Supermercado"),
-            "dia": ("Alimentacion", "Supermercado"),
-            "alcampo": ("Alimentacion", "Supermercado"),
-            "restaurante": ("Alimentacion", "Restaurantes"),
-            "cena": ("Alimentacion", "Restaurantes"),
-            "almuerzo": ("Alimentacion", "Restaurantes"),
-            "comida": ("Alimentacion", "Restaurantes"),
-            "pizza": ("Alimentacion", "Restaurantes"),
-            "burguer": ("Alimentacion", "Restaurantes"),
-            "hamburguesa": ("Alimentacion", "Restaurantes"),
-            "sushi": ("Alimentacion", "Restaurantes"),
-            "café": ("Alimentacion", "Cafeterías"),
-            "cafetería": ("Alimentacion", "Cafeterías"),
-            "starbucks": ("Alimentacion", "Cafeterías"),
-            "desayuno": ("Alimentacion", "Cafeterías"),
-            
-            // Transporte
-            "gasolina": ("Transporte", "Gasolina"),
-            "combustible": ("Transporte", "Gasolina"),
-            "diesel": ("Transporte", "Gasolina"),
-            "gasolinera": ("Transporte", "Gasolina"),
-            "repsol": ("Transporte", "Gasolina"),
-            "cepsa": ("Transporte", "Gasolina"),
-            "parking": ("Transporte", "Parking"),
-            "aparcamiento": ("Transporte", "Parking"),
-            "taxi": ("Transporte", "Taxi"),
-            "uber": ("Transporte", "Taxi"),
-            "cabify": ("Transporte", "Taxi"),
-            "bolt": ("Transporte", "Taxi"),
-            "metro": ("Transporte", "Transporte público"),
-            "autobús": ("Transporte", "Transporte público"),
-            "autobus": ("Transporte", "Transporte público"),
-            "bus": ("Transporte", "Transporte público"),
-            "tren": ("Transporte", "Transporte público"),
-            "renfe": ("Transporte", "Transporte público"),
-            "cercanías": ("Transporte", "Transporte público"),
-            "peaje": ("Transporte", "Peajes"),
-            
-            // Ocio
-            "cine": ("Ocio", "Cine"),
-            "película": ("Ocio", "Cine"),
-            "cerveza": ("Ocio", "Bares"),
-            "birra": ("Ocio", "Bares"),
-            "copas": ("Ocio", "Bares"),
-            "bar": ("Ocio", "Bares"),
-            "discoteca": ("Ocio", "Bares"),
-            "concierto": ("Ocio", "Eventos"),
-            "teatro": ("Ocio", "Eventos"),
-            "fiesta": ("Ocio", "Eventos"),
-            "gimnasio": ("Ocio", "Gimnasio"),
-            "gym": ("Ocio", "Gimnasio"),
-            "netflix": ("Ocio", "Suscripciones"),
-            "spotify": ("Ocio", "Suscripciones"),
-            "hbo": ("Ocio", "Suscripciones"),
-            "disney": ("Ocio", "Suscripciones"),
-            "amazon": ("Ocio", "Suscripciones"),
-            
-            // Salud
-            "farmacia": ("Salud", "Farmacia"),
-            "medicinas": ("Salud", "Farmacia"),
-            "medicina": ("Salud", "Farmacia"),
-            "médico": ("Salud", "Médico"),
-            "medico": ("Salud", "Médico"),
-            "doctor": ("Salud", "Médico"),
-            "dentista": ("Salud", "Dentista"),
-            "hospital": ("Salud", "Hospital"),
-            
-            // Hogar/Vivienda
-            "alquiler": ("Vivienda", "Alquiler"),
-            "hipoteca": ("Vivienda", "Hipoteca"),
-            "luz": ("Vivienda", "Luz"),
-            "electricidad": ("Vivienda", "Luz"),
-            "agua": ("Vivienda", "Agua"),
-            "gas": ("Vivienda", "Gas"),
-            "internet": ("Vivienda", "Internet"),
-            "wifi": ("Vivienda", "Internet"),
-            "teléfono": ("Vivienda", "Teléfono"),
-            "telefono": ("Vivienda", "Teléfono"),
-            "móvil": ("Vivienda", "Teléfono"),
-            "movil": ("Vivienda", "Teléfono"),
-            
-            // Compras
-            "ropa": ("Compras", "Ropa"),
-            "zapatos": ("Compras", "Ropa"),
-            "zapatillas": ("Compras", "Ropa"),
-            "zara": ("Compras", "Ropa"),
-            "hm": ("Compras", "Ropa"),
-            "primark": ("Compras", "Ropa"),
-            
-            // Otros
-            "tabaco": ("Otros", "Varios"),
-            "cigarro": ("Otros", "Varios"),
-            "cigarros": ("Otros", "Varios"),
-            "regalo": ("Otros", "Regalos"),
-        ]
-        
+        // 4. Use shared categoryKeywords dictionary
         for word in words {
-            if let match = keywords[word] {
+            if let match = categoryKeywords[word] {
                 // Find matching user category
                 if let userCat = categories.first(where: {
-                    $0.name.localizedCaseInsensitiveContains(match.category)
+                    $0.name.localizedCaseInsensitiveContains(match.category.replacingOccurrences(of: #"[\p{Emoji}]\s*"#, with: "", options: .regularExpression))
                 }) {
                     // Find matching subcategory
                     if let subName = match.subcategory,
@@ -260,6 +335,8 @@ class ExpenseParser {
                     print("📍 Keyword category: \(userCat.name)")
                     return (userCat.name, nil)
                 }
+                // Fallback: return the keyword category directly
+                return (match.category, match.subcategory)
             }
         }
         

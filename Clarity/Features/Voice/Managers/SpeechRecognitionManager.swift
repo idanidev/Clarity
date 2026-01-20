@@ -4,17 +4,18 @@
 import Foundation
 import Speech
 import AVFoundation
-import Combine
-import os.log
+import Observation
+import OSLog
 
-class SpeechRecognitionManager: ObservableObject {
-    @Published var isListening = false
-    @Published var transcript = ""
-    @Published var interimTranscript = ""
-    @Published var audioLevel: Float = 0.0
-    @Published var hasPermission = false
-    @Published var lastError: RecognitionError?
-    @Published var didStopDueToSilence = false  // Flag for UI to observe
+@Observable
+class SpeechRecognitionManager {
+    var isListening = false
+    var transcript = ""
+    var interimTranscript = ""
+    var audioLevel: Float = 0.0
+    var hasPermission = false
+    var lastError: RecognitionError?
+    var didStopDueToSilence = false  // Flag for UI to observe
     
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?

@@ -5,7 +5,7 @@ import SwiftUI
 import Charts
 
 struct ChartsView: View {
-    @State private var viewModel = DashboardViewModel()
+    @State private var viewModel = DependencyContainer.shared.makeHomeViewModel() // Updated
     @State private var selectedTab = 0
     @State private var filter = ExpenseFilter(dateRange: .thisMonth)
     
@@ -36,7 +36,7 @@ struct ChartsView: View {
                 .background(Color.bgSecondary)
                 
                 // Content
-                if viewModel.isLoading {
+                if viewModel.state == .loading { // Updated
                     Spacer()
                     ProgressView()
                         .tint(Color.clarityPrimary)
@@ -146,7 +146,7 @@ struct ChartsView: View {
     // MARK: - Filtered Data
     
     private var filteredExpenses: [Expense] {
-        var expenses = viewModel.expenses
+        var expenses = viewModel.allExpenses // Updated
         
         print("📊 CHARTS: Total expenses from VM: \(expenses.count)")
         

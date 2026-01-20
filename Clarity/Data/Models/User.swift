@@ -110,8 +110,12 @@ struct UserSettings: Codable {
     var language: String? // "es" | "en"
     var theme: String? // "dark" | "light" | "system"
     var currency: String? // "EUR" | "USD"
+    var privacyMode: Bool? // Hide amounts
+    var defaultDateRange: String? // Legacy, kept for migration
+    var defaultFilter: ExpenseFilter? // Full persistable filter
+    var hasCompletedOnboarding: Bool?
     
-    static let `default` = UserSettings(language: "es", theme: "system", currency: "EUR")
+    static let `default` = UserSettings(language: "es", theme: "system", currency: "EUR", privacyMode: false, defaultDateRange: "thisMonth", defaultFilter: nil, hasCompletedOnboarding: false)
 }
 
 struct AIQuotas: Codable {

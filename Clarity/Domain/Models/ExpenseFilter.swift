@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct ExpenseFilter: Equatable, Sendable {
+struct ExpenseFilter: Equatable, Sendable, Codable {
     var selectedCategories: Set<String> = []
     var selectedPaymentMethods: Set<String> = []
     var dateRange: DateRange = .thisMonth
@@ -14,7 +14,7 @@ struct ExpenseFilter: Equatable, Sendable {
     var sortBy: SortOption = .dateDesc
     var showOnlyRecurring: Bool = false
     
-    enum DateRange: String, CaseIterable, Sendable {
+    enum DateRange: String, CaseIterable, Sendable, Codable {
         case allTime = "Todos"
         case today = "Hoy"
         case yesterday = "Ayer"
@@ -30,7 +30,7 @@ struct ExpenseFilter: Equatable, Sendable {
         case custom = "Personalizado"
     }
     
-    enum SortOption: String, CaseIterable, Sendable {
+    enum SortOption: String, CaseIterable, Sendable, Codable {
         case dateDesc = "Más recientes"
         case dateAsc = "Más antiguos"
         case amountDesc = "Mayor importe"

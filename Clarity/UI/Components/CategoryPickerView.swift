@@ -120,7 +120,7 @@ struct CategoryPickerView: View {
     private func select(category: String, sub: String?) {
         selectedCategory = category
         selectedSubcategory = sub
-        HapticManager.selection()
+        HapticManager.shared.selection()
         dismiss()
     }
     

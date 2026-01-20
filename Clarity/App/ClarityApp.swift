@@ -4,25 +4,47 @@
 import SwiftUI
 import FirebaseCore
 import AppIntents
+import TipKit
 
 @main
 struct ClarityApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @StateObject private var authViewModel = AuthViewModel()
+    @State private var authViewModel = AuthViewModel()
     
     @AppStorage("app.theme") private var selectedTheme: String = "system"
     
     init() {
         Task {
             ClarityShortcuts.updateAppShortcutParameters()
+            
+            // Configure Tips
+            try? Tips.configure([
+                .displayFrequency(.immediate),
+                .datastoreLocation(.applicationDefault)
+            ])
         }
     }
     
+    @State private var feedbackManager = FeedbackManager.shared
+    
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(authViewModel)
-                .preferredColorScheme(colorScheme)
+            ZStack(alignment: .top) {
+                ContentView()
+                
+                // Global Feedback Overlay
+                if let message = feedbackManager.currentMessage {
+                    FeedbackOverlay(message: message) {
+                        feedbackManager.dismiss()
+                    }
+                }
+            }
+            .environment(authViewModel)
+            .environment(feedbackManager) // Optional if using singleton directly, but good practice
+            .preferredColorScheme(colorScheme)
+            .task {
+                authViewModel.startListening()
+            }
         }
     }
     

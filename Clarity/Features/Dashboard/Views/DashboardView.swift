@@ -4,7 +4,7 @@
 import SwiftUI
 
 struct DashboardView: View {
-    @State private var viewModel = DashboardViewModel()
+    @State private var viewModel = DependencyContainer.shared.makeHomeViewModel()
     @State private var expenseToEdit: Expense? = nil
     @State private var showEditSheet = false
     
@@ -13,8 +13,7 @@ struct DashboardView: View {
             MainContent(
                 viewModel: viewModel,
                 expenseToEdit: $expenseToEdit,
-                showEditSheet: $showEditSheet,
-                onExpenseDuplicate: duplicateExpense
+                showEditSheet: $showEditSheet
             )
             .background {
                 ZStack {
@@ -46,38 +45,14 @@ struct DashboardView: View {
             }
         }
     }
-    
-    private func duplicateExpense(_ expense: Expense) {
-        Task {
-            let duplicated = Expense(
-                amount: expense.amount,
-                name: expense.name,
-                category: expense.category,
-                subcategory: expense.subcategory,
-                date: Formatters.isoString(from: Date()),
-                paymentMethod: expense.paymentMethod,
-                notes: expense.notes,
-                isDeductible: expense.isDeductible
-            )
-            
-            do {
-                _ = try await DependencyContainer.shared.expenseRepository.addExpense(duplicated)
-                await viewModel.refresh()
-                HapticManager.notification(.success)
-            } catch {
-                print("Error duplicating expense: \(error)")
-            }
-        }
-    }
 }
 
 // MARK: - Subviews
 
 struct MainContent: View {
-    @Bindable var viewModel: DashboardViewModel
+    @Bindable var viewModel: HomeViewModel
     @Binding var expenseToEdit: Expense?
     @Binding var showEditSheet: Bool
-    let onExpenseDuplicate: (Expense) -> Void
     
     var body: some View {
         VStack(spacing: 0) {
@@ -97,7 +72,7 @@ struct MainContent: View {
             // Search Bar with native iOS Menu filter
             SearchBarView(
                 searchText: $viewModel.searchText,
-                filter: $viewModel.filter,
+                filter: $viewModel.selectedFilter,
                 onFilterChange: { /* Handled by VM */ }
             )
             .padding(.horizontal)
@@ -105,31 +80,30 @@ struct MainContent: View {
             
             // Active filter pills
             ActiveFilterPillsView(
-                filter: $viewModel.filter,
+                filter: $viewModel.selectedFilter,
                 onFilterChange: { /* Handled by VM */ }
             )
             
             // Content
             ExpenseListContent(
-                isLoading: viewModel.isLoading,
-                expensesEmpty: viewModel.expenses.isEmpty,
+                isLoading: viewModel.state == .loading,
+                expensesEmpty: viewModel.allExpenses.isEmpty,
                 filteredEmpty: viewModel.filteredExpenses.isEmpty,
-                activeFilters: viewModel.filter.hasActiveFilters,
+                activeFilters: viewModel.selectedFilter.hasActiveFilters,
                 groupsEmpty: viewModel.categoryGroups.isEmpty,
                 categoryGroups: viewModel.categoryGroups, // Read-only pass
                 onDelete: { expense in
                     Task {
                         await viewModel.deleteExpense(expense)
-                        HapticManager.notification(.success)
+                        HapticManager.shared.notification(.success)
                     }
                 },
                 onEdit: { expense in
                     expenseToEdit = expense
                     showEditSheet = true
                 },
-                onDuplicate: onExpenseDuplicate,
                 onClearFilters: {
-                    viewModel.filter = ExpenseFilter()
+                    viewModel.selectedFilter = ExpenseFilter()
                     viewModel.searchText = ""
                 }
             )
@@ -146,7 +120,6 @@ struct ExpenseListContent: View {
     let categoryGroups: [CategoryGroup] // Read-only
     let onDelete: (Expense) -> Void
     let onEdit: (Expense) -> Void
-    let onDuplicate: (Expense) -> Void
     let onClearFilters: () -> Void
     
     var body: some View {
@@ -193,8 +166,7 @@ struct ExpenseListContent: View {
             ExpandableExpenseList(
                 categories: categoryGroups,
                 onExpenseDelete: onDelete,
-                onExpenseEdit: onEdit,
-                onExpenseDuplicate: onDuplicate
+                onExpenseEdit: onEdit
             )
         }
     }

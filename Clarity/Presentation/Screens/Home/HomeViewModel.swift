@@ -49,6 +49,17 @@ final class HomeViewModel {
     var filteredExpenses: [Expense] = []
     var dateFilteredExpenses: [Expense] = [] // For Savings calculation
     var income: Double = 0
+    var showAddExpense = false // From DashboardViewModel
+    
+    // Computed properties (from DashboardViewModel)
+    var totalFilteredAmount: Double {
+        filteredExpenses.reduce(0) { $0 + $1.amount }
+    }
+    
+    var calculatedSavings: Double {
+        let periodExpenses = dateFilteredExpenses.reduce(0) { $0 + $1.amount }
+        return income - periodExpenses
+    }
     
     // Internal
     private let getExpensesUseCase: GetExpensesUseCase
@@ -57,6 +68,11 @@ final class HomeViewModel {
     
     // Exposed for View Logic (loading check)
     var allExpenses: [Expense] = []
+    
+    // Pagination
+    var currentPage = 0
+    var hasMorePages = true
+    var isLoadingMore = false
     
     init(
         getExpensesUseCase: GetExpensesUseCase,
@@ -67,39 +83,21 @@ final class HomeViewModel {
         self.deleteExpenseUseCase = deleteExpenseUseCase
         self.addExpenseUseCase = addExpenseUseCase
         
-        // Load income - temporary direct access to keep parity
+        // Load income
         self.income = UserDataManager.shared.userDocument?.income ?? 0
     }
     
     // MARK: - Intents
-    
-    func duplicateExpense(_ expense: Expense) async {
-        let duplicated = Expense(
-            amount: expense.amount,
-            name: expense.name,
-            category: expense.category,
-            subcategory: expense.subcategory,
-            date: Formatters.isoString(from: Date()), // Current date
-            paymentMethod: expense.paymentMethod,
-            notes: expense.notes,
-            isDeductible: expense.isDeductible
-        )
-        
-        do {
-            _ = try await addExpenseUseCase.execute(duplicated)
-            await loadExpenses()
-        } catch {
-            state = .error(.savingFailed(error.localizedDescription))
-        }
-    }
     
     func deleteExpense(_ expense: Expense) async {
         guard let id = expense.id else { return }
         do {
             try await deleteExpenseUseCase.execute(id: id)
             await loadExpenses()
+            FeedbackManager.shared.show(.success, title: "Gasto eliminado", message: "\(expense.name) se ha borrado correctamente")
         } catch {
             state = .error(.deletionFailed(error.localizedDescription))
+            FeedbackManager.shared.show(.error, title: "Error al borrar", message: error.localizedDescription)
         }
     }
     
@@ -108,15 +106,40 @@ final class HomeViewModel {
         self.income = UserDataManager.shared.userDocument?.income ?? 0
         
         state = .loading
+        currentPage = 0
+        hasMorePages = true
+        
         do {
-            let expenses = try await getExpensesUseCase.execute(filter: nil)
-            self.allExpenses = expenses
+            // Paginated Load (First Page)
+            let result = try await getExpensesUseCase.executePaginated(page: 0)
+            self.allExpenses = result.expenses
+            self.hasMorePages = result.hasMore
             
             applyFilters()
-            state = .loaded(filteredExpenses)
         } catch {
             state = .error(.dataLoadingFailed(error.localizedDescription))
         }
+    }
+    
+    func loadMore() async {
+        guard hasMorePages, !isLoadingMore else { return }
+        isLoadingMore = true
+        
+        do {
+            currentPage += 1
+            let result = try await getExpensesUseCase.executePaginated(page: currentPage)
+            
+            self.allExpenses.append(contentsOf: result.expenses)
+            self.hasMorePages = result.hasMore
+            
+            applyFilters() // Re-apply filters to new full set
+        } catch {
+            // Silently fail or show toast? For infinite scroll, usually silent or small indicator
+            print("Error loading more: \(error)")
+            currentPage -= 1 // Revert page logic
+        }
+        
+        isLoadingMore = false
     }
     
     func refresh() async {
@@ -125,7 +148,6 @@ final class HomeViewModel {
             let expenses = try await getExpensesUseCase.execute(filter: nil, policy: .networkFirst)
             self.allExpenses = expenses
             applyFilters()
-            state = .loaded(filteredExpenses)
         } catch {
             // Even with networkFirst, repo falls back to cache. 
             // If we get here, both failed or critical error.

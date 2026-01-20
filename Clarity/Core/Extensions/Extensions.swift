@@ -37,13 +37,7 @@ extension Date {
 
 // MARK: - Double Extensions
 extension Double {
-    var currencyString: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "EUR"
-        formatter.locale = Locale(identifier: "es_ES")
-        return formatter.string(from: NSNumber(value: self)) ?? "€\(self)"
-    }
+
     
     var compactCurrencyString: String {
         if self >= 1000 {

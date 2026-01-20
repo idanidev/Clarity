@@ -16,6 +16,10 @@ struct ExpenseFilterSheet: View {
     
     @State private var minAmountText: String = ""
     @State private var maxAmountText: String = ""
+    @State private var showSavePresetAlert = false
+    @State private var newPresetName = ""
+    
+    private var presetManager: FilterPresetManager { FilterPresetManager.shared }
     
     init(
         filter: Binding<ExpenseFilter>,
@@ -33,6 +37,9 @@ struct ExpenseFilterSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Saved Presets
+                    savedPresetsSection
+                    
                     // Date Range
                     dateRangeSection
                     
@@ -75,6 +82,15 @@ struct ExpenseFilterSheet: View {
                         .fontWeight(.semibold)
                 }
             }
+            .alert("Guardar Preset", isPresented: $showSavePresetAlert) {
+                TextField("Nombre del preset", text: $newPresetName)
+                Button("Cancelar", role: .cancel) { newPresetName = "" }
+                Button("Guardar") {
+                    saveCurrentAsPreset()
+                }
+            } message: {
+                Text("Dale un nombre a este filtro para acceder rápidamente")
+            }
         }
     }
     
@@ -112,14 +128,57 @@ struct ExpenseFilterSheet: View {
                     action: { 
                         resetFilters()
                         applyFilters()
-                        HapticManager.notification(.success)
+                        HapticManager.shared.notification(.success)
                     }
                 )
             }
+            
+            Divider()
+            
+            saveAsDefaultButton
         }
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
         .shadow(color: .black.opacity(0.1), radius: 5, y: -5)
+    }
+    
+    @State private var didSaveDefault = false
+    
+    private var saveAsDefaultButton: some View {
+        Button {
+            UserDataManager.shared.saveDefaultFilter(filter)
+            withAnimation(.bouncy) {
+                didSaveDefault = true
+            }
+            HapticManager.shared.notification(.success)
+            
+            // Reset after 2 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation {
+                    didSaveDefault = false
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: didSaveDefault ? "checkmark.circle.fill" : "star.fill")
+                    .foregroundStyle(didSaveDefault ? .green : Color.clarityPrimary)
+                Text(didSaveDefault ? "¡Guardado como predeterminado!" : "Guardar como filtro por defecto")
+                    .fontWeight(.medium)
+            }
+            .font(.subheadline)
+            .foregroundStyle(didSaveDefault ? .green : Color.clarityPrimary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(didSaveDefault ? Color.green.opacity(0.15) : Color.clarityPrimary.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(didSaveDefault ? Color.green.opacity(0.3) : Color.clarityPrimary.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .disabled(didSaveDefault)
     }
     
     // MARK: - Date Range Section
@@ -142,7 +201,7 @@ struct ExpenseFilterSheet: View {
                     ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
                         Button {
                             filter.dateRange = range
-                            HapticManager.selection()
+                            HapticManager.shared.selection()
                         } label: {
                             HStack {
                                 Text(range.rawValue)
@@ -251,7 +310,7 @@ struct ExpenseFilterSheet: View {
                     } else {
                         filter.selectedCategories.removeAll()
                     }
-                    HapticManager.selection()
+                    HapticManager.shared.selection()
                 }
                 .font(.caption)
                 .foregroundStyle(Color.clarityPrimary)
@@ -323,7 +382,7 @@ struct ExpenseFilterSheet: View {
     private var clearAllButton: some View {
         Button {
             resetFilters()
-            HapticManager.notification(.warning)
+            HapticManager.shared.notification(.warning)
         } label: {
             HStack {
                 Image(systemName: "trash.fill")
@@ -352,7 +411,7 @@ struct ExpenseFilterSheet: View {
     private func quickActionChip(title: String, icon: String, isActive: Bool, isDestructive: Bool = false, action: @escaping () -> Void) -> some View {
         Button {
             action()
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -380,7 +439,7 @@ struct ExpenseFilterSheet: View {
     private func dateChip(_ range: ExpenseFilter.DateRange) -> some View {
         Button {
             filter.dateRange = range
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             Text(range.rawValue)
                 .font(.subheadline.weight(.medium))
@@ -401,7 +460,7 @@ struct ExpenseFilterSheet: View {
             } else {
                 filter.selectedCategories.insert(category)
             }
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             Text(category)
                 .font(.subheadline)
@@ -424,7 +483,7 @@ struct ExpenseFilterSheet: View {
             } else {
                 filter.selectedPaymentMethods.insert(method)
             }
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
@@ -453,7 +512,7 @@ struct ExpenseFilterSheet: View {
     private func sortChip(_ option: ExpenseFilter.SortOption) -> some View {
         Button {
             filter.sortBy = option
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             HStack {
                 Text(option.rawValue)
@@ -479,7 +538,7 @@ struct ExpenseFilterSheet: View {
             filter.maxAmount = max
             minAmountText = min.map { String(Int($0)) } ?? ""
             maxAmountText = max.map { String(Int($0)) } ?? ""
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             Text(title)
                 .font(.caption.weight(.medium))
@@ -495,7 +554,7 @@ struct ExpenseFilterSheet: View {
     
     private func applyFilters() {
         onApply()
-        HapticManager.notification(.success)
+        HapticManager.shared.notification(.success)
         dismiss()
     }
     
@@ -504,6 +563,88 @@ struct ExpenseFilterSheet: View {
         minAmountText = ""
         maxAmountText = ""
         // Not applying automatically on reset to allow user to review
+    }
+    
+    // MARK: - Saved Presets Section
+    private var savedPresetsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                sectionHeader(title: "Presets Guardados", icon: "star.fill")
+                Spacer()
+                // Save current filter as preset
+                if filter.hasActiveFilters {
+                    Button {
+                        showSavePresetAlert = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Guardar")
+                        }
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.clarityPrimary)
+                    }
+                }
+            }
+            
+            if presetManager.presets.isEmpty {
+                Text("No tienes presets guardados")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .padding(.vertical, 8)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(presetManager.presets) { preset in
+                            presetChip(preset)
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+    
+    private func presetChip(_ preset: FilterPreset) -> some View {
+        Button {
+            filter = preset.filter
+            HapticManager.shared.selection()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: preset.icon)
+                    .font(.system(size: 12))
+                Text(preset.name)
+                    .font(.system(size: 13, weight: .medium))
+            }
+            .foregroundStyle(preset.colorValue)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(preset.colorValue.opacity(0.15))
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(preset.colorValue.opacity(0.3), lineWidth: 1)
+            )
+        }
+        .contextMenu {
+            Button(role: .destructive) {
+                presetManager.deletePreset(preset)
+            } label: {
+                Label("Eliminar", systemImage: "trash")
+            }
+        }
+    }
+    
+    private func saveCurrentAsPreset() {
+        guard !newPresetName.isEmpty else { return }
+        let preset = FilterPreset(
+            name: newPresetName,
+            filter: filter
+        )
+        presetManager.savePreset(preset)
+        newPresetName = ""
+        HapticManager.shared.notification(.success)
     }
 }
 

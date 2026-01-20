@@ -7,14 +7,24 @@ struct StatCard: View {
     let title: String
     let value: String
     let color: Color
+    var isConfidential: Bool = false
+    
+    @State private var userDataManager = UserDataManager.shared
     
     var body: some View {
         VStack(spacing: 6) {
-            Text(value)
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            Group {
+                if isConfidential && userDataManager.privacyMode {
+                    Text("****")
+                } else {
+                    Text(value)
+                }
+            }
+            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .foregroundColor(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+            .contentTransition(.numericText())
             
             Text(title)
                 .font(.caption)
@@ -31,6 +41,12 @@ struct StatCard: View {
             .background(.ultraThinMaterial)
         )
         .clipShape(RoundedRectangle(cornerRadius: 14))
+        .onTapGesture {
+            if isConfidential {
+                userDataManager.togglePrivacyMode()
+            }
+        }
+        .animation(.snappy, value: userDataManager.privacyMode)
     }
 }
 

@@ -26,4 +26,18 @@ protocol ExpenseRepositoryProtocol: Sendable {
     func addExpense(_ expense: Expense) async throws -> String
     func deleteExpense(id: String) async throws
     func updateExpense(_ expense: Expense) async throws
+    
+    // Pagination
+    func getExpensesPaginated(page: Int) async throws -> PageResult
+}
+
+// Helper for Domain Pagination
+struct PageResult: Sendable {
+    let expenses: [Expense]
+    let hasMore: Bool
+    
+    init(expenses: [Expense], hasMore: Bool) {
+        self.expenses = expenses
+        self.hasMore = hasMore
+    }
 }

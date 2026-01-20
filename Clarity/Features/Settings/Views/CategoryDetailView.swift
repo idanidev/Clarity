@@ -50,7 +50,7 @@ struct CategoryDetailView: View {
                                 selectedColor = colorHex
                                 hasChanges = true
                             }
-                            HapticManager.selection()
+                            HapticManager.shared.selection()
                         } label: {
                             Circle()
                                 .fill(Color(hex: colorHex) ?? .gray)
@@ -107,7 +107,7 @@ struct CategoryDetailView: View {
                     withAnimation(.bouncy) {
                         subcategories.remove(atOffsets: indexSet)
                         hasChanges = true
-                        HapticManager.notification(.warning)
+                        HapticManager.shared.notification(.warning)
                     }
                 }
                 .onMove { from, to in
@@ -130,7 +130,7 @@ struct CategoryDetailView: View {
                                 newSubcategoryName = ""
                                 showAddSubcategory = false
                                 hasChanges = true
-                                HapticManager.impact(.light)
+                                HapticManager.shared.impact(.light)
                             }
                         } label: {
                             Image(systemName: "checkmark.circle.fill")
@@ -226,7 +226,7 @@ struct CategoryDetailView: View {
         updated.updatedAt = Date()
         
         await UserDataManager.shared.updateCategory(updated)
-        HapticManager.notification(.success)
+        HapticManager.shared.notification(.success)
         onUpdate()
         dismiss()
         isSaving = false
@@ -236,7 +236,7 @@ struct CategoryDetailView: View {
         guard let id = originalCategory.id else { return }
         
         await UserDataManager.shared.deleteCategory(id: id)
-        HapticManager.notification(.success)
+        HapticManager.shared.notification(.success)
         onUpdate()
         dismiss()
     }

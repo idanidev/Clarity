@@ -6,25 +6,31 @@ import FirebaseAuth
 import FirebaseFirestore
 import Combine
 import AuthenticationServices
+import Observation
 
 @MainActor
-class AuthViewModel: ObservableObject {
-    @Published var isAuthenticated = false
-    @Published var isLoading = true
-    @Published var currentUser: User?
-    @Published var userDocument: UserDocument?
-    @Published var errorMessage: String?
+@Observable
+final class AuthViewModel {
+    var isAuthenticated = false
+    var isLoading = true
+    var currentUser: User?
+    var userDocument: UserDocument?
+    var errorMessage: String?
     
     private var authStateListener: AuthStateDidChangeListenerHandle?
-    private let db = Firestore.firestore()
+    @ObservationIgnored
+    private lazy var db = Firestore.firestore()
     
     init() {
-        setupAuthStateListener()
+        // Validation moved to startListening to ensure Firebase is configured
     }
     
-    deinit {
-        if let listener = authStateListener {
-            Auth.auth().removeStateDidChangeListener(listener)
+    // deinit removed to avoid MainActor isolation issues.
+    // Listener uses weak self and will auto-cleanup/ignore updates if self is gone.
+    
+    func startListening() {
+        if authStateListener == nil {
+            setupAuthStateListener()
         }
     }
     
@@ -37,6 +43,9 @@ class AuthViewModel: ObservableObject {
                 if let user = user {
                     await self?.fetchUserDocument(userId: user.uid)
                     // Load and cache user data (categories, etc.)
+                    if let doc = self?.userDocument {
+                        UserDataManager.shared.setUserDocument(doc)
+                    }
                     await UserDataManager.shared.loadUserData()
                 }
                 

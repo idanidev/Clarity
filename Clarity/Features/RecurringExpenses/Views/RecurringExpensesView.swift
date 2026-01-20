@@ -165,13 +165,13 @@ struct RecurringExpensesView: View {
         Task {
             do {
                 try await repository.toggleActive(id: id, active: !expense.active)
-                HapticManager.impact(.light)
+                HapticManager.shared.impact(.light)
             } catch {
                 // Revert on error
                 if let index = expenses.firstIndex(where: { $0.id == id }) {
                     expenses[index].active.toggle()
                 }
-                HapticManager.notification(.error)
+                HapticManager.shared.notification(.error)
             }
         }
     }
@@ -187,7 +187,7 @@ struct RecurringExpensesView: View {
             Task {
                 do {
                     try await repository.delete(id: id)
-                    HapticManager.notification(.success)
+                    HapticManager.shared.notification(.success)
                 } catch {
                     loadExpenses() // Reload to restore
                 }
@@ -246,14 +246,18 @@ struct RecurringExpenseRow: View {
                 
                 // Badges row - clean layout
                 HStack(spacing: 8) {
-                    // Frequency badge
-                    Text(expense.frequency.displayName)
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.secondary.opacity(0.12))
-                        .clipShape(Capsule())
+                    // Frequency badge - MORE VISIBLE with color
+                    HStack(spacing: 3) {
+                        Image(systemName: frequencyIcon)
+                            .font(.system(size: 9))
+                        Text(expense.frequency.displayName)
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(frequencyColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(frequencyColor.opacity(0.15))
+                    .clipShape(Capsule())
                     
                     // Day badge
                     HStack(spacing: 3) {
@@ -316,6 +320,26 @@ struct RecurringExpenseRow: View {
         let names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
         guard month >= 1 && month <= 12 else { return "?" }
         return names[month - 1]
+    }
+    
+    // Color based on frequency type
+    private var frequencyColor: Color {
+        switch expense.frequency {
+        case .monthly: return .blue
+        case .quarterly: return .orange
+        case .semestral: return .purple
+        case .yearly: return .green
+        }
+    }
+    
+    // Icon based on frequency type
+    private var frequencyIcon: String {
+        switch expense.frequency {
+        case .monthly: return "repeat"
+        case .quarterly: return "calendar.badge.clock"
+        case .semestral: return "arrow.triangle.2.circlepath"
+        case .yearly: return "calendar.badge.exclamationmark"
+        }
     }
 }
 

@@ -63,6 +63,21 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
         self.updatedAt = updatedAt
     }
 }
+
+// MARK: - Helpers
+extension Expense {
+    static var empty: Expense {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withFullDate]
+        
+        return Expense(
+            amount: 0,
+            name: "",
+            category: "",
+            date: formatter.string(from: Date())
+        )
+    }
+}
     
 
 

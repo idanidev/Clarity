@@ -2,9 +2,10 @@
 // Unified view with Tabla and Gráfica tabs
 
 import SwiftUI
+import TipKit
 
 struct ExpensesView: View {
-    @State private var viewModel = DashboardViewModel()
+    @State private var viewModel = DependencyContainer.shared.makeHomeViewModel() // Updated
     @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
@@ -27,8 +28,8 @@ struct ExpensesView: View {
             .sheet(isPresented: $viewModel.showAddExpense) { addSheet }
             .sheet(isPresented: $showFilterSheet) {
                 ExpenseFilterSheet(
-                    filter: $viewModel.filter,
-                    availableCategories: Array(Set(viewModel.expenses.map { $0.category })),
+                    filter: $viewModel.selectedFilter, // Updated
+                    availableCategories: Array(Set(viewModel.allExpenses.map { $0.category })), // Updated
                     onApply: {
                         // Filters apply auto via binding
                     }
@@ -39,98 +40,331 @@ struct ExpensesView: View {
     // MARK: - Main Content
     private var mainContent: some View {
         VStack(spacing: 0) {
-            // Content based on selection - no TabView swipe to conflict with list swipes
-            Group {
-                switch selectedView {
-                case 0:
-                    tableContent
-                case 1:
-                    VStack(spacing: 0) {
-                        DonutChartContent(viewModel: viewModel, filter: viewModel.filter)
-                    }
-                case 2:
-                    VStack(spacing: 0) {
-                        CalendarChartContent(viewModel: viewModel)
-                    }
-                default:
-                    tableContent
+            // Vista actual
+            ZStack {
+                if selectedView == 0 {
+                    tableView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
+                } else if selectedView == 1 {
+                    donutChartView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
+                } else if selectedView == 2 {
+                    calendarView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
+                } else {
+                    comparisonView
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: selectedView)
-            .onChange(of: selectedView) { _, _ in
-                HapticManager.selection()
-            }
-            
-            // Picker at bottom - more accessible for thumb
+            .animation(.easeInOut(duration: 0.25), value: selectedView)
+
+            // Picker at bottom
             segmentedPicker
         }
     }
     
-    // MARK: - Segmented Picker
-    // MARK: - Bottom Toolbar (Filter + View Modes)
-    private var segmentedPicker: some View {
-        HStack {
-            // Left spacer to balance filter button
-            Color.clear.frame(width: 60, height: 1)
-            
-            Spacer()
-            
-            // View Mode Selector (Icons) - CENTERED
-            HStack(spacing: 0) {
-                viewModeButton(icon: "list.bullet", index: 0)
-                viewModeButton(icon: "chart.pie.fill", index: 1)
-                viewModeButton(icon: "calendar", index: 2)
+    // Helper para empty states
+    private func emptyStateMockup(icon: String, title: String, subtitle: String) -> some View {
+        Section {
+            VStack(spacing: 20) {
+                Image(systemName: icon)
+                    .font(.system(size: 60))
+                    .foregroundStyle(.secondary)
+                Text(title)
+                    .font(.title2.bold())
+                Text(subtitle)
+                    .foregroundStyle(.secondary)
             }
-            .background(Capsule().fill(Color.bgTertiary))
-            
-            Spacer()
-            
-            // Clear + Filter buttons (Right)
-            HStack(spacing: 4) {
-                if viewModel.filter.hasActiveFilters || !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.filter = ExpenseFilter(dateRange: .thisMonth)
-                        viewModel.searchText = ""
-                        HapticManager.notification(.success)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20))
+            .frame(maxWidth: .infinity)
+            .padding(.top, 60)
+            .padding(.bottom, 60)
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+    
+    // MARK: - Segmented Picker
+    private var segmentedPicker: some View {
+        VStack(spacing: 8) {
+            // Fila superior: Botones de filtro
+            HStack {
+                HStack(spacing: 8) {
+                    if viewModel.selectedFilter.hasActiveFilters || !viewModel.searchText.isEmpty { // Updated
+                        Button {
+                            viewModel.selectedFilter = ExpenseFilter(dateRange: .thisMonth) // Updated
+                            viewModel.searchText = ""
+                            HapticManager.shared.notification(.success)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                Text("Limpiar")
+                                    .font(.system(size: 13, weight: .medium))
+                            }
                             .foregroundStyle(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color(.tertiarySystemFill))
+                            .clipShape(Capsule())
+                        }
                     }
                 }
-                
-                    Button {
-                        showFilterSheet = true
-                        HapticManager.selection()
-                    } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle" + (viewModel.filter.hasActiveFilters || !viewModel.searchText.isEmpty ? ".fill" : ""))
-                            .font(.system(size: 22))
-                            .foregroundStyle(viewModel.filter.hasActiveFilters || !viewModel.searchText.isEmpty ? Color.clarityPrimary : .secondary)
+
+                Spacer()
+
+                Button {
+                    showFilterSheet = true
+                    HapticManager.shared.selection()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 16))
+                        Text("Filtros")
+                            .font(.system(size: 13, weight: .medium))
                     }
+                    .foregroundStyle(viewModel.selectedFilter.hasActiveFilters || !viewModel.searchText.isEmpty ? Color.clarityPrimary : .secondary) // Updated
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(viewModel.selectedFilter.hasActiveFilters ? Color.clarityPrimary.opacity(0.15) : Color(.tertiarySystemFill))
+                    .clipShape(Capsule())
+                }
+                .popoverTip(FilterTip())
             }
-            .frame(width: 60)
+            .padding(.horizontal, Spacing.md)
+
+            // DEBUG: 4 BOTONES FORZADOS con colores diferentes
+            HStack(spacing: 8) {
+                // Botón 1: Lista (AZUL)
+                Button {
+                    selectedView = 0
+                    print("🔵 Seleccionado: LISTA (0)")
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(selectedView == 0 ? .white : .blue)
+                        .frame(width: 44, height: 44)
+                        .background(selectedView == 0 ? Color.blue : Color.blue.opacity(0.2))
+                        .clipShape(Circle())
+                }
+                
+                // Botón 2: Gráfico (VERDE)
+                Button {
+                    selectedView = 1
+                    print("🟢 Seleccionado: GRÁFICO (1)")
+                } label: {
+                    Image(systemName: "chart.pie.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(selectedView == 1 ? .white : .green)
+                        .frame(width: 44, height: 44)
+                        .background(selectedView == 1 ? Color.green : Color.green.opacity(0.2))
+                        .clipShape(Circle())
+                }
+                
+                // Botón 3: Calendario (NARANJA)
+                Button {
+                    selectedView = 2
+                    print("🟠 Seleccionado: CALENDARIO (2)")
+                } label: {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(selectedView == 2 ? .white : .orange)
+                        .frame(width: 44, height: 44)
+                        .background(selectedView == 2 ? Color.orange : Color.orange.opacity(0.2))
+                        .clipShape(Circle())
+                }
+                
+                // Botón 4: VS COMPARACIÓN (ROJO - IMPOSIBLE DE IGNORAR)
+                Button {
+                    selectedView = 3
+                    print("🔴 Seleccionado: VS COMPARACIÓN (3)")
+                } label: {
+                    Text("VS")
+                        .font(.system(size: 16, weight: .black))
+                        .foregroundStyle(selectedView == 3 ? .white : .red)
+                        .frame(width: 44, height: 44)
+                        .background(selectedView == 3 ? Color.red : Color.red.opacity(0.2))
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .strokeBorder(Color.red, lineWidth: 2)
+                        )
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 28)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.2), radius: 10, y: 4)
+            )
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.sm)
         .background(.ultraThinMaterial)
     }
     
-    private func viewModeButton(icon: String, index: Int) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedView = index
-            }
-            HapticManager.selection()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: selectedView == index ? .semibold : .regular))
-                .foregroundStyle(selectedView == index ? Color.clarityPrimary : .secondary)
-                .frame(width: 50, height: 32)
+    // MARK: - Computed Views for Optimization
+    
+    private var tableView: some View {
+        List {
+            headerSection
+            listContent
         }
-        .background(
-             Capsule()
-                 .fill(selectedView == index ? Color.clarityPrimary.opacity(0.15) : Color.clear)
-        )
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.bgPrimary)
+    }
+    
+    private var headerSection: some View {
+        Section {
+            VStack(spacing: 16) {
+                SummaryCardsView(
+                    totalExpenses: viewModel.totalFilteredAmount,
+                    expenseCount: viewModel.filteredExpenses.count,
+                    savings: viewModel.calculatedSavings,
+                    savingsPercentage: viewModel.calculatedSavings > 0
+                        ? Int((viewModel.calculatedSavings / (UserDataManager.shared.userDocument?.income ?? 1)) * 100)
+                        : 0,
+                    available: viewModel.calculatedSavings
+                )
+                .padding(.top, 4)
+                
+                SearchBarView(
+                    searchText: $viewModel.searchText,
+                    filter: $viewModel.selectedFilter, // Updated
+                    onFilterChange: {}
+                )
+                
+                ActiveFilterPillsView(
+                    filter: $viewModel.selectedFilter, // Updated
+                    onFilterChange: {}
+                )
+            }
+        }
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+    }
+    
+    @ViewBuilder
+    private var listContent: some View {
+        if viewModel.state == .loading { // Updated
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+        } else if viewModel.allExpenses.isEmpty { // Updated
+            emptyStateMockup(
+                icon: "wallet.bifold",
+                title: "Sin gastos",
+                subtitle: "Añade tu primer gasto del mes"
+            )
+        } else if viewModel.filteredExpenses.isEmpty && viewModel.selectedFilter.hasActiveFilters { // Updated
+            emptyStateMockup(
+                icon: "line.3.horizontal.decrease.circle",
+                title: "Sin resultados",
+                subtitle: "No hay gastos que coincidan"
+            )
+        } else {
+            expenseGroupsSection
+            
+            // Infinite Scroll Trigger
+            if viewModel.hasMorePages {
+                Section {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .listRowBackground(Color.clear)
+                        .onAppear {
+                            Task { await viewModel.loadMore() }
+                        }
+                }
+                .listRowSeparator(.hidden)
+            }
+        }
+    }
+    
+    private var expenseGroupsSection: some View {
+        ForEach(viewModel.categoryGroups) { group in
+            Section {
+                ForEach(group.subcategories) { subcategory in
+                    ForEach(subcategory.expenses, id: \.stableId) { expense in
+                        ModernExpenseCard(expense: expense)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                // Ambos botones en UNA SOLA llamada a swipeActions
+                                Button {
+                                    HapticManager.shared.expenseDuplicated()
+                                    duplicateExpense(expense)
+                                } label: {
+                                    Label("Duplicar", systemImage: "doc.on.doc")
+                                }
+                                .tint(.blue)
+
+                                Button {
+                                    HapticManager.shared.swipeAction()
+                                    expenseToEdit = expense
+                                } label: {
+                                    Label("Editar", systemImage: "pencil")
+                                }
+                                .tint(.orange)
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                // Borrar (swipe derecha)
+                                Button(role: .destructive) {
+                                    Task {
+                                        HapticManager.shared.expenseDeleted()
+                                        await viewModel.deleteExpense(expense)
+                                    }
+                                } label: {
+                                    Label("Borrar", systemImage: "trash")
+                                }
+                            }
+                    }
+                }
+            } header: {
+                // Custom Header
+                HStack {
+                    CategoryBadge(
+                        category: group.name,
+                        emoji: group.emoji,
+                        size: .small,
+                        style: .vibrant,
+                        isSelected: true
+                    )
+                    Spacer()
+                    Text(group.totalAmount.formattedCurrency)
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+            }
+        }
+    }
+    
+    private var donutChartView: some View {
+        DonutChartContent(viewModel: viewModel, filter: viewModel.selectedFilter) // Updated
+    }
+    
+    private var calendarView: some View {
+        CalendarChartContent(viewModel: viewModel)
+    }
+    
+    private var comparisonView: some View {
+        MonthComparisonView(viewModel: viewModel)
     }
     
     // MARK: - Sheets
@@ -139,7 +373,6 @@ struct ExpensesView: View {
             Task { await viewModel.refresh() }
         }
         .presentationDetents([.large])
-        .presentationBackground(.regularMaterial)
     }
     
     private var addSheet: some View {
@@ -147,96 +380,6 @@ struct ExpensesView: View {
             Task { await viewModel.refresh() }
         }
         .presentationDetents([.large])
-        .presentationBackground(.regularMaterial)
-    }
-    
-    private var tableContent: some View {
-        VStack(spacing: 16) {
-            // Stat Cards (3 cards, responsive - fill width)
-            HStack(spacing: 12) {
-                StatCard(
-                    title: "Total",
-                    value: Formatters.currency(viewModel.totalFilteredAmount),
-                    color: Color.clarityPrimary
-                )
-                
-                StatCard(
-                    title: "Gastos",
-                    value: "\(viewModel.filteredExpenses.count)",
-                    color: .blue
-                )
-                
-                StatCard(
-                    title: "Ahorro",
-                    value: Formatters.currency(viewModel.calculatedSavings),
-                    color: viewModel.calculatedSavings >= 0 ? .green : .red
-                )
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            
-            // Search bar for table
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                
-                TextField("Buscar gastos...", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                
-                if !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.searchText = ""
-                        HapticManager.selection()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            
-            // Active filter pills (kept for feedback)
-            ActiveFilterPillsView(
-                filter: $viewModel.filter,
-                onFilterChange: { /* Handled by VM */ }
-            )
-            .padding(.top, 4)
-            
-            // Content
-            ExpenseListContent(
-                isLoading: viewModel.isLoading,
-                expensesEmpty: viewModel.expenses.isEmpty,
-                filteredEmpty: viewModel.filteredExpenses.isEmpty,
-                activeFilters: viewModel.filter.hasActiveFilters,
-                groupsEmpty: viewModel.categoryGroups.isEmpty,
-                categoryGroups: viewModel.categoryGroups, // Read-only pass
-                // Wait, ExpenseListContent likely expects Binding<[CategoryGroup]> if it handles expansion state within the group model
-                // checking usage: categoryGroups: $categoryGroups
-                // If CategoryGroup handles expansion state, it needs to be mutable.
-                // Since VM owns it now, we pass binding to VM property.
-                // But VM property `categoryGroups` is private(set).
-                // FIX: DashboardViewModel needs to expose binding or handling for expansion.
-                // OR ExpenseListContent manages expansion locally.
-                onDelete: { expense in
-                    Task {
-                        await viewModel.deleteExpense(expense)
-                        HapticManager.notification(.success)
-                    }
-                },
-                onEdit: { expense in
-                    expenseToEdit = expense
-                },
-                onDuplicate: duplicateExpense,
-                onClearFilters: {
-                    viewModel.filter = ExpenseFilter(dateRange: .thisMonth)
-                    viewModel.searchText = ""
-                }
-            )
-        }
     }
     
     // Helper needed for Duplicate because it uses DependencyContainer directly or VM
@@ -252,14 +395,15 @@ struct ExpensesView: View {
                 notes: expense.notes,
                 isDeductible: expense.isDeductible
             )
-            
+
             do {
                 _ = try await DependencyContainer.shared.expenseRepository.addExpense(duplicated)
                 await viewModel.refresh()
-                HapticManager.notification(.success)
+                FeedbackManager.shared.show(.success, title: "Gasto duplicado", message: "\(expense.name) copiado correctamente")
             } catch {
-                print("Error duplicating expense: \(error)")
+                FeedbackManager.shared.show(.error, title: "Error al duplicar", message: error.localizedDescription)
             }
         }
     }
 }
+

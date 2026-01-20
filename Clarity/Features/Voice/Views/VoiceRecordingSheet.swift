@@ -5,7 +5,7 @@ import SwiftUI
 import Combine
 
 struct VoiceRecordingSheet: View {
-    @ObservedObject var speechManager: SpeechRecognitionManager
+    var speechManager: SpeechRecognitionManager
     var onComplete: (String) -> Void
     
     @State private var currentExampleIndex = 0

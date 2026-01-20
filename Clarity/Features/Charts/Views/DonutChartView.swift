@@ -26,14 +26,17 @@ struct DonutChartView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: Spacing.lg) {
-                donutChart
-                categoryGrid
-
+            GlassCard.standard {
+                VStack(spacing: Spacing.lg) {
+                    donutChart
+                    categoryGrid
+                }
+                .padding(.bottom, Spacing.xl)
             }
-            .padding(.bottom, Spacing.xl)
+            .padding(.horizontal)
+            .padding(.top)
         }
-        .background(Color.bgPrimary)
+
     }
     
     // MARK: - Donut Chart Component
@@ -56,34 +59,34 @@ struct DonutChartView: View {
                 // And only if animation has passed the start.
                 let visibleEnd = min(endPct, max(startPct, Double(animationProgress)))
                                 
-                if animationProgress > startPct {
-                    Circle()
-                        .trim(from: startPct, to: visibleEnd)
-                        .stroke(segment.data.color, style: StrokeStyle(lineWidth: 35, lineCap: .butt))
-                        .rotationEffect(.degrees(-90))
-                        .scaleEffect(selectedCategory == segment.data ? 1.05 : 1.0)
-                        .onTapGesture {
-                            withAnimation(.bouncy(duration: 0.3)) {
-                                selectedCategory = selectedCategory == segment.data ? nil : segment.data
+                    if animationProgress > startPct {
+                        Circle()
+                            .trim(from: startPct, to: visibleEnd)
+                            .stroke(segment.data.color, style: StrokeStyle(lineWidth: 45, lineCap: .butt))
+                            .rotationEffect(.degrees(-90))
+                            .scaleEffect(selectedCategory == segment.data ? 1.05 : 1.0)
+                            .onTapGesture {
+                                withAnimation(.bouncy(duration: 0.3)) {
+                                    selectedCategory = selectedCategory == segment.data ? nil : segment.data
+                                }
                             }
-                        }
+                    }
                 }
-            }
             
             // Center text
             VStack(spacing: 2) {
                 Text("Total")
-                    .font(.system(size: 13))
+                    .font(.system(size: 14))
                     .foregroundColor(.gray)
                     .opacity(animationProgress > 0.1 ? 1 : 0)
                 
                 Text(total.formattedCurrency)
-                    .font(.system(size: 22, weight: .bold))
+                    .font(.system(size: 28, weight: .bold)) // Larger amount text
                     .foregroundColor(.white)
                     .opacity(animationProgress > 0.1 ? 1 : 0)
             }
         }
-        .frame(width: 200, height: 200)
+        .frame(width: 280, height: 280) // Larger frame
         .padding(.top, Spacing.xl)
         .onAppear {
             updateCachedSegments()
@@ -225,11 +228,18 @@ struct CategoryChartCard: View {
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.vertical, Spacing.xs + 2)
-        .background(Color.bgSecondary)
+        .background {
+            ZStack {
+                Color.glassBackground
+                if isSelected {
+                    data.color.opacity(0.15)
+                }
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(isSelected ? data.color : Color.borderDefault, lineWidth: isSelected ? 2 : 1)
+                .stroke(isSelected ? data.color : Color.glassBorder, lineWidth: isSelected ? 1.5 : 1)
         )
     }
     

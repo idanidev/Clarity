@@ -7,8 +7,8 @@ struct VoiceExpenseButton: View {
     var viewModel: HomeViewModel
     let categories: [Category]
     
-    @StateObject private var speechManager = SpeechRecognitionManager()
-    @StateObject private var voiceCoordinator = VoiceExpenseCoordinator()
+    @State private var speechManager = SpeechRecognitionManager()
+    @State private var voiceCoordinator = VoiceExpenseCoordinator()
     
     var body: some View {
         Button {

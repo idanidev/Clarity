@@ -1,40 +1,18 @@
 // EditExpenseSheet.swift
-// Edit existing expense form
+// Modernized Edit Expense Form
 
 import SwiftUI
+import TipKit
 
 struct EditExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
-    let expense: Expense
+    @State private var viewModel: EditExpenseViewModel
+    @State private var speechManager = SpeechRecognitionManager()
     let onSave: () -> Void
     
-    @State private var amount: Double
-    @State private var name: String
-    @State private var category: String
-    @State private var subcategory: String?
-    @State private var date: Date
-    @State private var paymentMethod: String
-    @State private var notes: String
-    @State private var isSaving = false
-    @State private var errorMessage: String?
-    
-    private let repository = DependencyContainer.shared.expenseRepository
-    
     init(expense: Expense, onSave: @escaping () -> Void) {
-        self.expense = expense
+        _viewModel = State(initialValue: EditExpenseViewModel(expense: expense))
         self.onSave = onSave
-        
-        _amount = State(initialValue: expense.amount)
-        _name = State(initialValue: expense.name)
-        _category = State(initialValue: expense.category)
-        _subcategory = State(initialValue: expense.subcategory)
-        _paymentMethod = State(initialValue: expense.paymentMethod)
-        _notes = State(initialValue: expense.notes ?? "")
-        
-        // Parse date
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        _date = State(initialValue: formatter.date(from: expense.date) ?? Date())
     }
     
     var body: some View {
@@ -47,34 +25,66 @@ struct EditExpenseSheet: View {
                             .font(.largeTitle)
                             .foregroundStyle(.secondary)
                         
-                        TextField("0.00", value: $amount, format: .number)
+                        TextField("0.00", value: $viewModel.amount, format: .number)
                             .font(.system(size: 48, weight: .bold, design: .monospaced))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.leading)
+                            .accessibilityLabel("Cantidad del gasto")
                     }
                     .padding(.vertical, Spacing.sm)
                 }
                 
                 // Name Section
                 Section("Descripción") {
-                    TextField("¿En qué gastaste?", text: $name)
+                    TextField("¿En qué gastaste?", text: $viewModel.name)
+                        .font(.clarityBody)
+                        .accessibilityLabel("Descripción del gasto")
+                        .onChange(of: viewModel.name) { _, newValue in
+                             if viewModel.category.isEmpty {
+                                 guard newValue.count >= 3 else { return }
+                                 if let suggestion = ExpenseParser.suggestCategory(for: newValue) {
+                                     viewModel.category = suggestion.category
+                                     viewModel.subcategory = suggestion.subcategory
+                                 }
+                             }
+                        }
+                    
+                    // Dictate button
+                    Button {
+                        if speechManager.isListening {
+                            speechManager.stopRecording()
+                        } else {
+                            HapticManager.shared.impact(.medium)
+                            try? speechManager.startRecording()
+                        }
+                    } label: {
+                        Label(speechManager.isListening ? "Escuchando..." : "Dictar",
+                              systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill")
+                            .foregroundStyle(speechManager.isListening ? .red : Color.clarityPrimary)
+                            .symbolEffect(.pulse, isActive: speechManager.isListening)
+                    }
+                }
+                .onChange(of: speechManager.transcript) { _, newTranscript in
+                    if !newTranscript.isEmpty {
+                        viewModel.name = newTranscript
+                    }
                 }
                 
                 // Category Section
                 Section("Categoría") {
                     NavigationLink {
                         CategoryPickerView(
-                            selectedCategory: $category,
-                            selectedSubcategory: $subcategory
+                            selectedCategory: $viewModel.category,
+                            selectedSubcategory: $viewModel.subcategory
                         )
                     } label: {
                         HStack {
-                            Text(category.isEmpty ? "Seleccionar" : category)
-                                .foregroundColor(category.isEmpty ? .gray : .primary)
+                            Text(viewModel.category.isEmpty ? "Seleccionar" : viewModel.category)
+                                .foregroundStyle(viewModel.category.isEmpty ? .secondary : .primary)
                             Spacer()
-                            if let sub = subcategory, !sub.isEmpty {
+                            if let sub = viewModel.subcategory {
                                 Text(sub)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -82,38 +92,35 @@ struct EditExpenseSheet: View {
                 
                 // Date Section
                 Section("Fecha") {
-                    DatePicker("Fecha", selection: $date, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .tint(Color.clarityPrimary)
+                    DatePicker(
+                        "",
+                        selection: $viewModel.date,
+                        displayedComponents: .date
+                    )
+                    .datePickerStyle(.graphical)
+                    .tint(Color.clarityPrimary)
+                    .accessibilityLabel("Fecha del gasto")
                 }
                 
-                // Payment Method
-                Section("Método de Pago") {
-                    Picker("Método", selection: $paymentMethod) {
-                        Text("Tarjeta").tag("Tarjeta")
-                        Text("Efectivo").tag("Efectivo")
-                        Text("Transferencia").tag("Transferencia")
-                        Text("Bizum").tag("Bizum")
+                // Payment Method Section
+                Section("Método de pago") {
+                    Picker("", selection: $viewModel.paymentMethod) {
+                        ForEach(PaymentMethod.allCases) { method in
+                            Label(method.rawValue, systemImage: method.icon)
+                                .tag(method)
+                        }
                     }
-                    .pickerStyle(.segmented)
+                    .pickerStyle(.navigationLink)
                 }
                 
-                // Notes
+                // Notes Section
                 Section("Notas") {
-                    TextField("Notas opcionales", text: $notes, axis: .vertical)
+                    TextField("Notas adicionales...", text: $viewModel.notes, axis: .vertical)
                         .lineLimit(3...6)
-                }
-                
-                // Error Message
-                if let error = errorMessage {
-                    Section {
-                        Text(error)
-                            .foregroundColor(Color.error)
-                    }
                 }
             }
             .navigationTitle("Editar Gasto")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {
@@ -123,50 +130,20 @@ struct EditExpenseSheet: View {
                 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
-                        saveExpense()
+                        Task {
+                            await viewModel.save()
+                            onSave()
+                            dismiss()
+                        }
                     }
-                    .disabled(isSaving || name.isEmpty || amount <= 0)
                     .fontWeight(.semibold)
+                    .disabled(!viewModel.isValid)
                 }
             }
-            .tint(Color.clarityPrimary)
-        }
-    }
-    
-    private func saveExpense() {
-        guard let expenseId = expense.id else { return }
-        
-        isSaving = true
-        errorMessage = nil
-        
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateString = formatter.string(from: date)
-        
-        let updatedExpense = Expense(
-            id: expenseId,
-            amount: amount,
-            name: name,
-            category: category,
-            subcategory: subcategory,
-            date: dateString,
-            paymentMethod: paymentMethod,
-            notes: notes.isEmpty ? nil : notes
-        )
-        
-        Task {
-            do {
-                try await repository.updateExpense(updatedExpense)
-                await MainActor.run {
-                    isSaving = false
-                    onSave()
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isSaving = false
-                    errorMessage = error.localizedDescription
-                }
+            .alert("Error", isPresented: $viewModel.showError) {
+                Button("OK") { }
+            } message: {
+                Text(viewModel.errorMessage ?? "Error desconocido")
             }
         }
     }

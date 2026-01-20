@@ -9,10 +9,15 @@ struct HomeView: View {
     private var userDataManager = UserDataManager.shared
     
     // UI State
-    @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario
+    @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario, 3 = VS
     @State private var expenseToEdit: Expense?
-    @State private var showEditSheet = false
     @State private var showFilterSheet = false
+    
+    // Voice & FAB
+    @State private var showVoiceSheet = false
+    @State private var showAddExpense = false // New state for manual entry
+    @State private var voiceCoordinator = VoiceExpenseCoordinator()
+    @State private var speechManager = SpeechRecognitionManager()
     
     @MainActor
     init(viewModel: HomeViewModel? = nil) {
@@ -21,21 +26,25 @@ struct HomeView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            mainContent
-                .background(Color.black) // Nuclear Black option
+        mainContent
+                .background(DesignTokens.Colors.background) // Adaptive background
                 .navigationTitle("") // Hidden title as requested
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(Color.black, for: .navigationBar)
+                .toolbarBackground(DesignTokens.Colors.background, for: .navigationBar)
                 .toolbarBackgroundVisibility(.visible, for: .navigationBar)
                 .refreshable { await viewModel.refresh() }
                 .task { await viewModel.loadExpenses() }
-                .sheet(isPresented: $showEditSheet) {
-                    if let expense = expenseToEdit {
-                        EditExpenseSheet(expense: expense) {
-                            Task { await viewModel.refresh() }
-                        }
+                .sheet(item: $expenseToEdit) { expense in
+                    EditExpenseSheet(expense: expense) {
+                        Task { await viewModel.refresh() }
                     }
+                    .presentationDetents([.large])
+                }
+                .sheet(isPresented: $showAddExpense) {
+                    AddExpenseSheet {
+                        Task { await viewModel.refresh() }
+                    }
+                    .presentationDetents([.large])
                 }
                 .sheet(isPresented: $showFilterSheet) {
                     ExpenseFilterSheet(
@@ -46,89 +55,121 @@ struct HomeView: View {
                         }
                     )
                 }
-        }
+                .sheet(isPresented: $showVoiceSheet) {
+                    VoiceRecordingSheet(
+                        speechManager: speechManager,
+                        onComplete: { transcript in
+                            voiceCoordinator.handleTranscript(transcript, categories: UserDataManager.shared.categories)
+                        }
+                    )
+                }
+                .sheet(isPresented: $voiceCoordinator.showConfirmation) {
+                    if let expense = voiceCoordinator.pendingExpense {
+                        VoiceConfirmationSheet(
+                            expense: expense,
+                            wasFullyDetected: voiceCoordinator.wasFullyDetected,
+                            categories: UserDataManager.shared.categories,
+                            speechManager: speechManager,
+                            onConfirm: { confirmed in
+                                Task {
+                                    await voiceCoordinator.saveExpense(confirmed, viewModel: viewModel)
+                                    UserDataManager.shared.completeOnboarding() // Sync onboarding
+                                }
+                            },
+                            onCancel: {
+                                voiceCoordinator.reset()
+                            }
+                        )
+                    }
+                }
+                .onChange(of: voiceCoordinator.errorMessage) { _, newValue in
+                    if let error = newValue {
+                        FeedbackManager.shared.show(.error, title: "Error de Voz", message: error)
+                        voiceCoordinator.clearError()
+                    }
+                }
+                .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
+                    if stopped && showVoiceSheet {
+                        let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        speechManager.stopRecording()
+                        showVoiceSheet = false
+                        voiceCoordinator.handleTranscript(fullTranscript, categories: UserDataManager.shared.categories)
+                    }
+                }
     }
     
     // MARK: - Main Content
     private var mainContent: some View {
-        VStack(spacing: 0) {
-            Group {
-                switch selectedView {
-                case 0:
-                    listView
-                case 1:
-                    chartView
-                case 2:
-                    calendarView
-                default:
-                    listView
+        ZStack(alignment: .bottomTrailing) {
+            VStack(spacing: 0) {
+                Group {
+                    switch selectedView {
+                    case 0:
+                        listView
+                    case 1:
+                        chartView
+                    case 2:
+                        calendarView
+                    case 3:
+                        comparisonView
+                    default:
+                        listView
+                    }
                 }
+                .animation(.easeInOut(duration: 0.2), value: selectedView)
+                
+                // Bottom Picker (Tabs)
+                segmentedPicker
             }
-            .animation(.easeInOut(duration: 0.2), value: selectedView)
             
-            // Bottom Picker (Tabs)
-            segmentedPicker
+            // FAB Overlay (Restored "Audit-Pre" Button)
+            VoiceExpenseButton(
+                viewModel: viewModel,
+                categories: UserDataManager.shared.categories
+            )
+            .padding(.trailing, 20)
+            .padding(.bottom, 90) // Raised to clear the segmented picker
         }
     }
     
     // MARK: - Tab 1: List View
     private var listView: some View {
-        VStack(spacing: 16) {
-            // Stat Cards (3 cards)
-            HStack(spacing: 12) {
-                StatCard(
-                    title: "Total",
-                    value: filteredTotal.formattedCurrency,
-                    color: Color.clarityPrimary
+        VStack(spacing: 0) {
+            // Header Content (Cards + Search) - Fixed at top
+            VStack(spacing: DesignTokens.Spacing.sm) {
+                // Summary Cards Modernas
+                SummaryCardsView(
+                    totalExpenses: filteredTotal,
+                    expenseCount: viewModel.filteredExpenses.count,
+                    savings: savings,
+                    savingsPercentage: savings > 0
+                        ? Int((savings / (monthlyIncome > 0 ? monthlyIncome : 1)) * 100)
+                        : 0,
+                    available: savings
                 )
-                
-                StatCard(
-                    title: "Gastos",
-                    value: "\(viewModel.filteredExpenses.count)",
-                    color: .blue
-                )
-                
-                StatCard(
-                    title: "Ahorro",
-                    value: savings.formattedCurrency,
-                    color: savings >= 0 ? .green : .red
-                )
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            
-            // Search Bar
-            HStack(spacing: 10) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                
-                TextField("Buscar gastos...", text: $viewModel.searchText)
-                    .textFieldStyle(.plain)
-                
-                if !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.searchText = ""
-                        HapticManager.selection()
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
+                .padding(.horizontal, DesignTokens.Spacing.sm)
+                .padding(.top, DesignTokens.Spacing.xxs)
+
+                // Search Bar Moderna
+                SearchBarView(
+                    searchText: $viewModel.searchText,
+                    filter: $viewModel.selectedFilter,
+                    onFilterChange: {
+                        // Handled automatically by ViewModel bindings
                     }
-                }
+                )
+                .padding(.horizontal, DesignTokens.Spacing.sm)
+
+                // Active Filters
+                ActiveFilterPillsView(
+                    filter: $viewModel.selectedFilter,
+                    onFilterChange: { /* Auto-handled */ }
+                )
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.black) // Hardcoded Black
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
-            
-            // Active Filters
-            ActiveFilterPillsView(
-                filter: $viewModel.selectedFilter,
-                onFilterChange: { /* Auto-handled */ }
-            )
-            .padding(.top, 4)
-            
-            // List Content
+            .background(DesignTokens.Colors.background)
+
+            // List Content - Scrollable
             if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
                 loadingView
             } else if case .error(let error) = viewModel.state {
@@ -143,15 +184,14 @@ struct HomeView: View {
                     },
                     onExpenseEdit: { expense in
                         expenseToEdit = expense
-                        showEditSheet = true
                     },
-                    onExpenseDuplicate: { expense in
-                        Task { await viewModel.duplicateExpense(expense) }
-                    }
+                    onLoadMore: nil
                 )
             }
         }
     }
+
+
     
     // MARK: - Tab 2: Chart View
     private var chartView: some View {
@@ -160,15 +200,11 @@ struct HomeView: View {
                 if viewModel.filteredExpenses.isEmpty {
                    ContentUnavailableView("Sin datos para gráficos", systemImage: "chart.pie")
                 } else {
-                    // Donut Chart
+                    // Donut Chart - Comparativa ahora en tab VS de ExpensesView
                     DonutChartView(
                         categoryData: buildChartData(),
                         total: filteredTotal
                     )
-                    
-                    // Comparison
-                    MonthComparisonChart(expenses: viewModel.allExpenses)
-                        .padding(.horizontal)
                 }
             }
             .padding(.bottom, 80)
@@ -189,46 +225,34 @@ struct HomeView: View {
     // MARK: - Bottom Picker
     private var segmentedPicker: some View {
         HStack {
-            Color.clear.frame(width: 60, height: 1)
             Spacer()
-            
-            HStack(spacing: 0) {
+
+            HStack(spacing: 4) {
                 viewModeButton(icon: "list.bullet", index: 0)
                 viewModeButton(icon: "chart.pie.fill", index: 1)
-                viewModeButton(icon: "calendar", index: 2)
-            }
-            .background(Capsule().fill(Color.bgTertiary))
-            
-            Spacer()
-            
-            // Buttons Right
-            HStack(spacing: 4) {
-                 if viewModel.selectedFilter.hasActiveFilters || !viewModel.searchText.isEmpty {
-                    Button {
-                        viewModel.selectedFilter = ExpenseFilter()
-                        viewModel.searchText = ""
-                        HapticManager.notification(.success)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                    }
-                }
                 
-                Button {
-                    showFilterSheet = true
-                    HapticManager.selection()
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle" + (viewModel.selectedFilter.hasActiveFilters ? ".fill" : ""))
-                        .font(.system(size: 22))
-                        .foregroundStyle(viewModel.selectedFilter.hasActiveFilters ? Color.clarityPrimary : .secondary)
-                }
+
+                
+                viewModeButton(icon: "calendar", index: 2)
+                viewModeButton(icon: "arrow.left.arrow.right", index: 3) // VS Comparison
             }
-            .frame(width: 60)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(0.7))
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+            .shadow(color: .black.opacity(0.3), radius: 15, x: 0, y: 5)
+
+            Spacer()
         }
-        .padding(.horizontal, Spacing.sm)
-        .padding(.vertical, Spacing.sm)
-        .background(Color.black) // Hardcoded Black, NO material
+        .padding(.horizontal, DesignTokens.Spacing.md)
+        .padding(.vertical, DesignTokens.Spacing.sm)
+        .background(.ultraThinMaterial.opacity(0.9))
     }
     
     private func viewModeButton(icon: String, index: Int) -> some View {
@@ -236,17 +260,22 @@ struct HomeView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedView = index
             }
-            HapticManager.selection()
+            HapticManager.shared.selection()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: selectedView == index ? .semibold : .regular))
-                .foregroundStyle(selectedView == index ? Color.clarityPrimary : .secondary)
-                .frame(width: 50, height: 32)
+                .font(.system(size: 20, weight: selectedView == index ? .semibold : .medium))
+                .foregroundStyle(selectedView == index ? Color.white : Color.white.opacity(0.6))
+                .frame(width: 52, height: 40)
         }
         .background(
              Capsule()
-                 .fill(selectedView == index ? Color.clarityPrimary.opacity(0.15) : Color.clear)
+                 .fill(selectedView == index ? DesignTokens.Colors.accent : Color.white.opacity(0.1))
         )
+    }
+    
+    // MARK: - Tab 4: Comparison View (VS)
+    private var comparisonView: some View {
+        MonthComparisonView(expenses: viewModel.allExpenses)
     }
     
     // MARK: - Helpers

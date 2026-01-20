@@ -23,6 +23,7 @@ class AddExpenseViewModel {
     var isLoading = false
     var showError = false
     var errorMessage: String?
+    var wasAutoCategorized = false  // Track if category was auto-filled
     
     // MARK: - Dependencies
     private let repository = DependencyContainer.shared.expenseRepository
@@ -36,13 +37,13 @@ class AddExpenseViewModel {
     // MARK: - Methods
     func save() async {
         guard isValid, let amount = amount else { return }
-        
+
         isLoading = true
-        
+
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         let dateString = formatter.string(from: date)
-        
+
         let expense = Expense(
             amount: amount,
             name: name,
@@ -52,14 +53,17 @@ class AddExpenseViewModel {
             paymentMethod: paymentMethod.rawValue,
             notes: notes.isEmpty ? nil : notes
         )
-        
+
         do {
             _ = try await repository.addExpense(expense)
+            HapticManager.shared.expenseAdded()
+            FeedbackManager.shared.show(.success, title: "Gasto añadido", message: "\(name) guardado correctamente")
         } catch {
             errorMessage = error.localizedDescription
             showError = true
+            FeedbackManager.shared.show(.error, title: "Error al guardar", message: error.localizedDescription)
         }
-        
+
         isLoading = false
     }
     
@@ -71,5 +75,6 @@ class AddExpenseViewModel {
         date = Date()
         paymentMethod = .tarjeta
         notes = ""
+        wasAutoCategorized = false
     }
 }

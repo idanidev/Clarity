@@ -5,7 +5,7 @@ import SwiftUI
 import AuthenticationServices
 
 struct LoginView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) var authViewModel
     @State private var email = ""
     @State private var password = ""
     @State private var isLoading = false
@@ -209,5 +209,5 @@ struct LoginView: View {
 
 #Preview {
     LoginView()
-        .environmentObject(AuthViewModel())
+        .environment(AuthViewModel())
 }

@@ -205,11 +205,11 @@ struct RecurringExpenseDetailView: View {
         
         do {
             try await RecurringExpenseRepository().toggleActive(id: id, active: !expense.active)
-            HapticManager.notification(.success)
+            HapticManager.shared.notification(.success)
             onUpdate()
             dismiss()
         } catch {
-            HapticManager.notification(.error)
+            HapticManager.shared.notification(.error)
             isProcessing = false
         }
     }
@@ -229,10 +229,10 @@ struct RecurringExpenseDetailView: View {
         
         do {
             _ = try await DependencyContainer.shared.expenseRepository.addExpense(newExpense)
-            HapticManager.notification(.success)
+            HapticManager.shared.notification(.success)
             dismiss()
         } catch {
-            HapticManager.notification(.error)
+            HapticManager.shared.notification(.error)
             isProcessing = false
         }
     }
@@ -242,11 +242,11 @@ struct RecurringExpenseDetailView: View {
         
         do {
             try await RecurringExpenseRepository().delete(id: id)
-            HapticManager.notification(.success)
+            HapticManager.shared.notification(.success)
             onUpdate()
             dismiss()
         } catch {
-            HapticManager.notification(.error)
+            HapticManager.shared.notification(.error)
         }
     }
 }
@@ -428,7 +428,7 @@ struct EditRecurringExpenseSheet: View {
                 try await RecurringExpenseRepository().update(updated)
                 print("✅ Saved successfully")
                 await MainActor.run {
-                    HapticManager.notification(.success)
+                    HapticManager.shared.notification(.success)
                     onSuccess()
                     dismiss()
                 }

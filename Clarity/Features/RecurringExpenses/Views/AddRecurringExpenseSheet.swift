@@ -155,7 +155,7 @@ struct AddRecurringExpenseSheet: View {
         Task {
             do {
                 _ = try await repository.add(newExpense)
-                HapticManager.notification(.success)
+                HapticManager.shared.notification(.success)
                 onSuccess()
                 dismiss()
             } catch {

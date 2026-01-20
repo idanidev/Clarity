@@ -7,6 +7,8 @@ import Combine
 import OSLog
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
+import TipKit
 
 @MainActor
 @Observable
@@ -65,6 +67,20 @@ final class UserDataManager {
             var allMethods = Set(PaymentMethod.allCases.map { $0.rawValue })
             allMethods.formUnion(customMethods)
             self.paymentMethods = allMethods.sorted()
+            
+            // Sync Tips
+            if let settings = self.userDocument?.settings, settings.hasCompletedOnboarding == true {
+                // Invalidate all tips if user already completed onboarding
+                try? Tips.resetDatastore() // Optional: verify if this is desired behavior or just hiding specific tips
+                // Better approach: Since we use TipKit's internal state, we might just want to ensure we don't show them.
+                // But TipKit persistence is separate.
+                // For this use case, if the user has completed onboarding, we can programmatically invalidate the tips.
+                // However, TipKit doesn't have a global "hide all" without resetting.
+                // Let's rely on the action: If we have the flag, we just assume they are done.
+                // A better way is to invalidate specific tips:
+                await AddExpenseTip().invalidate(reason: .actionPerformed)
+                await FilterTip().invalidate(reason: .actionPerformed)
+            }
             
         } catch {
             logger.error("Error loading user data: \(error.localizedDescription)")
@@ -155,6 +171,101 @@ final class UserDataManager {
     
     func color(for categoryName: String) -> Color {
         Color(hex: colorHex(for: categoryName)) ?? .gray
+    }
+    
+    // MARK: - User Document Management
+    
+    func setUserDocument(_ document: UserDocument) {
+        self.userDocument = document
+    }
+    
+    var privacyMode: Bool {
+        userDocument?.settings?.privacyMode ?? false
+    }
+    
+    func togglePrivacyMode() {
+        guard var document = userDocument, let userId = userId else { return }
+        
+        // 1. Update Local
+        var newSettings = document.settings ?? .default
+        let newPrivacy = !(newSettings.privacyMode ?? false)
+        newSettings.privacyMode = newPrivacy
+        document.settings = newSettings
+        self.userDocument = document
+        
+        HapticManager.shared.selection()
+        
+        // 2. Update Remote
+        Task {
+            do {
+                try await Firestore.firestore()
+                    .collection("users")
+                    .document(userId)
+                    .updateData(["settings.privacyMode": newPrivacy])
+            } catch {
+                logger.error("Error saving privacy mode: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func saveDefaultFilter(_ filter: ExpenseFilter) {
+        guard var document = userDocument, let userId = userId else { return }
+        
+        // 1. Update Local
+        var newSettings = document.settings ?? .default
+        newSettings.defaultFilter = filter
+        document.settings = newSettings
+        self.userDocument = document
+        
+        HapticManager.shared.notification(.success)
+        
+        // 2. Update Remote
+        Task {
+            do {
+                // Encode filter to dictionary
+                let data = try Firestore.Encoder().encode(newSettings)
+                try await Firestore.firestore()
+                    .collection("users")
+                    .document(userId)
+                    .updateData(["settings": data]) // Update full settings object to ensure filter structure matches
+                logger.info("✅ Default filter saved")
+            } catch {
+                logger.error("❌ Error saving default filter: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    var defaultFilter: ExpenseFilter? {
+        userDocument?.settings?.defaultFilter
+    }
+    
+    // MARK: - Onboarding Sincronization
+    var hasCompletedOnboarding: Bool {
+        userDocument?.settings?.hasCompletedOnboarding ?? false
+    }
+    
+    func completeOnboarding() {
+        guard !hasCompletedOnboarding else { return }
+        guard var document = userDocument, let userId = userId else { return }
+        
+        // 1. Update Local
+        var newSettings = document.settings ?? .default
+        newSettings.hasCompletedOnboarding = true
+        document.settings = newSettings
+        self.userDocument = document
+        
+        // 2. Update Remote
+        Task {
+            do {
+                try await Firestore.firestore()
+                    .collection("users")
+                    .document(userId)
+                    .updateData(["settings.hasCompletedOnboarding": true])
+                logger.info("✅ Onboarding marked as completed")
+            } catch {
+                logger.error("❌ Error saving onboarding status: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

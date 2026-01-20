@@ -50,7 +50,7 @@ struct EmojiPickerView: View {
                                 ForEach(category.emojis, id: \.self) { emoji in
                                     Button {
                                         selectedEmoji = emoji
-                                        HapticManager.impact(.light)
+                                        HapticManager.shared.impact(.light)
                                         dismiss()
                                     } label: {
                                         Text(emoji)

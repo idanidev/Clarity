@@ -62,6 +62,19 @@ extension Color {
         "Otros": Color(hex: "#6B7280")!,         // Gray
     ]
     
+    // MARK: - Glassmorphism Colors
+    /// Fondos con efecto glass para tarjetas modernas
+    static let glassBackground = Color.white.opacity(0.05)
+    static let glassBackgroundLight = Color.white.opacity(0.08)
+    static let glassBackgroundHeavy = Color.white.opacity(0.12)
+    
+    /// Bordes glassmórficos
+    static let glassBorder = Color.white.opacity(0.1)
+    static let glassBorderStrong = Color.white.opacity(0.2)
+    
+    /// Overlay sutil para efectos de profundidad
+    static let glassOverlay = Color.white.opacity(0.03)
+    
     // MARK: - Gradients
     static let clarityGradient = LinearGradient(
         colors: [clarityPrimary, claritySecondary],
@@ -83,6 +96,51 @@ extension Color {
     
     static let brandGradientDiagonal = LinearGradient(
         colors: [Color(hex: "#8B5CF6")!, Color(hex: "#6366F1")!],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    // MARK: - Gradientes Vibrantes Multi-Color
+    /// Gradiente vibrante estilo SkillsMP para acentos especiales
+    static let vibrantGradient = LinearGradient(
+        colors: [
+            Color(hex: "#FF6B6B")!,  // Coral
+            Color(hex: "#4ECDC4")!,  // Turquesa
+            Color(hex: "#45B7D1")!   // Azul cielo
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    /// Gradiente sunset cálido
+    static let sunsetGradient = LinearGradient(
+        colors: [
+            Color(hex: "#FF6B9D")!,  // Rosa
+            Color(hex: "#FFA07A")!,  // Salmón
+            Color(hex: "#FFD93D")!   // Amarillo dorado
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    /// Gradiente océano fresco
+    static let oceanGradient = LinearGradient(
+        colors: [
+            Color(hex: "#667EEA")!,  // Índigo
+            Color(hex: "#764BA2")!,  // Púrpura
+            Color(hex: "#F093FB")!   // Rosa claro
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+    
+    /// Gradiente aurora boreal
+    static let auroraGradient = LinearGradient(
+        colors: [
+            Color(hex: "#00F260")!,  // Verde brillante
+            Color(hex: "#0575E6")!,  // Azul eléctrico
+            Color(hex: "#00F260")!   // Verde brillante
+        ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )

@@ -2,11 +2,12 @@
 // Add new expense form
 
 import SwiftUI
+import TipKit // Added for potential future tips in this sheet
 
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
-    @StateObject private var speechManager = SpeechRecognitionManager()
+    @State private var speechManager = SpeechRecognitionManager()
     let onSave: () -> Void
     
     var body: some View {
@@ -33,13 +34,25 @@ struct AddExpenseSheet: View {
                     TextField("¿En qué gastaste?", text: $viewModel.name)
                         .font(.clarityBody)
                         .accessibilityLabel("Descripción del gasto")
+                        .onChange(of: viewModel.name) { _, newValue in
+                            // Auto-categorize only if category empty or was auto-filled
+                            guard viewModel.category.isEmpty || viewModel.wasAutoCategorized else { return }
+                            guard newValue.count >= 3 else { return } // Wait for 3+ chars
+                            
+                            // Use ExpenseParser (same logic as voice)
+                            if let suggestion = ExpenseParser.suggestCategory(for: newValue) {
+                                viewModel.category = suggestion.category
+                                viewModel.subcategory = suggestion.subcategory
+                                viewModel.wasAutoCategorized = true
+                            }
+                        }
                     
                     // Dictate button
                     Button {
                         if speechManager.isListening {
                             speechManager.stopRecording()
                         } else {
-                            HapticManager.impact(.medium)
+                            HapticManager.shared.impact(.medium)
                             try? speechManager.startRecording()
                         }
                     } label: {
@@ -62,6 +75,10 @@ struct AddExpenseSheet: View {
                             selectedCategory: $viewModel.category,
                             selectedSubcategory: $viewModel.subcategory
                         )
+                        .onAppear {
+                            // User manually selecting = no longer auto-categorized
+                            viewModel.wasAutoCategorized = false
+                        }
                     } label: {
                         HStack {
                             Text(viewModel.category.isEmpty ? "Seleccionar" : viewModel.category)
@@ -70,6 +87,12 @@ struct AddExpenseSheet: View {
                             if let sub = viewModel.subcategory {
                                 Text(sub)
                                     .foregroundStyle(.secondary)
+                            }
+                            // Auto-fill indicator
+                            if viewModel.wasAutoCategorized && !viewModel.category.isEmpty {
+                                Image(systemName: "sparkles")
+                                    .font(.caption)
+                                    .foregroundStyle(.yellow)
                             }
                         }
                     }
@@ -117,6 +140,7 @@ struct AddExpenseSheet: View {
                     Button("Guardar") {
                         Task {
                             await viewModel.save()
+                            UserDataManager.shared.completeOnboarding()
                             onSave()
                             dismiss()
                         }

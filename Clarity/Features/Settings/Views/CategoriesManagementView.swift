@@ -58,7 +58,7 @@ struct CategoriesManagementView: View {
             AddCategoryView { newCategory in
                 Task {
                     await userDataManager.addCategory(newCategory)
-                    HapticManager.notification(.success)
+                    HapticManager.shared.notification(.success)
                 }
             }
         }
@@ -83,14 +83,14 @@ struct CategoriesManagementView: View {
         
         Task {
                 await userDataManager.deleteCategory(id: id)
-                HapticManager.notification(.success)
+                HapticManager.shared.notification(.success)
         }
         categoryToDelete = nil
     }
     
     private func moveCategories(from source: IndexSet, to destination: Int) {
         // Local reorder only for now - Firebase persist on save
-        HapticManager.impact(.light)
+        HapticManager.shared.impact(.light)
     }
 }
 

@@ -3,24 +3,25 @@
 
 import Foundation
 import SwiftUI
-import Combine
+import Observation
 
 @MainActor
-class VoiceExpenseCoordinator: ObservableObject {
+@Observable
+class VoiceExpenseCoordinator {
     // UI State
-    @Published var showRecording = false
-    @Published var showConfirmation = false
-    @Published var showSuccessToast = false
-    @Published var showError = false
+    var showRecording = false
+    var showConfirmation = false
+    var showSuccessToast = false
+    var showError = false
     
     // Data State
-    @Published var pendingExpense: Expense?
-    @Published var wasFullyDetected = false
-    @Published var isProcessing = false
+    var pendingExpense: Expense?
+    var wasFullyDetected = false
+    var isProcessing = false
     
     // Messages
-    @Published var errorMessage: String?
-    @Published var successMessage = ""
+    var errorMessage: String?
+    var successMessage = ""
     
     // Dependencies
     private var stats = VoiceStats.load()
@@ -37,7 +38,7 @@ class VoiceExpenseCoordinator: ObservableObject {
         case error(String)
     }
     
-    @Published private(set) var state: State = .idle
+    private(set) var state: State = .idle
     
     // MARK: - Computed Properties for UI
     
@@ -120,7 +121,7 @@ class VoiceExpenseCoordinator: ObservableObject {
             state = .recording
             showRecording = true
             if settings.vibration {
-                HapticManager.impact(.medium)
+                HapticManager.shared.impact(.medium)
             }
         } catch {
             errorMessage = "No se pudo iniciar la grabación: \(error.localizedDescription)"
@@ -195,7 +196,7 @@ class VoiceExpenseCoordinator: ObservableObject {
                 }
                 
                 if settings.vibration {
-                    HapticManager.notification(.success)
+                    HapticManager.shared.notification(.success)
                 }
             }
             
@@ -217,7 +218,7 @@ class VoiceExpenseCoordinator: ObservableObject {
             showError = true
             
             if settings.vibration {
-                HapticManager.notification(.error)
+                HapticManager.shared.notification(.error)
             }
             
             reset()

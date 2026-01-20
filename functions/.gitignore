@@ -1,0 +1,7 @@
+# Firebase Functions
+node_modules/
+npm-debug.log
+firebase-debug.log
+firebase-debug.*.log
+*.log
+.firebase/

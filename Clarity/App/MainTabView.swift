@@ -2,73 +2,45 @@
 // Main tab navigation with native iOS TabView and radial menu
 
 import SwiftUI
+import TipKit
 
 struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var previousTab = 0
-    @State private var showRadialMenu = false
     @State private var showManualExpense = false
     @State private var showRecurring = false
-    @State private var dragOffset: CGSize = .zero
-    @State private var selectedMenuOption: RadialMenuOption? = nil
     private var userDataManager = UserDataManager.shared
     @State private var homeViewModel = DependencyContainer.shared.makeHomeViewModel()
-    
+
+    // Centralized managers
+    @State private var coordinator = AppCoordinator()
+    @State private var feedbackManager = FeedbackManager.shared
+
     // Voice components
-    @StateObject private var speechManager = SpeechRecognitionManager()
-    @StateObject private var voiceCoordinator = VoiceExpenseCoordinator()
+    @State private var speechManager = SpeechRecognitionManager()
+    @State private var voiceCoordinator = VoiceExpenseCoordinator()
     
     init() {
-        // Configure OLED Black Tab Bar
+        // Configure Glassmorphic Tab Bar
         let appearance = UITabBarAppearance()
-        appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(red: 0, green: 0, blue: 0, alpha: 1.0) // HARDCODED PURE BLACK
-        appearance.shadowColor = UIColor.white.withAlphaComponent(0.1) // Subtle border
+        appearance.configureWithTransparentBackground()
+        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
+        appearance.backgroundColor = UIColor.black.withAlphaComponent(0.2)
         
-        // Ensure strictly black in all modes
+        // Item appearance
+        let itemAppearance = UITabBarItemAppearance()
+        itemAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.5)
+        itemAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.white.withAlphaComponent(0.5)]
+        
+        itemAppearance.selected.iconColor = UIColor(Color.clarityPrimary)
+        itemAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(Color.clarityPrimary)]
+        
+        appearance.stackedLayoutAppearance = itemAppearance
+        appearance.inlineLayoutAppearance = itemAppearance
+        appearance.compactInlineLayoutAppearance = itemAppearance
+        
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
-    }
-    
-    // Menu geometry
-    private let menuRadius: CGFloat = 80
-    private let angleThreshold: Double = 35
-    
-    // Menu options enum
-    enum RadialMenuOption: CaseIterable {
-        case manual, voice, recurring
-        
-        var icon: String {
-            switch self {
-            case .manual: "pencil.line"
-            case .voice: "mic.fill"
-            case .recurring: "arrow.triangle.2.circlepath"
-            }
-        }
-        
-        var label: String {
-            switch self {
-            case .manual: "Manual"
-            case .voice: "Voz"
-            case .recurring: "Recurrente"
-            }
-        }
-        
-        var angle: Double {
-            switch self {
-            case .manual: -45
-            case .voice: 0
-            case .recurring: 45
-            }
-        }
-        
-        var color: Color {
-            switch self {
-            case .manual: .blue
-            case .voice: .purple
-            case .recurring: .orange
-            }
-        }
     }
     
     var body: some View {
@@ -93,9 +65,11 @@ struct MainTabView: View {
                 }
                 .tag(1)
                 
+                // Espacio para botón central
                 Color.clear
                     .tabItem {
-                        Image(systemName: "mic.badge.plus")
+                        Image(systemName: "plus")
+                        Text("Añadir")
                     }
                     .tag(2)
                 
@@ -119,50 +93,8 @@ struct MainTabView: View {
             }
             .tint(Color.clarityPrimary)
             
-            // Invisible overlay on center tab for long press + drag
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Rectangle()
-                        .fill(Color.clear)
-                        .frame(width: 70, height: 50)
-                        .contentShape(Rectangle()) // Ensure hit testing works
-                        .gesture(
-                            DragGesture(minimumDistance: 15, coordinateSpace: .local)
-                                .onChanged { value in
-                                    handleCenterTabDrag(value)
-                                }
-                                .onEnded { value in
-                                    handleCenterTabDragEnd(value)
-                                }
-                        )
-                        .simultaneousGesture(
-                            LongPressGesture(minimumDuration: 0.25)
-                                .onEnded { _ in
-                                    if !showRadialMenu {
-                                        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                                            showRadialMenu = true
-                                        }
-                                        HapticManager.impact(.medium)
-                                    }
-                                }
-                        )
-                        .onTapGesture {
-                            if !showRadialMenu {
-                                HapticManager.selection()
-                                showManualExpense = true
-                            }
-                        }
-                    Spacer()
-                }
-                .padding(.bottom, 0) // Adjust if needed for safe area
-            }
             
-            // Radial Menu Overlay
-            if showRadialMenu {
-                radialMenuOverlay
-            }
+
         }
         // Sheets and alerts
         .sheet(isPresented: $voiceCoordinator.showRecording) {
@@ -189,6 +121,7 @@ struct MainTabView: View {
                                 confirmed,
                                 viewModel: homeViewModel
                             )
+                            UserDataManager.shared.completeOnboarding()
                         }
                     },
                     onCancel: {
@@ -223,6 +156,7 @@ struct MainTabView: View {
         .onChange(of: selectedTab) { oldValue, newValue in
             if newValue == 2 {
                 selectedTab = oldValue
+                showManualExpense = true
             } else {
                 previousTab = newValue
             }
@@ -242,17 +176,18 @@ struct MainTabView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .sensoryFeedback(.selection, trigger: selectedMenuOption)
+        .overlay(alignment: .top) {
+            if let message = feedbackManager.currentMessage {
+                FeedbackOverlay(message: message) {
+                    feedbackManager.dismiss()
+                }
+            }
+        }
         .task {
             await userDataManager.loadUserData()
         }
         .onOpenURL { url in
             if url.scheme == "clarity" && url.host == "add-expense" {
-                // Determine if we are in the middle of a transition or if menu is open
-                if showRadialMenu {
-                    closeMenu()
-                }
-                
                 // Parse optional input parameter
                 var inputPhrase: String?
                 if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
@@ -273,163 +208,9 @@ struct MainTabView: View {
             }
         }
     }
-    
-    // MARK: - Radial Menu Overlay
-    private var radialMenuOverlay: some View {
-        ZStack {
-            // Backdrop
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    closeMenu()
-                }
-            
-            // Menu positioned above tab bar
-            VStack {
-                Spacer()
-                
-                ZStack {
-                    // Options
-                    ForEach(RadialMenuOption.allCases, id: \.self) { option in
-                        menuOptionView(option)
-                            .offset(
-                                x: sin(option.angle * .pi / 180) * menuRadius,
-                                y: -cos(option.angle * .pi / 180) * menuRadius
-                            )
-                    }
-                    
-                    // Center indicator
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color.clarityPrimary, Color.claritySecondary],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 56, height: 56)
-                            .shadow(color: Color.clarityPrimary.opacity(0.4), radius: 8, y: 2)
-                        
-                        Image(systemName: "xmark")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(.white)
-                    }
-                    .onTapGesture {
-                        closeMenu()
-                    }
-                }
-                .padding(.bottom, 80)
-            }
-        }
-        .transition(.opacity)
-        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: showRadialMenu)
-    }
-    
-    private func menuOptionView(_ option: RadialMenuOption) -> some View {
-        Button {
-            executeOption(option)
-        } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(selectedMenuOption == option ? option.color.gradient : Color(.systemGray5).gradient)
-                        .frame(width: 56, height: 56)
-                        .shadow(
-                            color: selectedMenuOption == option ? option.color.opacity(0.5) : .black.opacity(0.1),
-                            radius: selectedMenuOption == option ? 10 : 4,
-                            y: 2
-                        )
-                    
-                    Image(systemName: option.icon)
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(selectedMenuOption == option ? .white : .primary)
-                }
-                .scaleEffect(selectedMenuOption == option ? 1.15 : 1.0)
-                
-                Text(option.label)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(selectedMenuOption == option ? .primary : .secondary)
-            }
-        }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.2), value: selectedMenuOption)
-    }
-    
-    // MARK: - Gesture Handlers
-    private func handleCenterTabDrag(_ value: DragGesture.Value) {
-        // Open menu on drag start
-        if !showRadialMenu {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                showRadialMenu = true
-            }
-            HapticManager.impact(.medium)
-        }
-        
-        dragOffset = value.translation
-        
-        // Calculate selection based on drag
-        let distance = hypot(value.translation.width, value.translation.height)
-        
-        if distance < 25 {
-            selectedMenuOption = nil
-            return
-        }
-        
-        // Y is inverted (negative = up)
-        let angle = atan2(value.translation.width, -value.translation.height) * 180 / .pi
-        
-        if abs(angle - RadialMenuOption.manual.angle) < angleThreshold {
-            selectedMenuOption = .manual
-        } else if abs(angle - RadialMenuOption.voice.angle) < angleThreshold {
-            selectedMenuOption = .voice
-        } else if abs(angle - RadialMenuOption.recurring.angle) < angleThreshold {
-            selectedMenuOption = .recurring
-        } else {
-            selectedMenuOption = nil
-        }
-    }
-    
-    private func handleCenterTabDragEnd(_ value: DragGesture.Value) {
-        if let option = selectedMenuOption {
-            executeOption(option)
-        } else {
-            // If very small movement, treat as tap (open menu only)
-            let distance = hypot(value.translation.width, value.translation.height)
-            if distance < 10 && !showRadialMenu {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) {
-                    showRadialMenu = true
-                }
-                HapticManager.impact(.medium)
-            }
-        }
-        
-        dragOffset = .zero
-    }
-    
-    private func executeOption(_ option: RadialMenuOption) {
-        HapticManager.notification(.success)
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            switch option {
-            case .manual: showManualExpense = true
-            case .voice: voiceCoordinator.handleButtonTap(speechManager: speechManager)
-            case .recurring: showRecurring = true
-            }
-            closeMenu()
-        }
-    }
-    
-    private func closeMenu() {
-        withAnimation(.spring(response: 0.3)) {
-            showRadialMenu = false
-        }
-        selectedMenuOption = nil
-        dragOffset = .zero
-    }
 }
 
 #Preview {
     MainTabView()
-        .environmentObject(AuthViewModel())
+        .environment(AuthViewModel())
 }

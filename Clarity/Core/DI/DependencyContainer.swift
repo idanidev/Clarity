@@ -9,12 +9,21 @@ final class DependencyContainer {
     
     private init() {}
     
+    // MARK: - SwiftData
+    private lazy var swiftDataService: SwiftDataService = {
+        SwiftDataService.shared
+    }()
+    
+    private lazy var swiftDataSource: SwiftDataExpenseDataSource = {
+        SwiftDataExpenseDataSource(context: swiftDataService.context)
+    }()
+    
     // MARK: - Data Sources
     private lazy var firebaseDataSource: FirebaseExpenseDataSource = {
         FirebaseExpenseDataSource()
     }()
     
-    private lazy var localDataSource: LocalExpenseDataSource = {
+    private lazy var legacyLocalDataSource: LocalExpenseDataSource = {
         LocalExpenseDataSource()
     }()
     
@@ -23,7 +32,8 @@ final class DependencyContainer {
     lazy var expenseRepository: ExpenseRepositoryProtocol = {
         ExpenseRepository(
             remote: firebaseDataSource,
-            local: localDataSource
+            swiftData: swiftDataSource,
+            legacy: legacyLocalDataSource
         )
     }()
     

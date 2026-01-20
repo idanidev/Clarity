@@ -5,7 +5,7 @@ import SwiftUI
 import Charts
 
 struct DonutChartContent: View {
-    var viewModel: DashboardViewModel
+    var viewModel: HomeViewModel // Updated
     var filter: ExpenseFilter
     
     private let defaultColors: [Color] = [
@@ -20,7 +20,7 @@ struct DonutChartContent: View {
     ]
     
     var body: some View {
-        if viewModel.isLoading {
+        if viewModel.state == .loading { // Updated
             Spacer()
             ProgressView()
                 .tint(Color.clarityPrimary)
@@ -36,15 +36,11 @@ struct DonutChartContent: View {
         } else {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Donut Chart
+                    // Donut Chart - ahora más grande sin comparativa (está en tab VS)
                     DonutChartView(
                         categoryData: buildChartData(),
                         total: filteredTotal
                     )
-                    
-                    // Month Comparison Chart
-                    MonthComparisonChart(expenses: viewModel.expenses)
-                        .padding(.horizontal)
                 }
                 .padding(.bottom, 100)
             }
@@ -52,7 +48,7 @@ struct DonutChartContent: View {
     }
     
     private var filteredExpenses: [Expense] {
-        var expenses = viewModel.expenses
+        var expenses = viewModel.allExpenses // Updated
         
         // Apply date range filter
         let dateRange = filter.dateRangeForQuery()
@@ -100,15 +96,15 @@ struct DonutChartContent: View {
 
 // MARK: - Calendar Chart Content
 struct CalendarChartContent: View {
-    var viewModel: DashboardViewModel
+    var viewModel: HomeViewModel // Updated
     
     var body: some View {
-        if viewModel.isLoading {
+        if viewModel.state == .loading { // Updated
             Spacer()
             ProgressView()
                 .tint(Color.clarityPrimary)
             Spacer()
-        } else if viewModel.expenses.isEmpty {
+        } else if viewModel.allExpenses.isEmpty { // Updated
             Spacer()
             ContentUnavailableView {
                 Label("Sin datos", systemImage: "calendar")
@@ -117,7 +113,8 @@ struct CalendarChartContent: View {
             }
             Spacer()
         } else {
-            ExpenseCalendarView(expenses: viewModel.expenses)
+            ExpenseCalendarView(expenses: viewModel.allExpenses) // Updated
         }
     }
 }
+

@@ -6,7 +6,7 @@ import FirebaseAuth
 import FirebaseFirestore
 
 struct SettingsView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
+    @Environment(AuthViewModel.self) var authViewModel
     @State private var showLogoutConfirm = false
     @AppStorage("app.theme") private var selectedTheme: String = "system"
     
@@ -56,7 +56,6 @@ struct SettingsView: View {
                         Label("Sistema", systemImage: "iphone").tag("system")
                     }
                     .onChange(of: selectedTheme) { _, newTheme in
-                        applyTheme(newTheme)
                         saveThemeToFirebase(newTheme)
                     }
                 }
@@ -77,7 +76,7 @@ struct SettingsView: View {
                     
                     Button {
                         // PDF export - complex feature for future
-                        HapticManager.notification(.warning)
+                        HapticManager.shared.notification(.warning)
                     } label: {
                         Label("Generar Informe PDF", systemImage: "doc.richtext")
                     }
@@ -122,9 +121,6 @@ struct SettingsView: View {
                 }
                 Button("Cancelar", role: .cancel) { }
             }
-            .onAppear {
-                loadThemeFromFirebase()
-            }
         }
     }
     
@@ -142,24 +138,7 @@ struct SettingsView: View {
             }
         }
     }
-    
     // MARK: - Theme Functions
-    
-    private func applyTheme(_ theme: String) {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let window = windowScene.windows.first else { return }
-        
-        UIView.transition(with: window, duration: 0.3, options: .transitionCrossDissolve) {
-            switch theme {
-            case "light":
-                window.overrideUserInterfaceStyle = .light
-            case "dark":
-                window.overrideUserInterfaceStyle = .dark
-            default:
-                window.overrideUserInterfaceStyle = .unspecified
-            }
-        }
-    }
     
     private func saveThemeToFirebase(_ theme: String) {
         guard let userId = Auth.auth().currentUser?.uid else { return }
@@ -170,21 +149,9 @@ struct SettingsView: View {
                     .collection("users")
                     .document(userId)
                     .updateData(["settings.theme": theme])
-                print("✅ Theme saved to Firebase: \(theme)")
             } catch {
                 print("❌ Error saving theme: \(error)")
             }
-        }
-    }
-    
-    private func loadThemeFromFirebase() {
-        // Load from Firebase if available, otherwise use local
-        if let userDoc = authViewModel.userDocument {
-            let userTheme = userDoc.effectiveTheme
-            selectedTheme = userTheme
-            applyTheme(userTheme)
-        } else {
-            applyTheme(selectedTheme)
         }
     }
 }
@@ -228,6 +195,6 @@ struct SubscriptionView: View {
 
 #Preview {
     SettingsView()
-        .environmentObject(AuthViewModel())
+        .environment(AuthViewModel())
 }
 

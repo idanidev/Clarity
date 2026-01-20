@@ -75,13 +75,14 @@ struct ExpenseCalendarView: View {
                     
                     // Days grid
                     LazyVGrid(columns: columns, spacing: 4) {
-                        // Empty cells for alignment
-                        ForEach(0..<firstDayOffset, id: \.self) { _ in
+                        // Empty cells for alignment - use unique stable IDs
+                        ForEach(0..<firstDayOffset, id: \.self) { index in
                             Color.clear
                                 .frame(height: 56)
+                                .id("empty-\(monthYearString)-\(index)")
                         }
                         
-                        // Day cells
+                        // Day cells - use unique stable IDs
                         ForEach(daysInMonth, id: \.self) { day in
                             CalendarDayCell(
                                 day: day,
@@ -89,6 +90,7 @@ struct ExpenseCalendarView: View {
                                 isToday: isToday(day),
                                 isSelected: isSelected(day)
                             )
+                            .id("day-\(monthYearString)-\(day)")
                             .onTapGesture {
                                 selectedDate = dateFor(day: day)
                             }
@@ -107,7 +109,7 @@ struct ExpenseCalendarView: View {
             }
             .padding(.horizontal)
         }
-        .background(Color.bgPrimary)
+
     }
     
     // MARK: - Computed Properties
@@ -162,10 +164,29 @@ struct ExpenseCalendarView: View {
     }
     
     private var currentWeekData: [WeekDayData] {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        
+        // Use selected date or today
+        let referenceDate = selectedDate ?? Date()
+        let weekday = calendar.component(.weekday, from: referenceDate)
+        // Adjust: Sunday = 1, Monday = 2, etc. We want Monday as start
+        let daysFromMonday = weekday == 1 ? 6 : weekday - 2
+        guard let startOfWeek = calendar.date(byAdding: .day, value: -daysFromMonday, to: referenceDate) else {
+            return []
+        }
+        
         let weekdayShorts = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
-        return weekdayShorts.map { day in
-            // Simplified - would calculate actual amounts
-            WeekDayData(dayShort: day, amount: Double.random(in: 0...100))
+        
+        return weekdayShorts.enumerated().map { index, dayName in
+            guard let dayDate = calendar.date(byAdding: .day, value: index, to: startOfWeek) else {
+                return WeekDayData(dayShort: dayName, amount: 0)
+            }
+            let dateString = formatter.string(from: dayDate)
+            let dayTotal = expenses
+                .filter { $0.date == dateString }
+                .reduce(0) { $0 + $1.amount }
+            return WeekDayData(dayShort: dayName, amount: dayTotal)
         }
     }
     

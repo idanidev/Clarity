@@ -4,8 +4,8 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var authViewModel: AuthViewModel
-    
+    @Environment(AuthViewModel.self) var authViewModel
+
     var body: some View {
         Group {
             if authViewModel.isLoading {
@@ -22,5 +22,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .environmentObject(AuthViewModel())
+        .environment(AuthViewModel())
 }
