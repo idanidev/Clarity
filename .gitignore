@@ -1,1 +1,18 @@
-build_log*.txt
+
+# Clarity .gitignore
+functions/serviceAccountKey.json
+.DS_Store
+*.xcuserstate
+xcuserdata/
+
+# Logs and Build Artifacts
+*.log
+*.txt
+*.xcactivitylog
+build/
+DerivedData/
+*.mode1v3
+*.mode2v3
+*.moved-aside
+*.pbxuser
+*.perspectivev3

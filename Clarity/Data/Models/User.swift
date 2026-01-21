@@ -23,6 +23,7 @@ struct UserDocument: Codable {
     var aiQuotas: AIQuotas?
     var subscription: Subscription?
     var goals: Goals?
+    var savedFilters: [ExpenseFilter]?
     
     // Computed
     var isAdmin: Bool { role == "admin" }
@@ -50,6 +51,7 @@ struct UserDocument: Codable {
         case email, displayName, role, createdAt, updatedAt
         case theme, language, income
         case settings, aiQuotas, subscription, goals
+        case savedFilters
     }
     
     // MARK: - Custom Decoding
@@ -66,6 +68,7 @@ struct UserDocument: Codable {
         aiQuotas = try container.decodeIfPresent(AIQuotas.self, forKey: .aiQuotas)
         subscription = try container.decodeIfPresent(Subscription.self, forKey: .subscription)
         goals = try container.decodeIfPresent(Goals.self, forKey: .goals)
+        savedFilters = try container.decodeIfPresent([ExpenseFilter].self, forKey: .savedFilters)
         
         // Robust Date Decoding
         if let date = try? container.decodeIfPresent(Date.self, forKey: .createdAt) {
@@ -96,6 +99,7 @@ struct UserDocument: Codable {
         try container.encodeIfPresent(aiQuotas, forKey: .aiQuotas)
         try container.encodeIfPresent(subscription, forKey: .subscription)
         try container.encodeIfPresent(goals, forKey: .goals)
+        try container.encodeIfPresent(savedFilters, forKey: .savedFilters)
     }
 }
 

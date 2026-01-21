@@ -9,37 +9,40 @@ extension Color {
     static let claritySecondary = Color(hex: "#A855F7")!  // Purple
     static let clarityAccent = Color(hex: "#6366F1")!     // Indigo
     
-    // MARK: - Background Colors (Adaptive: OLED Dark vs Standard Light)
+    // MARK: - Background Colors (OLED / True Black)
     static let bgPrimary = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark ? .black : .systemBackground
+        trait.userInterfaceStyle == .dark ? .black : .systemGroupedBackground
     })
     
     static let bgSecondary = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark ? UIColor(red: 0.04, green: 0.04, blue: 0.04, alpha: 1) : .secondarySystemBackground
+        trait.userInterfaceStyle == .dark ? UIColor(red: 0.11, green: 0.11, blue: 0.118, alpha: 1) : .white // #1C1C1E equivalent aprox
     })
     
-    static let bgTertiary = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark ? UIColor(red: 0.07, green: 0.07, blue: 0.07, alpha: 1) : .tertiarySystemBackground
-    })
-    
+    // Explicit #1C1C1E for Cards in Dark Mode
     static let bgCard = Color(UIColor { trait in
-        trait.userInterfaceStyle == .dark ? UIColor(red: 0.02, green: 0.02, blue: 0.02, alpha: 1) : .secondarySystemGroupedBackground
+        trait.userInterfaceStyle == .dark ? UIColor(red: 28/255, green: 28/255, blue: 30/255, alpha: 1) : .white
     })
     
-    // Legacy aliases for compatibility
-    static let cardBackground = bgSecondary
-    static let secondaryBackground = bgTertiary
-    static let tertiaryBackground = bgCard
+    // Legacy aliases
+    static let cardBackground = bgCard
+    static let secondaryBackground = bgPrimary
+    static let tertiaryBackground = bgSecondary
     
     // MARK: - Border Colors
-    static let borderDefault = Color(hex: "#2D2D3D")!     // Subtle borders
-    static let borderActive = Color(hex: "#8B5CF6")!      // Active/selected
-    static let borderSubtle = Color(hex: "#3D3D5C")!      // Very subtle
+    static let borderDefault = Color.primary.opacity(0.1)
+    static let borderActive = Color.clarityPrimary
+    static let borderSubtle = Color.primary.opacity(0.05)
     
-    // MARK: - Text Colors
-    static let textPrimary = Color.white
-    static let textSecondary = Color.white.opacity(0.9)
-    static let textTertiary = Color.gray
+    // MARK: - Text Colors (High Contrast / Opacity Strategy)
+    // Primary: Pure Black (Light) / Pure White (Dark)
+    static let textPrimary = Color.primary
+    
+    // Secondary: Dimmed but bright in Dark Mode (White 70%), Elegant Gray in Light (Black 60%)
+    static let textSecondary = Color.primary.opacity(0.7)
+    
+    // Tertiary: Subtle details
+    static let textTertiary = Color.primary.opacity(0.4)
+    
     static let textAccent = Color(hex: "#8B5CF6")!
     
     // MARK: - Semantic Colors

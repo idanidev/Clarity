@@ -23,7 +23,7 @@ struct GetExpensesUseCase {
         return expenses
     }
     
-    func executePaginated(page: Int) async throws -> PageResult {
-        try await repository.getExpensesPaginated(page: page)
+    func executePaginated(page: Int, filter: ExpenseFilter? = nil) async throws -> PageResult {
+        try await repository.getExpensesPaginated(page: page, filter: filter)
     }
 }

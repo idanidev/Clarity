@@ -196,20 +196,20 @@ struct SubcategorySection: View {
                         .fill(categoryColor.opacity(0.5))
                         .frame(width: 2, height: 20)
                     
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    
                     Text(subcategory.name)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignTokens.Colors.textSecondary)
                     
                     Spacer()
                     
                     Text("\(subcategory.expenses.count)")
                         .font(.system(size: 12))
                         .foregroundStyle(.tertiary)
+                        
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)

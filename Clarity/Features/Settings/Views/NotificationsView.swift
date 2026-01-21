@@ -265,7 +265,9 @@ struct NotificationsView: View {
         UNUserNotificationCenter.current().add(request) { error in
             if error == nil {
                 print("✅ Test notification scheduled (3 seconds)")
-                HapticManager.shared.notification(.success)
+                DispatchQueue.main.async {
+                    HapticManager.shared.notification(.success)
+                }
             }
         }
     }

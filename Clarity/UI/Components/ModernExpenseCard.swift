@@ -11,10 +11,15 @@ struct ModernExpenseCard: View {
     var onDelete: (() -> Void)? = nil
     var onEdit: (() -> Void)? = nil
 
-
+    @Environment(\.colorScheme) var colorScheme
+    
     var body: some View {
         mainContent
             .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small))
+            .shadow(
+                color: colorScheme == .dark ? .clear : .black.opacity(0.05),
+                radius: 2, x: 0, y: 1
+            )
     }
 
     private var mainContent: some View {
@@ -30,14 +35,14 @@ struct ModernExpenseCard: View {
                 // Fila 1: Nombre + Importe
                 HStack {
                     Text(expense.name)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundStyle(DesignTokens.Colors.textPrimary)
                         .lineLimit(1)
 
                     Spacer(minLength: DesignTokens.Spacing.xs)
 
                     Text(formattedAmount)
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.system(size: 17, weight: .bold, design: .rounded))
                         .foregroundStyle(DesignTokens.Colors.textPrimary)
                 }
 
@@ -66,36 +71,27 @@ struct ModernExpenseCard: View {
                     if expense.isRecurring == true || expense.recurring == true {
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 10))
-                            Text("Recurrente")
-                                .font(.system(size: 11))
+                            .font(.system(size: 10))
                         }
                         .foregroundStyle(DesignTokens.Colors.accent)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(DesignTokens.Colors.accent.opacity(0.1))
-                        .clipShape(Capsule())
                     }
-
+                    
                     // Subcategoría si existe
                     if let sub = expense.subcategory, !sub.isEmpty {
                         Text(sub)
                             .font(.system(size: 11))
-                            .foregroundStyle(DesignTokens.Colors.textTertiary)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color(.tertiarySystemFill))
+                            .background(DesignTokens.Colors.textSecondary.opacity(0.1))
                             .clipShape(Capsule())
                     }
                 }
             }
             .padding(.horizontal, DesignTokens.Spacing.sm)
-            .padding(.vertical, 10)
+            .padding(.vertical, 8)
         }
         .background(DesignTokens.Colors.surface)
-        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small))
-        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
-        .contentShape(Rectangle())
     }
 
     

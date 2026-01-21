@@ -18,28 +18,27 @@ exports.processRecurringExpenses = functions.pubsub
   .schedule("0 9 * * *") // Every day at 9:00 AM UTC
   .timeZone("America/Los_Angeles") // Change to your timezone
   .onRun(async (context) => {
-    console.log("🔄 Starting recurring expense processing...");
+    console.log(
+      "🔄 Starting recurring expense processing (Atomic Batch Mode)...",
+    );
 
     const today = new Date();
     const currentDay = today.getDate();
-    const currentMonth = today.getMonth() + 1; // JavaScript months are 0-indexed
+    const currentMonth = today.getMonth() + 1; // 1-12
     const currentYear = today.getFullYear();
+    const todayISO = formatISODate(today); // "YYYY-MM-DD"
 
     console.log(
-      `📅 Processing for: Day ${currentDay}, Month ${currentMonth}, Year ${currentYear}`
+      `📅 Processing for: ${todayISO} (Day ${currentDay}, Month ${currentMonth})`,
     );
 
     try {
-      // Get all users
       const usersSnapshot = await db.collection("users").get();
       let totalProcessed = 0;
       let totalCreated = 0;
 
       for (const userDoc of usersSnapshot.docs) {
         const userId = userDoc.id;
-        console.log(`👤 Processing user: ${userId}`);
-
-        // Get all active recurring expenses for this user
         const recurringExpensesRef = db
           .collection("users")
           .doc(userId)
@@ -49,83 +48,81 @@ exports.processRecurringExpenses = functions.pubsub
           .where("active", "==", true)
           .get();
 
-        if (activeExpenses.empty) {
-          console.log(`  ℹ️  No active recurring expenses for user ${userId}`);
-          continue;
-        }
+        if (activeExpenses.empty) continue;
 
-        console.log(
-          `  📋 Found ${activeExpenses.size} active recurring expenses`
-        );
+        // Use a Batch for atomic operations (prevents duplicates if script crashes)
+        // One batch per user to avoid hitting 500 limits easily
+        let batch = db.batch();
+        let opCount = 0;
 
         for (const expenseDoc of activeExpenses.docs) {
           const expense = expenseDoc.data();
           const expenseId = expenseDoc.id;
-
           totalProcessed++;
 
-          // Check if this expense should be charged today
           if (
             shouldCreateExpenseToday(
               expense,
               currentDay,
               currentMonth,
-              currentYear
+              currentYear,
             )
           ) {
-            console.log(
-              `  ✅ Creating charge for: ${expense.name} (${expense.amount})`
-            );
+            console.log(`  ✅ Queueing charge for: ${expense.name}`);
 
-            try {
-              // Create the expense
-              const expenseRef = db
-                .collection("users")
-                .doc(userId)
-                .collection("expenses");
+            // 1. Create New Expense
+            const newExpenseRef = db
+              .collection("users")
+              .doc(userId)
+              .collection("expenses")
+              .doc(); // Auto ID
 
-              const newExpense = {
-                amount: expense.amount,
-                name: expense.name,
-                category: expense.category,
-                subcategory: expense.subcategory || null,
-                date: formatISODate(today),
-                paymentMethod: expense.paymentMethod,
-                notes: `Cargo automático (${expense.frequency || "mensual"})`,
-                isRecurring: true,
-                recurring: true,
-                recurringId: expenseId,
-                recurringFrequency: expense.frequency || "monthly",
-                createdAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              };
+            const newExpense = {
+              amount: expense.amount,
+              name: expense.name,
+              category: expense.category,
+              subcategory: expense.subcategory || null,
+              date: todayISO,
+              paymentMethod: expense.paymentMethod,
+              notes: `Cargo automático (${expense.frequency || "mensual"})`,
+              isRecurring: true,
+              recurring: true,
+              recurringId: expenseId,
+              recurringFrequency: expense.frequency || "monthly", // Default handled BUT warned in helper
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            };
 
-              await expenseRef.add(newExpense);
+            batch.set(newExpenseRef, newExpense);
 
-              // Update lastCreated timestamp on recurring expense
-              await recurringExpensesRef.doc(expenseId).update({
-                lastCreated: formatISODate(today),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              });
+            // 2. Update Source Recurring Expense (Atomic Lock)
+            const recurRef = recurringExpensesRef.doc(expenseId);
+            batch.update(recurRef, {
+              lastCreated: todayISO,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
 
-              totalCreated++;
-              console.log(
-                `  ✅ Successfully created expense for: ${expense.name}`
-              );
-            } catch (error) {
-              console.error(
-                `  ❌ Error creating expense for ${expense.name}:`,
-                error
-              );
+            opCount++;
+
+            // Safety: Commit if batch gets too big (limit is 500 ops)
+            if (opCount >= 200) {
+              await batch.commit();
+              batch = db.batch(); // Reset
+              opCount = 0;
             }
-          } else {
-            console.log(`  ⏭️  Skipping ${expense.name} - not due today`);
           }
+        }
+
+        // Commit pending operations for this user
+        if (opCount > 0) {
+          await batch.commit();
+          totalCreated += opCount;
+          console.log(`  💾 Committed ${opCount} charges for user ${userId}`);
         }
       }
 
       console.log(
-        `✅ Processing complete: ${totalProcessed} expenses checked, ${totalCreated} created`
+        `✅ Processing complete: ${totalProcessed} checked, ${totalCreated} created.`,
       );
       return { processed: totalProcessed, created: totalCreated };
     } catch (error) {
@@ -147,7 +144,7 @@ function shouldCreateExpenseToday(
   expense,
   currentDay,
   currentMonth,
-  currentYear
+  currentYear,
 ) {
   // Get frequency first (needed for checks)
   const frequency = expense.frequency || "monthly";
@@ -162,11 +159,11 @@ function shouldCreateExpenseToday(
     // Parse lastCreated as YYYY-MM-DD string (ISO format from Firestore)
     const lastCreatedStr = expense.lastCreated;
     const todayStr = formatISODate(
-      new Date(currentYear, currentMonth - 1, currentDay)
+      new Date(currentYear, currentMonth - 1, currentDay),
     );
 
     console.log(
-      `    🔍 Checking duplicate: lastCreated="${lastCreatedStr}", today="${todayStr}"`
+      `    🔍 Checking duplicate: lastCreated="${lastCreatedStr}", today="${todayStr}"`,
     );
 
     if (lastCreatedStr === todayStr) {
@@ -184,7 +181,7 @@ function shouldCreateExpenseToday(
         // If already created this month this year, skip
         if (lastYear === currentYear && lastMonth === currentMonth) {
           console.log(
-            `    ℹ️  ${frequency} expense already created this month (${lastCreatedStr}) for: ${expense.name}`
+            `    ℹ️  ${frequency} expense already created this month (${lastCreatedStr}) for: ${expense.name}`,
           );
           return false;
         }
@@ -203,7 +200,7 @@ function shouldCreateExpenseToday(
       // Quarterly: charge every 3 months starting from billingMonth
       if (!expense.billingMonth) {
         console.warn(
-          `    ⚠️  Quarterly expense ${expense.name} missing billingMonth`
+          `    ⚠️  Quarterly expense ${expense.name} missing billingMonth`,
         );
         return false;
       }
@@ -220,7 +217,7 @@ function shouldCreateExpenseToday(
       // Semestral (biannual): charge every 6 months starting from billingMonth
       if (!expense.billingMonth) {
         console.warn(
-          `    ⚠️  Semestral expense ${expense.name} missing billingMonth`
+          `    ⚠️  Semestral expense ${expense.name} missing billingMonth`,
         );
         return false;
       }
@@ -236,7 +233,7 @@ function shouldCreateExpenseToday(
       // Yearly: charge once per year in the specified month
       if (!expense.billingMonth) {
         console.warn(
-          `    ⚠️  Yearly expense ${expense.name} missing billingMonth`
+          `    ⚠️  Yearly expense ${expense.name} missing billingMonth`,
         );
         return false;
       }
@@ -244,7 +241,7 @@ function shouldCreateExpenseToday(
 
     default:
       console.warn(
-        `    ⚠️  Unknown frequency: ${frequency} for ${expense.name}`
+        `    ⚠️  Unknown frequency: ${frequency} for ${expense.name}`,
       );
       return false;
   }
@@ -273,7 +270,7 @@ exports.processRecurringExpensesManual = functions.https.onCall(
     if (!context.auth) {
       throw new functions.https.HttpsError(
         "unauthenticated",
-        "Must be authenticated to trigger manual processing"
+        "Must be authenticated to trigger manual processing",
       );
     }
 
@@ -282,5 +279,5 @@ exports.processRecurringExpensesManual = functions.https.onCall(
     // Call the same processing logic
     const result = await exports.processRecurringExpenses.run();
     return result;
-  }
+  },
 );

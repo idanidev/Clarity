@@ -58,16 +58,47 @@ final class HomeViewModel {
     
     var calculatedSavings: Double {
         let periodExpenses = dateFilteredExpenses.reduce(0) { $0 + $1.amount }
-        return income - periodExpenses
+        
+        // Calculate duration in months to adjust income
+        let (startStr, endStr) = selectedFilter.dateRangeForQuery()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        
+        guard let start = formatter.date(from: startStr),
+              let end = formatter.date(from: endStr) else {
+            return income - periodExpenses
+        }
+        
+        // Calculate exact days
+        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
+        
+        // Logic:
+        // - "This Month" / "Last Month" (approx 28-31 days) -> 1x Income
+        // - "Today" / "Yesterday" (1 day) -> 1x Income (Budget view mostly)
+        // - "Last 3 Months" (90 days) -> 3x Income
+        
+        // Threshold: If duration is significantly more than a standard month (e.g. > 45 days), scale it.
+        // Otherwise, assume it's a monthly view or sub-monthly view where we want to compare against full Monthly Budget.
+        let finalIncome: Double
+        if days > 45 {
+             let months = Double(days) / 30.44 // Average days in month
+             finalIncome = income * months
+        } else {
+             finalIncome = income
+        }
+        
+        return finalIncome - periodExpenses
     }
     
     // Internal
     private let getExpensesUseCase: GetExpensesUseCase
     private let deleteExpenseUseCase: DeleteExpenseUseCase
     private let addExpenseUseCase: AddExpenseUseCase
+    private let recurringRepository = RecurringExpenseRepository()
     
     // Exposed for View Logic (loading check)
     var allExpenses: [Expense] = []
+    var allRecurringRules: [RecurringExpense] = [] // Keep them for reference
     
     // Pagination
     var currentPage = 0
@@ -83,8 +114,11 @@ final class HomeViewModel {
         self.deleteExpenseUseCase = deleteExpenseUseCase
         self.addExpenseUseCase = addExpenseUseCase
         
-        // Load income
+        // Load income and default filter
         self.income = UserDataManager.shared.userDocument?.income ?? 0
+        if let savedDefault = UserDataManager.shared.defaultFilter {
+            self.selectedFilter = savedDefault
+        }
     }
     
     // MARK: - Intents
@@ -101,23 +135,70 @@ final class HomeViewModel {
         }
     }
     
-    func loadExpenses() async {
+    // Flag to track if we've attempted to apply the default filter
+    private var hasAppliedDefaultFilter = false
+    
+    func loadExpenses(silent: Bool = false) async {
+        print("🔍 loadExpenses called (silent: \(silent))")
         // Refresh income
         self.income = UserDataManager.shared.userDocument?.income ?? 0
         
-        state = .loading
+        let hasData = UserDataManager.shared.hasLoaded
+        let defaultFilter = UserDataManager.shared.defaultFilter
+        print("👤 UserData loaded: \(hasData), Default Filter present: \(defaultFilter != nil)")
+        
+        // Try to apply default filter if not yet done and available
+        if !hasAppliedDefaultFilter, let defaultFilter = UserDataManager.shared.defaultFilter {
+            print("🏠 Apply Default Filter: \(defaultFilter.name ?? "Unnamed")")
+            self.selectedFilter = defaultFilter
+            self.hasAppliedDefaultFilter = true
+        } else if !hasAppliedDefaultFilter, UserDataManager.shared.hasLoaded {
+            // If UserData is loaded but no default filter, mark as applied to stop trying
+            print("🏠 UserData loaded but no Default Filter found. Marking as checked.")
+            self.hasAppliedDefaultFilter = true
+        } else if !hasAppliedDefaultFilter {
+            print("⏳ UserData not ready yet, skipping default filter check for now.")
+        }
+        
+        if !silent && allExpenses.isEmpty {
+            state = .loading
+        }
+        
         currentPage = 0
         hasMorePages = true
         
         do {
-            // Paginated Load (First Page)
-            let result = try await getExpensesUseCase.executePaginated(page: 0)
-            self.allExpenses = result.expenses
+
+            
+            // Fetch Expenses and Rules in parallel for Sanitization
+            // robust error handling: if rules fail, we still want expenses
+            async let expensesTask = getExpensesUseCase.executePaginated(page: 0, filter: selectedFilter)
+            
+            // Safe fetch for rules
+            var rules: [RecurringExpense] = []
+            do {
+                rules = try await recurringRepository.fetchAll()
+            } catch {
+                print("⚠️ Failed to load recurring rules: \(error)")
+            }
+            
+            let result = try await expensesTask
+            self.allRecurringRules = rules
+            
+            // Sanitize Result
+            // Logic: Deduplicate by period and remove misplaced annuals
+            let sanitized = ExpenseSanitizer.sanitize(expenses: result.expenses, rules: rules)
+            
+            self.allExpenses = sanitized
             self.hasMorePages = result.hasMore
             
+
             applyFilters()
         } catch {
-            state = .error(.dataLoadingFailed(error.localizedDescription))
+            print("❌ Error loading expenses: \(error)")
+            if !silent {
+                state = .error(.dataLoadingFailed(error.localizedDescription))
+            }
         }
     }
     
@@ -127,7 +208,7 @@ final class HomeViewModel {
         
         do {
             currentPage += 1
-            let result = try await getExpensesUseCase.executePaginated(page: currentPage)
+            let result = try await getExpensesUseCase.executePaginated(page: currentPage, filter: selectedFilter)
             
             self.allExpenses.append(contentsOf: result.expenses)
             self.hasMorePages = result.hasMore
@@ -143,23 +224,14 @@ final class HomeViewModel {
     }
     
     func refresh() async {
-        // Pull-to-refresh should try network first
-        do {
-            let expenses = try await getExpensesUseCase.execute(filter: nil, policy: .networkFirst)
-            self.allExpenses = expenses
-            applyFilters()
-        } catch {
-            // Even with networkFirst, repo falls back to cache. 
-            // If we get here, both failed or critical error.
-            state = .error(.networkError(error.localizedDescription))
-        }
+        await loadExpenses(silent: true)
     }
     
     // MARK: - Logic
     
     private func applyFilters() {
-        // 1. Deduplicate (just in case)
-        let uniqueExpenses = deduplicate(expenses: allExpenses)
+        // 1. Base is already sanitized
+        let uniqueExpenses = allExpenses
         
         // 2. Date Filter (Base for everything)
         let dateRange = selectedFilter.dateRangeForQuery()
@@ -257,7 +329,12 @@ final class HomeViewModel {
             }
         }
         
-        self.categoryGroups = Array(groups.values).sorted { $0.totalAmount > $1.totalAmount }
+        self.categoryGroups = Array(groups.values).sorted {
+            if $0.totalAmount == $1.totalAmount {
+                return $0.name < $1.name
+            }
+            return $0.totalAmount > $1.totalAmount
+        }
     }
     
     // MARK: - Helpers

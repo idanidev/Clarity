@@ -3,9 +3,6 @@
 
 import SwiftUI
 
-// MARK: - Filter Model
-// ExpenseFilter struct moved to Domain/Models/ExpenseFilter.swift
-
 // MARK: - Filter Sheet View
 struct ExpenseFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,8 +15,6 @@ struct ExpenseFilterSheet: View {
     @State private var maxAmountText: String = ""
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
-    
-    private var presetManager: FilterPresetManager { FilterPresetManager.shared }
     
     init(
         filter: Binding<ExpenseFilter>,
@@ -36,41 +31,98 @@ struct ExpenseFilterSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
-                    // Saved Presets
-                    savedPresetsSection
+                VStack(spacing: 16) {
+                    // 1. Saved Presets (Top Bar)
+                    presetsSection
                     
-                    // Date Range
-                    dateRangeSection
-                    
-                    // Amount Range
-                    amountRangeSection
-                    
-                    // Categories
-                    if !availableCategories.isEmpty {
-                        categoriesSection
+                    // 2. Main Criteria (Date & Amount)
+                    VStack(spacing: 0) {
+                        sectionHeader("Cuándo y Cuánto", icon: "calendar.badge.clock")
+                            .padding()
+                        
+                        Divider()
+                        
+                        VStack(spacing: 20) {
+                            dateRangeSelector
+                            amountRangeSelector
+                        }
+                        .padding()
                     }
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     
-                    // Payment Methods
-                    paymentMethodsSection
+                    // 3. Details (Category & Payment)
+                    VStack(spacing: 0) {
+                        sectionHeader("Detalles", icon: "tag.fill")
+                            .padding()
+                        
+                        Divider()
+                        
+                        VStack(spacing: 20) {
+                            if !availableCategories.isEmpty {
+                                categorySelector
+                            }
+                            paymentMethodSelector
+                        }
+                        .padding()
+                    }
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     
-                    // Sort Options
-                    sortSection
+                    // 4. Options & Sort (Compact)
+                    VStack(spacing: 0) {
+                        sectionHeader("Opciones", icon: "slider.horizontal.3")
+                            .padding()
+                        
+                        Divider()
+                        
+                        VStack(spacing: 16) {
+                            Toggle("Solo recurrentes", isOn: $filter.showOnlyRecurring)
+                                .tint(Color.clarityPrimary)
+                            
+                            Divider()
+                            
+                            HStack {
+                                Text("Ordenar por")
+                                Spacer()
+                                Menu {
+                                    ForEach(ExpenseFilter.SortOption.allCases, id: \.self) { option in
+                                        Button(option.rawValue) {
+                                            filter.sortBy = option
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text(filter.sortBy.rawValue)
+                                            .foregroundStyle(Color.clarityPrimary)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                            .font(.caption)
+                                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+                                    }
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     
-                    // Additional Options
-                    additionalOptionsSection
-                    
-                    // Clear All Button
+                    // Clear All (Text Link)
                     if filter.hasActiveFilters {
-                        clearAllButton
+                        Button("Limpiar todos los filtros") {
+                            resetFilters()
+                            HapticManager.shared.notification(.warning)
+                        }
+                        .foregroundStyle(.red)
+                        .font(.subheadline)
+                        .padding(.top, 8)
                     }
+                    
+                    Spacer(minLength: 40)
                 }
                 .padding()
             }
             .background(Color(.systemGroupedBackground))
-            .safeAreaInset(edge: .bottom) {
-                quickActionsSection
-            }
             .navigationTitle("Filtros")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -80,359 +132,206 @@ struct ExpenseFilterSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Aplicar") { applyFilters() }
                         .fontWeight(.semibold)
+                        .foregroundStyle(Color.clarityPrimary)
                 }
             }
-            .alert("Guardar Preset", isPresented: $showSavePresetAlert) {
-                TextField("Nombre del preset", text: $newPresetName)
+            .alert("Guardar Filtro", isPresented: $showSavePresetAlert) {
+                TextField("Nombre del filtro", text: $newPresetName)
                 Button("Cancelar", role: .cancel) { newPresetName = "" }
                 Button("Guardar") {
                     saveCurrentAsPreset()
                 }
             } message: {
-                Text("Dale un nombre a este filtro para acceder rápidamente")
+                Text("Guarda esta configuración para usarla más tarde.")
+            }
+            .task {
+                // Ensure data is fresh
+                await UserDataManager.shared.loadUserData()
+            }
+            .onAppear {
+                // Initialize text fields
+                if let min = filter.minAmount { minAmountText = String(Int(min)) }
+                if let max = filter.maxAmount { maxAmountText = String(Int(max)) }
             }
         }
     }
     
-    // MARK: - Quick Actions
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "Acciones Rápidas", icon: "bolt.fill")
-            
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                quickActionChip(
-                    title: "Este mes",
-                    icon: "calendar",
-                    isActive: filter.dateRange == .thisMonth,
-                    action: { 
-                        filter.dateRange = .thisMonth
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Mes pasado",
-                    icon: "calendar.badge.clock",
-                    isActive: filter.dateRange == .lastMonth,
-                    action: { 
-                        filter.dateRange = .lastMonth
-                        applyFilters()
-                    }
-                )
-                
-                quickActionChip(
-                    title: "Limpiar filtros",
-                    icon: "xmark.circle.fill",
-                    isActive: false,
-                    isDestructive: true,
-                    action: { 
-                        resetFilters()
-                        applyFilters()
-                        HapticManager.shared.notification(.success)
-                    }
-                )
-            }
-            
-            Divider()
-            
-            saveAsDefaultButton
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .shadow(color: .black.opacity(0.1), radius: 5, y: -5)
-    }
+    // MARK: - Sections
     
-    @State private var didSaveDefault = false
-    
-    private var saveAsDefaultButton: some View {
-        Button {
-            UserDataManager.shared.saveDefaultFilter(filter)
-            withAnimation(.bouncy) {
-                didSaveDefault = true
-            }
-            HapticManager.shared.notification(.success)
+    private var presetsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader("Mis Filtros", icon: "bookmark.fill")
+                .padding()
             
-            // Reset after 2 seconds
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                withAnimation {
-                    didSaveDefault = false
-                }
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: didSaveDefault ? "checkmark.circle.fill" : "star.fill")
-                    .foregroundStyle(didSaveDefault ? .green : Color.clarityPrimary)
-                Text(didSaveDefault ? "¡Guardado como predeterminado!" : "Guardar como filtro por defecto")
-                    .fontWeight(.medium)
-            }
-            .font(.subheadline)
-            .foregroundStyle(didSaveDefault ? .green : Color.clarityPrimary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(didSaveDefault ? Color.green.opacity(0.15) : Color.clarityPrimary.opacity(0.1))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(didSaveDefault ? Color.green.opacity(0.3) : Color.clarityPrimary.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .disabled(didSaveDefault)
-    }
-    
-    // MARK: - Date Range Section
-    private var dateRangeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "📅 Período", icon: "calendar")
-            
-            // Popular options as chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    ForEach([ExpenseFilter.DateRange.today, .yesterday, .thisWeek, .thisMonth, .lastMonth, .last3Months], id: \.self) { range in
-                        dateChip(range)
-                    }
-                }
-            }
-            
-            // All options dropdown
-            DisclosureGroup("Más opciones de fecha") {
-                VStack(spacing: 0) {
-                    ForEach(ExpenseFilter.DateRange.allCases, id: \.self) { range in
+                    // Save Button (Always visible if active filters)
+                    if filter.hasActiveFilters {
                         Button {
-                            filter.dateRange = range
+                            showSavePresetAlert = true
                             HapticManager.shared.selection()
                         } label: {
-                            HStack {
-                                Text(range.rawValue)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if filter.dateRange == range {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color.clarityPrimary)
-                                }
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus")
+                                Text("Guardar nuevo")
                             }
-                            .padding(.vertical, 10)
-                        }
-                        
-                        if range != ExpenseFilter.DateRange.allCases.last {
-                            Divider()
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.clarityPrimary.opacity(0.1))
+                            .foregroundStyle(Color.clarityPrimary)
+                            .clipShape(Capsule())
                         }
                     }
-                }
-                .padding(.top, 8)
-            }
-            .tint(.secondary)
-            
-            // Custom date pickers
-            if filter.dateRange == .custom {
-                VStack(spacing: 12) {
-                    DatePicker("Desde", selection: $filter.customStartDate, displayedComponents: .date)
-                        .tint(Color.clarityPrimary)
-                    DatePicker("Hasta", selection: $filter.customEndDate, displayedComponents: .date)
-                        .tint(Color.clarityPrimary)
-                }
-                .padding(.top, 8)
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-    
-    // MARK: - Amount Range Section
-    private var amountRangeSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "💰 Rango de Importe", icon: "eurosign.circle.fill")
-            
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Mínimo")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                     
-                    HStack {
-                        TextField("0", text: $minAmountText)
-                            .keyboardType(.decimalPad)
-                            .onChange(of: minAmountText) { _, newValue in
-                                filter.minAmount = Double(newValue)
-                            }
-                        Text("€")
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(12)
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Máximo")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    let saved = UserDataManager.shared.savedFilters
                     
-                    HStack {
-                        TextField("∞", text: $maxAmountText)
-                            .keyboardType(.decimalPad)
-                            .onChange(of: maxAmountText) { _, newValue in
-                                filter.maxAmount = Double(newValue)
-                            }
-                        Text("€")
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(12)
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                }
-            }
-            
-            // Preset buttons
-            HStack(spacing: 8) {
-                presetAmountButton("<10€", min: nil, max: 10)
-                presetAmountButton("10-50€", min: 10, max: 50)
-                presetAmountButton("50-100€", min: 50, max: 100)
-                presetAmountButton(">100€", min: 100, max: nil)
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-    
-    // MARK: - Categories Section
-    private var categoriesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                sectionHeader(title: "📁 Categorías", icon: "folder.fill")
-                Spacer()
-                Button(filter.selectedCategories.isEmpty ? "Todas" : "Ninguna") {
-                    if filter.selectedCategories.isEmpty {
-                        filter.selectedCategories = Set(availableCategories)
+                    if saved.isEmpty {
+                        // Empty State - Always show if no saved filters
+                        HStack {
+                            Text("No hay filtros guardados")
+                                .font(.caption)
+                                .foregroundStyle(DesignTokens.Colors.textSecondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 4)
                     } else {
-                        filter.selectedCategories.removeAll()
+                        ForEach(saved) { preset in
+                            presetChip(preset)
+                        }
                     }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 12)
+            
+            Divider()
+                .padding(.horizontal)
+        }
+        .background(Color(.secondarySystemGroupedBackground)) // Visual separation like other cards
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+    }
+    
+    private var dateRangeSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Período")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach([ExpenseFilter.DateRange.thisMonth, .lastMonth, .thisYear, .allTime], id: \.self) { range in
+                        dateChip(range)
+                    }
+                    // Custom trigger
+                    Button {
+                        filter.dateRange = .custom
+                    } label: {
+                        Text("Custom")
+                            .font(.subheadline)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(filter.dateRange == .custom ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
+                            .foregroundStyle(filter.dateRange == .custom ? .white : .primary)
+                            .clipShape(Capsule())
+                    }
+                }
+            }
+            
+            if filter.dateRange == .custom {
+                HStack {
+                    DatePicker("", selection: $filter.customStartDate, displayedComponents: .date)
+                    Text("-")
+                    DatePicker("", selection: $filter.customEndDate, displayedComponents: .date)
+                }
+                .labelsHidden()
+            }
+        }
+    }
+    
+    private var amountRangeSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Rango de Importe")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            
+            HStack {
+                TextField("Min", text: $minAmountText)
+                    .keyboardType(.numberPad)
+                    .padding(8)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: minAmountText) { _, val in filter.minAmount = Double(val) }
+                
+                Text("-")
+                
+                TextField("Max", text: $maxAmountText)
+                    .keyboardType(.numberPad)
+                    .padding(8)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .onChange(of: maxAmountText) { _, val in filter.maxAmount = Double(val) }
+            }
+        }
+    }
+    
+    private var categorySelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Categorías")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(filter.selectedCategories.count == availableCategories.count ? "Ninguna" : "Todas") {
                     HapticManager.shared.selection()
+                    if filter.selectedCategories.count == availableCategories.count {
+                        filter.selectedCategories.removeAll()
+                    } else {
+                        filter.selectedCategories = Set(availableCategories)
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(Color.clarityPrimary)
             }
             
+            // Sort categories to prevent jumping
+            let sortedCategories = availableCategories.sorted()
+            
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 8) {
-                ForEach(availableCategories, id: \.self) { category in
+                ForEach(sortedCategories, id: \.self) { category in
                     categoryChip(category)
                 }
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
     
-    // MARK: - Payment Methods Section
-    private var paymentMethodsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "💳 Método de Pago", icon: "creditcard.fill")
+    private var paymentMethodSelector: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Métodos de Pago")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             
-            HStack(spacing: 8) {
-                ForEach(availablePaymentMethods, id: \.self) { method in
-                    paymentMethodChip(method)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(availablePaymentMethods, id: \.self) { method in
+                        paymentMethodChip(method)
+                    }
                 }
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
     
-    // MARK: - Sort Section
-    private var sortSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "↕️ Ordenar por", icon: "arrow.up.arrow.down")
-            
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                ForEach(ExpenseFilter.SortOption.allCases, id: \.self) { option in
-                    sortChip(option)
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
+    // MARK: - Components
     
-    // MARK: - Additional Options Section
-    private var additionalOptionsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "⚙️ Opciones", icon: "gearshape.fill")
-            
-            Toggle(isOn: $filter.showOnlyRecurring) {
-                HStack {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .foregroundStyle(Color.clarityPrimary)
-                    Text("Solo gastos recurrentes")
-                }
-            }
-            .tint(Color.clarityPrimary)
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-    }
-    
-    // MARK: - Clear All Button
-    private var clearAllButton: some View {
-        Button {
-            resetFilters()
-            HapticManager.shared.notification(.warning)
-        } label: {
-            HStack {
-                Image(systemName: "trash.fill")
-                Text("Limpiar todos los filtros")
-            }
-            .font(.headline)
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.red.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-    }
-    
-    // MARK: - Helper Views
-    
-    private func sectionHeader(title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
+    private func sectionHeader(_ title: String, icon: String) -> some View {
+        HStack {
             Image(systemName: icon)
                 .foregroundStyle(Color.clarityPrimary)
             Text(title)
                 .font(.headline)
-        }
-    }
-    
-    private func quickActionChip(title: String, icon: String, isActive: Bool, isDestructive: Bool = false, action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-            HapticManager.shared.selection()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 14))
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(
-                isActive ? Color.clarityPrimary :
-                isDestructive ? Color.red.opacity(0.15) :
-                Color(.tertiarySystemGroupedBackground)
-            )
-            .foregroundStyle(
-                isActive ? .white :
-                isDestructive ? .red :
-                .primary
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            Spacer()
         }
     }
     
@@ -442,9 +341,9 @@ struct ExpenseFilterSheet: View {
             HapticManager.shared.selection()
         } label: {
             Text(range.rawValue)
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(filter.dateRange == range ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
                 .foregroundStyle(filter.dateRange == range ? .white : .primary)
                 .clipShape(Capsule())
@@ -453,20 +352,16 @@ struct ExpenseFilterSheet: View {
     
     private func categoryChip(_ category: String) -> some View {
         let isSelected = filter.selectedCategories.contains(category)
-        
         return Button {
-            if isSelected {
-                filter.selectedCategories.remove(category)
-            } else {
-                filter.selectedCategories.insert(category)
-            }
+            if isSelected { filter.selectedCategories.remove(category) }
+            else { filter.selectedCategories.insert(category) }
             HapticManager.shared.selection()
         } label: {
             Text(category)
-                .font(.subheadline)
+                .font(.caption)
                 .lineLimit(1)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
                 .background(isSelected ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())
@@ -475,86 +370,75 @@ struct ExpenseFilterSheet: View {
     
     private func paymentMethodChip(_ method: String) -> some View {
         let isSelected = filter.selectedPaymentMethods.contains(method)
-        let icon = paymentMethodIcon(method)
-        
         return Button {
-            if isSelected {
-                filter.selectedPaymentMethods.remove(method)
-            } else {
-                filter.selectedPaymentMethods.insert(method)
-            }
+            if isSelected { filter.selectedPaymentMethods.remove(method) }
+            else { filter.selectedPaymentMethods.insert(method) }
             HapticManager.shared.selection()
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                Text(method)
-                    .font(.caption)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(isSelected ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-    }
-    
-    private func paymentMethodIcon(_ method: String) -> String {
-        switch method {
-        case "Tarjeta": return "creditcard.fill"
-        case "Efectivo": return "banknote.fill"
-        case "Bizum": return "iphone.gen3"
-        case "Transferencia": return "arrow.left.arrow.right"
-        default: return "questionmark.circle"
-        }
-    }
-    
-    private func sortChip(_ option: ExpenseFilter.SortOption) -> some View {
-        Button {
-            filter.sortBy = option
-            HapticManager.shared.selection()
-        } label: {
-            HStack {
-                Text(option.rawValue)
-                    .font(.subheadline)
-                Spacer()
-                if filter.sortBy == option {
-                    Image(systemName: "checkmark")
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(filter.sortBy == option ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-            .foregroundStyle(filter.sortBy == option ? .white : .primary)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-        }
-    }
-    
-    private func presetAmountButton(_ title: String, min: Double?, max: Double?) -> some View {
-        let isActive = filter.minAmount == min && filter.maxAmount == max
-        
-        return Button {
-            filter.minAmount = min
-            filter.maxAmount = max
-            minAmountText = min.map { String(Int($0)) } ?? ""
-            maxAmountText = max.map { String(Int($0)) } ?? ""
-            HapticManager.shared.selection()
-        } label: {
-            Text(title)
-                .font(.caption.weight(.medium))
+            Text(method)
+                .font(.caption)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(isActive ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-                .foregroundStyle(isActive ? .white : .primary)
+                .background(isSelected ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
+                .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())
         }
     }
     
-    // MARK: - Actions
+    private func presetChip(_ preset: ExpenseFilter) -> some View {
+        let isSavedDefault = UserDataManager.shared.defaultFilter?.id == preset.id
+        // We compare everything EXCEPT the ID to check if it's "logically" the same filter,
+        // or just rely on full equality if IDs are consistent.
+        // Since `filter = preset` copies the ID, full equality works.
+        let isActive = filter == preset
+        
+        return Button {
+            filter = preset
+            HapticManager.shared.selection()
+            onApply()
+            dismiss()
+        } label: {
+            HStack(spacing: 4) {
+                Text(preset.name ?? "Filtro")
+                if isSavedDefault {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.yellow)
+                }
+            }
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isActive ? Color.clarityPrimary.opacity(0.15) : Color(.tertiarySystemGroupedBackground))
+            .foregroundStyle(isActive ? Color.clarityPrimary : .primary)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isActive ? Color.clarityPrimary : Color.clear, lineWidth: 1)
+            )
+        }
+        .contextMenu {
+            Button {
+                Task {
+                    UserDataManager.shared.saveDefaultFilter(preset)
+                    await MainActor.run { HapticManager.shared.notification(.success) }
+                }
+            } label: {
+                Label("Marcar como predeterminado", systemImage: "star")
+            }
+            
+            Button(role: .destructive) {
+                Task { await UserDataManager.shared.deleteFilter(preset) }
+            } label: {
+                Label("Eliminar", systemImage: "trash")
+            }
+        }
+    }
+    
+    // MARK: - Logic
     
     private func applyFilters() {
         onApply()
-        HapticManager.shared.notification(.success)
         dismiss()
     }
     
@@ -562,99 +446,24 @@ struct ExpenseFilterSheet: View {
         filter = ExpenseFilter()
         minAmountText = ""
         maxAmountText = ""
-        // Not applying automatically on reset to allow user to review
-    }
-    
-    // MARK: - Saved Presets Section
-    private var savedPresetsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                sectionHeader(title: "Presets Guardados", icon: "star.fill")
-                Spacer()
-                // Save current filter as preset
-                if filter.hasActiveFilters {
-                    Button {
-                        showSavePresetAlert = true
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Guardar")
-                        }
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.clarityPrimary)
-                    }
-                }
-            }
-            
-            if presetManager.presets.isEmpty {
-                Text("No tienes presets guardados")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-                    .padding(.vertical, 8)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(presetManager.presets) { preset in
-                            presetChip(preset)
-                        }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-    
-    private func presetChip(_ preset: FilterPreset) -> some View {
-        Button {
-            filter = preset.filter
-            HapticManager.shared.selection()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: preset.icon)
-                    .font(.system(size: 12))
-                Text(preset.name)
-                    .font(.system(size: 13, weight: .medium))
-            }
-            .foregroundStyle(preset.colorValue)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(preset.colorValue.opacity(0.15))
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .strokeBorder(preset.colorValue.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .contextMenu {
-            Button(role: .destructive) {
-                presetManager.deletePreset(preset)
-            } label: {
-                Label("Eliminar", systemImage: "trash")
-            }
-        }
     }
     
     private func saveCurrentAsPreset() {
         guard !newPresetName.isEmpty else { return }
-        let preset = FilterPreset(
-            name: newPresetName,
-            filter: filter
-        )
-        presetManager.savePreset(preset)
-        newPresetName = ""
-        HapticManager.shared.notification(.success)
+        Task {
+            await UserDataManager.shared.saveFilter(filter, name: newPresetName)
+            await MainActor.run {
+                newPresetName = ""
+                HapticManager.shared.notification(.success)
+            }
+        }
     }
 }
 
-// MARK: - Alias for backwards compatibility
-typealias FilterSheet = ExpenseFilterSheet
-
+// MARK: - Preview
 #Preview {
     ExpenseFilterSheet(
         filter: .constant(ExpenseFilter()),
-        availableCategories: ["Alimentación 🥗", "Ocio 🍻", "Compras 🛒", "Transporte 🚗", "Suscripciones 📱"]
+        availableCategories: ["Comida 🍔", "Transporte 🚌", "Casa 🏠"]
     ) {}
-    .preferredColorScheme(.dark)
 }

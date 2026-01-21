@@ -28,7 +28,7 @@ protocol ExpenseRepositoryProtocol: Sendable {
     func updateExpense(_ expense: Expense) async throws
     
     // Pagination
-    func getExpensesPaginated(page: Int) async throws -> PageResult
+    func getExpensesPaginated(page: Int, filter: ExpenseFilter?) async throws -> PageResult
 }
 
 // Helper for Domain Pagination
@@ -36,8 +36,5 @@ struct PageResult: Sendable {
     let expenses: [Expense]
     let hasMore: Bool
     
-    init(expenses: [Expense], hasMore: Bool) {
-        self.expenses = expenses
-        self.hasMore = hasMore
-    }
+    // Default memberwise init is sufficient and prevents isolation issues
 }

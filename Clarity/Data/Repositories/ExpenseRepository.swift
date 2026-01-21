@@ -52,7 +52,7 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     
     func getExpenses(policy: CachePolicy) async throws -> [Expense] {
         switch policy {
-        case .cacheFirst(let maxAge):
+        case .cacheFirst(_):
             // Check SwiftData
             let cached = try swiftDataSource.fetchExpenses()
             
@@ -96,20 +96,23 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     
     // MARK: - Paginated Fetch
     
-    func getExpensesPaginated(page: Int) async throws -> PageResult {
+    func getExpensesPaginated(page: Int, filter: ExpenseFilter?) async throws -> PageResult {
+        // HYBRID APPROACH: If page query, we try to fetch ALL to satisfy user request "pedir todo"
+        // But we keep the signature.
+        // Actually, let's use the new getExpenses(filter:) logic for "page 0" and return all.
+        // Infinite scroll will just receive empty on page 1.
+        
         if page == 0 {
-            let result = try await remoteDataSource.getFirstPage()
-            if !result.expenses.isEmpty {
-                try await saveToLocal(result.expenses)
+            let expenses = try await remoteDataSource.getExpenses(filter: filter)
+            
+            if !expenses.isEmpty {
+                // Bulk save to local cache (might be heavy if >1000, but simplest path)
+                Task { try? await saveToLocal(expenses) }
             }
-            return result
+            
+            return PageResult(expenses: expenses, hasMore: false) // No more pages, we fetched all.
         } else {
-            let result = try await remoteDataSource.getNextPage()
-            if !result.expenses.isEmpty {
-                // Append to local
-                try await saveToLocal(result.expenses)
-            }
-            return result
+            return PageResult(expenses: [], hasMore: false)
         }
     }
     

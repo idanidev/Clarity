@@ -14,7 +14,7 @@ struct HomeView: View {
     @State private var showFilterSheet = false
     
     // Voice & FAB
-    @State private var showVoiceSheet = false
+    // showVoiceSheet removed
     @State private var showAddExpense = false // New state for manual entry
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
     @State private var speechManager = SpeechRecognitionManager()
@@ -49,20 +49,15 @@ struct HomeView: View {
                 .sheet(isPresented: $showFilterSheet) {
                     ExpenseFilterSheet(
                         filter: $viewModel.selectedFilter,
-                        availableCategories: Array(Set(viewModel.allExpenses.map { $0.category })),
+                        availableCategories: UserDataManager.shared.categoryNames,
                         onApply: {
-                            // Filter is bound to ViewModel, changes auto-trigger
+                            // Trigger reload to fetch data if date range changed
+                            Task { await viewModel.loadExpenses() }
                         }
                     )
                 }
-                .sheet(isPresented: $showVoiceSheet) {
-                    VoiceRecordingSheet(
-                        speechManager: speechManager,
-                        onComplete: { transcript in
-                            voiceCoordinator.handleTranscript(transcript, categories: UserDataManager.shared.categories)
-                        }
-                    )
-                }
+                // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
+
                 .sheet(isPresented: $voiceCoordinator.showConfirmation) {
                     if let expense = voiceCoordinator.pendingExpense {
                         VoiceConfirmationSheet(
@@ -88,49 +83,63 @@ struct HomeView: View {
                         voiceCoordinator.clearError()
                     }
                 }
-                .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
-                    if stopped && showVoiceSheet {
-                        let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
-                        speechManager.stopRecording()
-                        showVoiceSheet = false
-                        voiceCoordinator.handleTranscript(fullTranscript, categories: UserDataManager.shared.categories)
-                    }
-                }
+                // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
     }
     
     // MARK: - Main Content
     private var mainContent: some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: 0) {
-                Group {
-                    switch selectedView {
-                    case 0:
-                        listView
-                    case 1:
-                        chartView
-                    case 2:
-                        calendarView
-                    case 3:
-                        comparisonView
-                    default:
-                        listView
-                    }
+        ZStack(alignment: .bottom) {
+            // Views (List, Chart, etc.)
+            Group {
+                switch selectedView {
+                case 0:
+                    listView
+                case 1:
+                    chartView
+                case 2:
+                    calendarView
+                case 3:
+                    comparisonView
+                default:
+                    listView
                 }
-                .animation(.easeInOut(duration: 0.2), value: selectedView)
-                
-                // Bottom Picker (Tabs)
-                segmentedPicker
             }
+            .animation(.easeInOut(duration: 0.2), value: selectedView)
+            .padding(.bottom, 60) // Space for floating bar
             
-            // FAB Overlay (Restored "Audit-Pre" Button)
-            VoiceExpenseButton(
-                viewModel: viewModel,
-                categories: UserDataManager.shared.categories
-            )
-            .padding(.trailing, 20)
-            .padding(.bottom, 90) // Raised to clear the segmented picker
+            // Floating Bottom Bar
+            segmentedPicker
         }
+    }
+
+    // MARK: - Bottom Picker
+    private var segmentedPicker: some View {
+        ZStack(alignment: .bottom) {
+            // Centered Pills (Floating Island)
+            HStack(spacing: 0) {
+                viewModeButton(icon: "list.bullet", index: 0)
+                viewModeButton(icon: "chart.pie.fill", index: 1)
+                viewModeButton(icon: "calendar", index: 2)
+                viewModeButton(icon: "arrow.left.arrow.right", index: 3)
+            }
+            .padding(4)
+            .background(.regularMaterial)
+            .clipShape(Capsule())
+            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            .frame(maxWidth: .infinity, alignment: .center) // Force center
+            
+            // Voice Button Aligned Right
+            HStack {
+                Spacer()
+                VoiceExpenseButton(
+                    viewModel: viewModel,
+                    categories: UserDataManager.shared.categories
+                )
+                .offset(y: 4) // "mas abajo" slightly to align nicely vs capsule
+            }
+            .padding(.trailing, DesignTokens.Spacing.md)
+        }
+        .padding(.bottom, DesignTokens.Spacing.sm)
     }
     
     // MARK: - Tab 1: List View
@@ -151,21 +160,49 @@ struct HomeView: View {
                 .padding(.horizontal, DesignTokens.Spacing.sm)
                 .padding(.top, DesignTokens.Spacing.xxs)
 
-                // Search Bar Moderna
-                SearchBarView(
-                    searchText: $viewModel.searchText,
-                    filter: $viewModel.selectedFilter,
-                    onFilterChange: {
-                        // Handled automatically by ViewModel bindings
+                // Search Bar Moderna + Filter Button
+                HStack(spacing: DesignTokens.Spacing.xs) {
+                    SearchBarView(
+                        searchText: $viewModel.searchText,
+                        filter: $viewModel.selectedFilter,
+                        onFilterChange: {
+                            // Handled automatically by ViewModel bindings
+                        }
+                    )
+                    
+                    // Clear Filter Button (only if active)
+                    if viewModel.selectedFilter.hasActiveFilters {
+                        Button {
+                            viewModel.selectedFilter = ExpenseFilter() // Reset
+                            HapticManager.shared.notification(.success)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor(DesignTokens.Colors.textSecondary)
+                                .frame(width: 44, height: 44)
+                                .background(DesignTokens.Colors.surface)
+                                .clipShape(Circle())
+                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        }
+                        .transition(.scale.combined(with: .opacity))
                     }
-                )
+                    
+                    Button {
+                        showFilterSheet = true
+                        HapticManager.shared.selection()
+                    } label: {
+                        // Purple icon if active filters
+                        Image(systemName: viewModel.selectedFilter.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                            .font(.system(size: 22))
+                            .foregroundColor(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary)
+                            .frame(width: 44, height: 44)
+                            .background(DesignTokens.Colors.surface)
+                            .clipShape(Circle())
+                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    }
+                }
                 .padding(.horizontal, DesignTokens.Spacing.sm)
-
-                // Active Filters
-                ActiveFilterPillsView(
-                    filter: $viewModel.selectedFilter,
-                    onFilterChange: { /* Auto-handled */ }
-                )
+                // ActiveFilterPillsView removed as requested
             }
             .background(DesignTokens.Colors.background)
 
@@ -185,7 +222,9 @@ struct HomeView: View {
                     onExpenseEdit: { expense in
                         expenseToEdit = expense
                     },
-                    onLoadMore: nil
+                    onLoadMore: {
+                        Task { await viewModel.loadMore() }
+                    }
                 )
             }
         }
@@ -222,38 +261,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Bottom Picker
-    private var segmentedPicker: some View {
-        HStack {
-            Spacer()
-
-            HStack(spacing: 4) {
-                viewModeButton(icon: "list.bullet", index: 0)
-                viewModeButton(icon: "chart.pie.fill", index: 1)
-                
-
-                
-                viewModeButton(icon: "calendar", index: 2)
-                viewModeButton(icon: "arrow.left.arrow.right", index: 3) // VS Comparison
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-            .background(
-                Capsule()
-                    .fill(Color.black.opacity(0.7))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-            )
-            .shadow(color: .black.opacity(0.3), radius: 15, x: 0, y: 5)
-
-            Spacer()
-        }
-        .padding(.horizontal, DesignTokens.Spacing.md)
-        .padding(.vertical, DesignTokens.Spacing.sm)
-        .background(.ultraThinMaterial.opacity(0.9))
-    }
     
     private func viewModeButton(icon: String, index: Int) -> some View {
         Button {
@@ -263,13 +270,13 @@ struct HomeView: View {
             HapticManager.shared.selection()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 20, weight: selectedView == index ? .semibold : .medium))
-                .foregroundStyle(selectedView == index ? Color.white : Color.white.opacity(0.6))
-                .frame(width: 52, height: 40)
+                .font(.system(size: 18, weight: selectedView == index ? .semibold : .medium)) // Slightly smaller icon
+                .foregroundStyle(selectedView == index ? Color.white : Color.primary.opacity(0.5))
+                .frame(width: 44, height: 36) // More compact
         }
         .background(
              Capsule()
-                 .fill(selectedView == index ? DesignTokens.Colors.accent : Color.white.opacity(0.1))
+                 .fill(selectedView == index ? DesignTokens.Colors.accent : Color.clear)
         )
     }
     

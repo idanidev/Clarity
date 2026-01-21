@@ -39,8 +39,8 @@ final class ExpenseCoordinator: ExpenseActionHandling {
     // MARK: - Actions
     
     func handleVoiceInput() async {
-        voiceCoordinator.handleButtonTap(speechManager: speechManager)
-        activeSheet = .voiceRecording
+        voiceCoordinator.startRecording(speechManager: speechManager)
+        // activeSheet = .voiceRecording // Recording is now inline, no sheet needed
     }
     
     func handleManualInput() {

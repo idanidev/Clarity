@@ -97,17 +97,8 @@ struct MainTabView: View {
 
         }
         // Sheets and alerts
-        .sheet(isPresented: $voiceCoordinator.showRecording) {
-            VoiceRecordingSheet(
-                speechManager: speechManager,
-                onComplete: { transcript in
-                    voiceCoordinator.handleTranscript(
-                        transcript,
-                        categories: userDataManager.categories
-                    )
-                }
-            )
-        }
+        // Sheets and alerts
+        // VoiceRecordingSheet removed (inline UI)
         .sheet(isPresented: $voiceCoordinator.showConfirmation) {
             if let expense = voiceCoordinator.pendingExpense {
                 VoiceConfirmationSheet(
@@ -159,15 +150,6 @@ struct MainTabView: View {
                 showManualExpense = true
             } else {
                 previousTab = newValue
-            }
-        }
-        .onChange(of: speechManager.didStopDueToSilence) { _, stopped in
-            if stopped && voiceCoordinator.showRecording {
-                let fullTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                speechManager.stopRecording()
-                voiceCoordinator.showRecording = false
-                voiceCoordinator.handleTranscript(fullTranscript, categories: userDataManager.categories)
             }
         }
         .overlay(alignment: .top) {

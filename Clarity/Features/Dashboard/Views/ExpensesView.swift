@@ -113,7 +113,7 @@ struct ExpensesView: View {
                                 Text("Limpiar")
                                     .font(.system(size: 13, weight: .medium))
                             }
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(Color(.tertiarySystemFill))
@@ -149,7 +149,7 @@ struct ExpensesView: View {
                 // Botón 1: Lista (AZUL)
                 Button {
                     selectedView = 0
-                    print("🔵 Seleccionado: LISTA (0)")
+
                 } label: {
                     Image(systemName: "list.bullet")
                         .font(.system(size: 20, weight: .bold))
@@ -162,7 +162,7 @@ struct ExpensesView: View {
                 // Botón 2: Gráfico (VERDE)
                 Button {
                     selectedView = 1
-                    print("🟢 Seleccionado: GRÁFICO (1)")
+
                 } label: {
                     Image(systemName: "chart.pie.fill")
                         .font(.system(size: 20, weight: .bold))
@@ -175,7 +175,7 @@ struct ExpensesView: View {
                 // Botón 3: Calendario (NARANJA)
                 Button {
                     selectedView = 2
-                    print("🟠 Seleccionado: CALENDARIO (2)")
+
                 } label: {
                     Image(systemName: "calendar")
                         .font(.system(size: 20, weight: .bold))
@@ -188,7 +188,7 @@ struct ExpensesView: View {
                 // Botón 4: VS COMPARACIÓN (ROJO - IMPOSIBLE DE IGNORAR)
                 Button {
                     selectedView = 3
-                    print("🔴 Seleccionado: VS COMPARACIÓN (3)")
+
                 } label: {
                     Text("VS")
                         .font(.system(size: 16, weight: .black))
@@ -225,6 +225,8 @@ struct ExpensesView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color.bgPrimary)
+        .environment(\.defaultMinListHeaderHeight, 0)
+        .listSectionSpacing(0)
     }
     
     private var headerSection: some View {
@@ -239,7 +241,6 @@ struct ExpensesView: View {
                         : 0,
                     available: viewModel.calculatedSavings
                 )
-                .padding(.top, 4)
                 
                 SearchBarView(
                     searchText: $viewModel.searchText,
@@ -300,7 +301,7 @@ struct ExpensesView: View {
                 ForEach(group.subcategories) { subcategory in
                     ForEach(subcategory.expenses, id: \.stableId) { expense in
                         ModernExpenseCard(expense: expense)
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -347,7 +348,7 @@ struct ExpensesView: View {
                     Spacer()
                     Text(group.totalAmount.formattedCurrency)
                         .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(DesignTokens.Colors.textPrimary)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 4)

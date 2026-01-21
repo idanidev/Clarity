@@ -27,7 +27,7 @@ class VoiceExpenseCoordinator {
     private var stats = VoiceStats.load()
     private var settings = VoiceSettings.load()
     
-    enum State {
+    enum State: Equatable {
         case idle
         case requesting
         case recording
@@ -83,53 +83,76 @@ class VoiceExpenseCoordinator {
     
     // MARK: - Actions
     
-    func handleButtonTap(speechManager: SpeechRecognitionManager) {
-        guard !isProcessing else { return }
+    // MARK: - Actions (New Inline Logic)
+    
+    /// Starts recording immediately (called on Hold/Tap)
+    func startRecording(speechManager: SpeechRecognitionManager) {
+        guard !isProcessing, state == .idle else { return }
         
-        if speechManager.isListening {
-            // Stop recording
-            speechManager.stopRecording()
-            showRecording = false
-            state = .idle
-        } else {
-            // Start recording
-            Task {
-                await startRecording(speechManager: speechManager)
+        Task {
+            // Check permissions silently (assumed handled by onboarding, but safety check)
+            if !speechManager.checkPermissions() {
+                // Determine if we should request? For now, if no permission, show error
+                await MainActor.run {
+                    errorMessage = "Faltan permisos de micrófono"
+                    showError = true
+                }
+                return
+            }
+            
+            do {
+                try speechManager.startRecording()
+                await MainActor.run {
+                    state = .recording
+                    showRecording = true // Used for UI visibility if needed, or remove if fully inline
+                    if settings.vibration {
+                        HapticManager.shared.impact(.medium)
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    errorMessage = "Error al iniciar: \(error.localizedDescription)"
+                    showError = true
+                    state = .idle
+                }
             }
         }
     }
     
-    private func startRecording(speechManager: SpeechRecognitionManager) async {
-        isProcessing = true
-        state = .requesting
+    /// Cancels current recording (called on Slide Left)
+    func cancelRecording(speechManager: SpeechRecognitionManager) {
+        guard state == .recording || state == .processing else { return }
         
-        // Check permissions
-        if !speechManager.checkPermissions() {
-            let granted = await speechManager.requestPermissions()
-            guard granted else {
-                errorMessage = "Se necesitan permisos de micrófono y reconocimiento de voz"
-                showError = true
-                isProcessing = false
-                state = .idle
-                return
-            }
+        speechManager.stopRecording()
+        reset()
+        
+        if settings.vibration {
+            HapticManager.shared.notification(.error)
         }
+    }
+    
+    /// Stops recording and processes the result (called on Release)
+    func stopAndFinish(speechManager: SpeechRecognitionManager) {
+        guard state == .recording else { return }
         
-        // Start recording
-        do {
-            try speechManager.startRecording()
-            state = .recording
-            showRecording = true
-            if settings.vibration {
-                HapticManager.shared.impact(.medium)
-            }
-        } catch {
-            errorMessage = "No se pudo iniciar la grabación: \(error.localizedDescription)"
-            showError = true
-            state = .idle
-        }
+        // Manual stop logic
+        // Get transcript before stop (or from manager buffer)
+        // SpeechManager usually updates `transcript` property
         
-        isProcessing = false
+        // We let the manager know we want to stop
+        speechManager.stopRecording()
+        
+        // Trigger processing processing
+        let text = (speechManager.transcript + " " + speechManager.interimTranscript)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            
+        handleTranscript(text, categories: UserDataManager.shared.categories)
+    }
+
+    /// Transitions to locked state (Hands-free)
+    func lockRecording() {
+        // Just state update if needed, mostly UI handled
+        // Could ensure coordinator knows we are locked 
     }
     
     func handleTranscript(_ transcript: String, categories: [Category]) {
@@ -201,7 +224,7 @@ class VoiceExpenseCoordinator {
             }
             
             // Reload expenses
-            await viewModel.loadExpenses()
+            await viewModel.loadExpenses(silent: true)
             
             // Auto-hide toast
             try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -226,12 +249,13 @@ class VoiceExpenseCoordinator {
     }
     
     func reset() {
-        state = .idle
-        pendingExpense = nil
-        wasFullyDetected = false
-        isProcessing = false
-        showRecording = false
-        showConfirmation = false
+            // Reset
+            state = .idle
+            pendingExpense = nil
+            wasFullyDetected = false
+            isProcessing = false
+            showRecording = false
+            showConfirmation = false
     }
     
     func clearError() {

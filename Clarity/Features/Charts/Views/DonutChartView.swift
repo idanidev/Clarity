@@ -82,7 +82,7 @@ struct DonutChartView: View {
                 
                 Text(total.formattedCurrency)
                     .font(.system(size: 28, weight: .bold)) // Larger amount text
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.primary)
                     .opacity(animationProgress > 0.1 ? 1 : 0)
             }
         }

@@ -76,6 +76,24 @@ class SpeechRecognitionManager {
     
     // MARK: - Recording Control
     
+    // MARK: - Pre-warming
+    
+    /// Prepares the audio engine for instant recording (Zero Latency)
+    func prepare() {
+        Task {
+            do {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
+                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+                logger.info("🔥 Audio Engine Pre-warmed (Ready via duckOthers)")
+            } catch {
+                logger.error("❌ Pre-warming failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Recording Control
+    
     func startRecording() throws {
         logger.info("🎤 Starting recording...")
         
@@ -91,10 +109,12 @@ class SpeechRecognitionManager {
         lastError = nil
         bufferCount = 0
         
-        // Setup audio session
+        // Setup audio session (if not already prepared or needs re-activation)
+        // We ensure settings are correct here too
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP])
+            // Using duckOthers to lower music volume instead of stopping it
+            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
             logger.error("❌ Audio session setup failed: \(error.localizedDescription)")

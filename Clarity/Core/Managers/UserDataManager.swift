@@ -57,16 +57,40 @@ final class UserDataManager {
         error = nil
         
         do {
+            print("📥 UserDataManager: Loading data for \(userId)...") 
             async let fetchedCategories = service.loadCategories(userId: userId)
             async let fetchedMethods = service.loadPaymentMethods(userId: userId)
             
             let (catsResult, _) = try await fetchedCategories
             self.categories = catsResult
             
+            // Load Local Backup Filters
+            var localFilters: [ExpenseFilter] = []
+            if let data = UserDefaults.standard.data(forKey: "backup_saved_filters"),
+               let decoded = try? JSONDecoder().decode([ExpenseFilter].self, from: data) {
+                localFilters = decoded
+            }
+            
+            // Ensure filters are present
+            if let docFilters = self.userDocument?.savedFilters, !docFilters.isEmpty {
+                 // Remote prevails, but maybe sync? For now trust remote if exists.
+            } else if !localFilters.isEmpty {
+                // If remote is empty but local has data, use local and try to sync up later?
+                // Or just inject into local userDocument state
+                if self.userDocument == nil {
+                    // Create dummy doc if fully offline/empty
+                    // self.userDocument = UserDocument(...) // Complexity: UserDocument init might be big
+                }
+                var doc = self.userDocument
+                doc?.savedFilters = localFilters
+                self.userDocument = doc
+            }
+            
             let customMethods = try await fetchedMethods
             var allMethods = Set(PaymentMethod.allCases.map { $0.rawValue })
             allMethods.formUnion(customMethods)
             self.paymentMethods = allMethods.sorted()
+            print("✅ UserDataManager: Loaded \(categories.count) categories, \(savedFilters.count) filters, Default: \(defaultFilter?.name ?? "None")")
             
             // Sync Tips
             if let settings = self.userDocument?.settings, settings.hasCompletedOnboarding == true {
@@ -78,8 +102,8 @@ final class UserDataManager {
                 // However, TipKit doesn't have a global "hide all" without resetting.
                 // Let's rely on the action: If we have the flag, we just assume they are done.
                 // A better way is to invalidate specific tips:
-                await AddExpenseTip().invalidate(reason: .actionPerformed)
-                await FilterTip().invalidate(reason: .actionPerformed)
+                AddExpenseTip().invalidate(reason: .actionPerformed)
+                FilterTip().invalidate(reason: .actionPerformed)
             }
             
         } catch {
@@ -265,6 +289,83 @@ final class UserDataManager {
             } catch {
                 logger.error("❌ Error saving onboarding status: \(error.localizedDescription)")
             }
+        }
+    }
+    
+    // MARK: - Smart Filters (Filtering 2.0)
+    
+    var savedFilters: [ExpenseFilter] {
+        userDocument?.savedFilters?.sorted { ($0.createdAt ?? Date()) > ($1.createdAt ?? Date()) } ?? []
+    }
+    
+    func saveFilter(_ filter: ExpenseFilter, name: String) async {
+        guard var document = userDocument, let userId = userId else { return }
+        
+        var newFilter = filter
+        newFilter.id = UUID() // Always new ID for fresh save
+        newFilter.name = name
+        newFilter.createdAt = Date()
+        
+        // 1. Update Local
+        var currentFilters = document.savedFilters ?? []
+        currentFilters.append(newFilter)
+        document.savedFilters = currentFilters
+        self.userDocument = document
+        
+        // 2. Update Remote
+        do {
+            let data = try Firestore.Encoder().encode(currentFilters)
+            try await Firestore.firestore()
+                .collection("users")
+                .document(userId)
+                .updateData(["savedFilters": data])
+            logger.info("✅ Filter saved: \(name)")
+            
+            // Backup to UserDefaults
+            if let encoded = try? JSONEncoder().encode(currentFilters) {
+                UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
+            }
+        } catch {
+            logger.error("❌ Error saving filter: \(error.localizedDescription)")
+            self.error = "Error al guardar filtro: \(error.localizedDescription)"
+            
+            // Still save to UserDefaults even if remote fails
+            if let encoded = try? JSONEncoder().encode(currentFilters) {
+                UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
+            }
+            
+            // Revert local on error - DISABLED for hybrid approach
+            /*
+            if var revertedDoc = self.userDocument {
+                revertedDoc.savedFilters?.removeAll { $0.id == newFilter.id }
+                self.userDocument = revertedDoc
+            }
+            */
+        }
+    }
+    
+    func deleteFilter(_ filter: ExpenseFilter) async {
+        guard var document = userDocument, let userId = userId else { return }
+        
+        // 1. Update Local
+        var currentFilters = document.savedFilters ?? []
+        currentFilters.removeAll { $0.id == filter.id }
+        document.savedFilters = currentFilters
+        self.userDocument = document
+        
+        // 2. Update Remote
+        do {
+            let data = try Firestore.Encoder().encode(currentFilters)
+            try await Firestore.firestore()
+                .collection("users")
+                .document(userId)
+                .updateData(["savedFilters": data])
+            logger.info("✅ Filter deleted")
+        } catch {
+            logger.error("❌ Error deleting filter: \(error.localizedDescription)")
+            self.error = "Error al eliminar filtro: \(error.localizedDescription)"
+            
+            // Revert local on error (complicated without cache, skipping complexity for now)
         }
     }
 }

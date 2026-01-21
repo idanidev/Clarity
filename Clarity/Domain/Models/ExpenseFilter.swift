@@ -3,7 +3,11 @@
 
 import Foundation
 
-struct ExpenseFilter: Equatable, Sendable, Codable {
+struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
+    var id: UUID = UUID()
+    var name: String?
+    var createdAt: Date? = Date()
+    
     var selectedCategories: Set<String> = []
     var selectedPaymentMethods: Set<String> = []
     var dateRange: DateRange = .thisMonth
@@ -13,6 +17,15 @@ struct ExpenseFilter: Equatable, Sendable, Codable {
     var maxAmount: Double? = nil
     var sortBy: SortOption = .dateDesc
     var showOnlyRecurring: Bool = false
+    
+    enum SortOption: String, CaseIterable, Sendable, Codable {
+        case dateDesc = "Más recientes"
+        case dateAsc = "Más antiguos"
+        case amountDesc = "Mayor importe"
+        case amountAsc = "Menor importe"
+        case nameAsc = "A-Z"
+        case nameDesc = "Z-A"
+    }
     
     enum DateRange: String, CaseIterable, Sendable, Codable {
         case allTime = "Todos"
@@ -30,13 +43,84 @@ struct ExpenseFilter: Equatable, Sendable, Codable {
         case custom = "Personalizado"
     }
     
-    enum SortOption: String, CaseIterable, Sendable, Codable {
-        case dateDesc = "Más recientes"
-        case dateAsc = "Más antiguos"
-        case amountDesc = "Mayor importe"
-        case amountAsc = "Menor importe"
-        case nameAsc = "A-Z"
-        case nameDesc = "Z-A"
+    enum CodingKeys: String, CodingKey {
+        case id, name, createdAt, selectedCategories, selectedPaymentMethods, dateRange
+        case customStartDate, customEndDate, minAmount, maxAmount, sortBy, showOnlyRecurring
+    }
+    
+    init(
+        id: UUID = UUID(),
+        name: String? = nil,
+        createdAt: Date? = Date(),
+        selectedCategories: Set<String> = [],
+        selectedPaymentMethods: Set<String> = [],
+        dateRange: DateRange = .thisMonth,
+        customStartDate: Date = Date(),
+        customEndDate: Date = Date(),
+        minAmount: Double? = nil,
+        maxAmount: Double? = nil,
+        sortBy: SortOption = .dateDesc,
+        showOnlyRecurring: Bool = false
+    ) {
+        self.id = id
+        self.name = name
+        self.createdAt = createdAt
+        self.selectedCategories = selectedCategories
+        self.selectedPaymentMethods = selectedPaymentMethods
+        self.dateRange = dateRange
+        self.customStartDate = customStartDate
+        self.customEndDate = customEndDate
+        self.minAmount = minAmount
+        self.maxAmount = maxAmount
+        self.sortBy = sortBy
+        self.showOnlyRecurring = showOnlyRecurring
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Graceful fallback for ID if missing in legacy data
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.name = try container.decodeIfPresent(String.self, forKey: .name)
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        
+        // Decode as Arrays for safety (Firestore might return arrays)
+        let categoriesArray = try container.decodeIfPresent([String].self, forKey: .selectedCategories) ?? []
+        self.selectedCategories = Set(categoriesArray)
+        
+        let methodsArray = try container.decodeIfPresent([String].self, forKey: .selectedPaymentMethods) ?? []
+        self.selectedPaymentMethods = Set(methodsArray)
+        
+        self.dateRange = try container.decodeIfPresent(DateRange.self, forKey: .dateRange) ?? .thisMonth
+        
+        self.customStartDate = try container.decodeIfPresent(Date.self, forKey: .customStartDate) ?? Date()
+        self.customEndDate = try container.decodeIfPresent(Date.self, forKey: .customEndDate) ?? Date()
+        
+        self.minAmount = try container.decodeIfPresent(Double.self, forKey: .minAmount)
+        self.maxAmount = try container.decodeIfPresent(Double.self, forKey: .maxAmount)
+        
+        self.sortBy = try container.decodeIfPresent(SortOption.self, forKey: .sortBy) ?? .dateDesc
+        self.showOnlyRecurring = try container.decodeIfPresent(Bool.self, forKey: .showOnlyRecurring) ?? false
+    }
+    
+    // Explicit encode needed if we want to be safe, though synthesized usually works with CodingKeys defined.
+    // However, for symmetry and control:
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(name, forKey: .name)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        
+        // Encode Sets as Arrays
+        try container.encode(Array(selectedCategories), forKey: .selectedCategories)
+        try container.encode(Array(selectedPaymentMethods), forKey: .selectedPaymentMethods)
+        
+        try container.encode(dateRange, forKey: .dateRange)
+        try container.encode(customStartDate, forKey: .customStartDate)
+        try container.encode(customEndDate, forKey: .customEndDate)
+        try container.encodeIfPresent(minAmount, forKey: .minAmount)
+        try container.encodeIfPresent(maxAmount, forKey: .maxAmount)
+        try container.encode(sortBy, forKey: .sortBy)
+        try container.encode(showOnlyRecurring, forKey: .showOnlyRecurring)
     }
     
     var hasActiveFilters: Bool {
@@ -58,8 +142,10 @@ struct ExpenseFilter: Equatable, Sendable, Codable {
         // Ignoring dedupe for now, assuming Repository provides unique items
         
         // Date Range
-        let (start, end) = dateRangeForQuery()
-        result = result.filter { $0.date >= start && $0.date <= end }
+        if dateRange != .allTime {
+            let (start, end) = dateRangeForQuery()
+            result = result.filter { $0.date >= start && $0.date <= end }
+        }
         
         // Categories service
         if !selectedCategories.isEmpty {
@@ -110,6 +196,11 @@ struct ExpenseFilter: Equatable, Sendable, Codable {
     
     // Helper used by UI and Logic
     func dateRangeForQuery() -> (start: String, end: String) {
+        return Self.queryRange(for: dateRange, customStart: customStartDate, customEnd: customEndDate)
+    }
+    
+    // Static helper to avoid actor isolation issues
+    nonisolated static func queryRange(for range: DateRange, customStart: Date, customEnd: Date) -> (start: String, end: String) {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         
@@ -117,10 +208,11 @@ struct ExpenseFilter: Equatable, Sendable, Codable {
         let now = Date()
         
         let (startDate, endDate): (Date, Date) = {
-            switch dateRange {
+            switch range {
             case .allTime:
-                let start = calendar.date(byAdding: .year, value: -10, to: now)!
-                return (start, now)
+                let start = calendar.date(byAdding: .year, value: -20, to: now)!
+                let end = calendar.date(byAdding: .year, value: 50, to: now)!
+                return (start, end)
             case .today:
                 let start = calendar.startOfDay(for: now)
                 return (start, now)
@@ -161,7 +253,7 @@ struct ExpenseFilter: Equatable, Sendable, Codable {
                 let start = calendar.date(byAdding: .year, value: -1, to: thisYearStart)!
                 return (start, thisYearStart)
             case .custom:
-                return (customStartDate, customEndDate)
+                return (customStart, customEnd)
             }
         }()
         

@@ -75,7 +75,7 @@ final class FeedbackManager {
         dismissTask = Task {
             try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
             if !Task.isCancelled {
-                await dismiss()
+                dismiss()
             }
         }
     }

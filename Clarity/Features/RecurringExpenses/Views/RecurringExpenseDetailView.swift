@@ -49,7 +49,7 @@ struct RecurringExpenseDetailView: View {
                         
                         Text(Formatters.currency(expense.amount))
                             .font(.title2.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
                     }
                     
                     // Status badge
@@ -107,7 +107,7 @@ struct RecurringExpenseDetailView: View {
                 if let lastCreated = expense.lastCreated {
                     LabeledContent {
                         Text(lastCreated)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
                     } label: {
                         Label("Último cargo", systemImage: "checkmark.circle")
                             .foregroundStyle(.green)
@@ -115,9 +115,9 @@ struct RecurringExpenseDetailView: View {
                 } else {
                     HStack {
                         Image(systemName: "clock")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
                         Text("Aún no se ha creado ningún cargo")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
                     }
                 }
             }
