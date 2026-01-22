@@ -48,40 +48,33 @@ class SpeechRecognitionManager {
     
     func prepare() {
         Task {
-            do {
-                let audioSession = AVAudioSession.sharedInstance()
-                // .playAndRecord is key here. .duckOthers lowers music instead of stopping it.
-                // .defaultToSpeaker ensures we don't go to receiver (earpiece).
-                try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
-                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-                logger.info("🔥 Audio Engine Pre-warmed")
-            } catch {
-                logger.error("❌ Pre-warming failed: \(error.localizedDescription)")
-            }
+            // Delegate to Pro SoundManager
+            await SoundManager.shared.configureAudioSession()
+            logger.info("🔥 Audio Engine Pre-warmed (Pro)")
         }
     }
     
     // MARK: - Recording Control
     
-    func startRecording() throws {
-        logger.info("🎤 Starting recording pipeline...")
+    func startRecording() async throws {
+        logger.info("🎤 Starting recording pipeline (Pro)...")
         
-        // 1. Clean previous state
+        // 1. Play Start Sound & Haptics (Immediate Feedback)
+        await SoundManager.shared.play(.startRecording)
+        
+        // 2. Technical Delay (0.2s) - Clean Input Channel
+        // This prevents the "ding" sound from being recorded in the transcript
+        try await Task.sleep(nanoseconds: 200_000_000)
+        
+        // 3. Clean previous state
         cleanupResources()
         transcript = ""
         interimTranscript = ""
         lastError = nil
         bufferCount = 0
         
-        // 2. Configure Audio Session (Robust)
-        let audioSession = AVAudioSession.sharedInstance()
-        do {
-                try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
-            try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-        } catch {
-            logger.error("❌ Audio Session Config Failed: \(error.localizedDescription)")
-            throw RecognitionError.audioEngineFailure
-        }
+        // 4. Ensure Audio Session is Robust
+        await SoundManager.shared.configureAudioSession()
         
         // 3. Create Request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()

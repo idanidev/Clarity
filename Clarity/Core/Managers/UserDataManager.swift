@@ -9,6 +9,7 @@ import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
 import TipKit
+import SwiftData
 
 @MainActor
 @Observable
@@ -19,6 +20,8 @@ final class UserDataManager {
     
     // MARK: - UI State
     var categories: [Category] = []
+    var expenses: [Expense] = [] // Cache for Voice Parser
+    var paymentMethods: [String] = []
     var paymentMethods: [String] = []
     var isLoading = false
     var error: String? // Simplificado a String para UI directa
@@ -60,6 +63,7 @@ final class UserDataManager {
             print("📥 UserDataManager: Loading data for \(userId)...") 
             async let fetchedCategories = service.loadCategories(userId: userId)
             async let fetchedMethods = service.loadPaymentMethods(userId: userId)
+            await self.loadExpenses() // Load expenses for cache
             
             let (catsResult, _) = try await fetchedCategories
             self.categories = catsResult
@@ -117,6 +121,19 @@ final class UserDataManager {
     
     func refreshCategories() async {
         await loadUserData()
+    }
+    
+    // MARK: - Expenses Cache
+    
+    func loadExpenses() async {
+        do {
+            let descriptor = FetchDescriptor<ExpenseModel>(sortBy: [SortDescriptor(\.date, order: .reverse)])
+            let models = try SwiftDataService.shared.context.fetch(descriptor)
+            self.expenses = models.map { $0.toDomain() }
+            print("📦 UserDataManager: Cached \(self.expenses.count) expenses for voice intelligence")
+        } catch {
+            logger.error("❌ Failed to cache expenses: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - CRUD

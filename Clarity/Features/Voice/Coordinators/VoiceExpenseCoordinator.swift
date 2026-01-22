@@ -88,17 +88,25 @@ class VoiceExpenseCoordinator {
                 return
             }
             
+            // Instant Visual Feedback
+            await MainActor.run {
+                state = .recording
+                // Haptics handled by Button/Engine but we can reinforce here if needed
+            }
+            
             do {
-                try speechManager.startRecording()
+                // Audio + Technical Delay (0.2s) happens here
+                try await speechManager.startRecording()
+                
                 await MainActor.run {
-                    state = .recording
                     if settings.vibration {
-                        HapticManager.shared.impact(.medium)
+                        VoiceHapticsEngine.shared.play(.recordingStart)
                     }
                 }
             } catch {
                 await MainActor.run {
-                    state = .error("Error al iniciar: \(error.localizedDescription)")
+                    state = .error("Error al iniciar: \(error.localizedDescription)") // Will revert UI
+                    SoundManager.shared.play(.error)
                 }
             }
         }
@@ -124,6 +132,8 @@ class VoiceExpenseCoordinator {
         guard state == .recording || state == .locked else { return }
         
         speechManager.stopRecording()
+        SoundManager.shared.play(.endRecording)
+        if settings.vibration { VoiceHapticsEngine.shared.play(.recordingEnd) }
         
         let text = (speechManager.transcript + " " + speechManager.interimTranscript)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -143,12 +153,18 @@ class VoiceExpenseCoordinator {
         }
         
         Task {
-            // Ultimate Parser: Result-based API
-            let result = await SmartTransactionParser.shared.parse(transcript)
+            // Ultimate Parser: Adaptive Intelligence (History Injection)
+            let result = await SmartTransactionParser.shared.parse(
+                transcript,
+                history: UserDataManager.shared.expenses
+            )
+            
+            SoundManager.shared.play(.success)
+            if settings.vibration { VoiceHapticsEngine.shared.play(.success) }
             
             switch result {
             case .success(let parsed):
-                print("✅ Parsed: amount=\(parsed.amount), merchant=\(parsed.merchant), source=\(parsed.detectionSource.rawValue)")
+                print("✅ [Adaptive] Result: \(parsed.merchant) -> \(parsed.category ?? "nil") (Source: \(parsed.detectionSource.rawValue))")
                 
                 let categoryName = parsed.category ?? categories.first?.name ?? "Otros"
                 
@@ -168,19 +184,19 @@ class VoiceExpenseCoordinator {
                                   parsed.category != nil &&
                                   parsed.subcategory != nil
                 
-                // Reinforce learning if confident
-                if wasFullyDetected, let category = parsed.category {
-                    await UserLearningManager.shared.learn(
-                        merchant: parsed.merchant,
-                        category: category,
-                        subcategory: parsed.subcategory
-                    )
-                }
+                wasFullyDetected = parsed.confidence >= 0.8 &&
+                                  parsed.category != nil &&
+                                  parsed.subcategory != nil
+                
+                // Note: Learning is now Implicit via History. We don't need explicit 'learn' call.
                 
                 state = .confirming
                 
             case .failure(let error):
                 // Specific error messages
+                SoundManager.shared.play(.error)
+                if settings.vibration { VoiceHapticsEngine.shared.play(.error) }
+                
                 state = .error(error.localizedDescription)
                 stats.recordFailure()
             }

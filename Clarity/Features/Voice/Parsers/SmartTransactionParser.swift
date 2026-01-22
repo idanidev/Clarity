@@ -8,7 +8,7 @@ import NaturalLanguage
 // MARK: - Protocol (Testability & DI)
 
 protocol TransactionParserProtocol {
-    func parse(_ text: String) async -> Result<SmartTransaction, ParserError>
+    func parse(_ text: String, history: [Expense]) async -> Result<SmartTransaction, ParserError>
     func suggestCategory(for text: String) -> (category: String, subcategory: String?)?
 }
 
@@ -173,7 +173,9 @@ final class SmartTransactionParser: TransactionParserProtocol {
     
     // MARK: - Main API (Result Type)
     
-    func parse(_ text: String) async -> Result<SmartTransaction, ParserError> {
+    // MARK: - Main API (Result Type)
+    
+    func parse(_ text: String, history: [Expense] = []) async -> Result<SmartTransaction, ParserError> {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .failure(.emptyInput)
         }
@@ -191,8 +193,8 @@ final class SmartTransactionParser: TransactionParserProtocol {
             return .failure(.noAmountFound)
         }
         
-        // 4. Category & Merchant Detection (Context-Aware)
-        let (category, subcategory, merchant, source) = await detectMetadata(from: textNoDate, normalized: normalized)
+        // 4. Category & Merchant Detection (Adaptive)
+        let (category, subcategory, merchant, source) = await inferMetadata(from: textNoDate, normalized: normalized, history: history)
         
         // 5. Confidence
         let confidence = calculateConfidence(source: source, hasAmount: true)
@@ -284,22 +286,57 @@ final class SmartTransactionParser: TransactionParserProtocol {
         return nil
     }
     
-    // MARK: - Metadata Detection (Context-Aware + Learning + NER)
+    // MARK: - Metadata Inference (Adaptive Intelligence)
     
-    private func detectMetadata(from original: String, normalized: String) async -> (String?, String?, String, SmartTransaction.DetectionSource) {
-        let words = normalized.components(separatedBy: " ").filter { $0.count > 2 }
+    private func inferMetadata(from original: String, normalized: String, history: [Expense]) async -> (String?, String?, String, SmartTransaction.DetectionSource) {
         let currentHour = Calendar.current.component(.hour, from: Date())
-        print("🔍 [detectMetadata] Words: \(words), Hour: \(currentHour)")
         
-        // Get clean description FIRST (user's actual input)
+        // 1. Advanced NLP Cleaning
         let cleanedDescription = cleanDescription(from: original, normalized: normalized)
+        let normalizedDescription = normalize(cleanedDescription)
         
-        // A. User Learning (Reinforcement) - match against cleaned description
-        if let pref = await UserLearningManager.shared.getPreference(for: cleanedDescription) {
-            return (pref.category, pref.subcategory, cleanedDescription, .learning)
+        print("🧠 [Adaptive] Input: '\(normalizedDescription)' | History Size: \(history.count)")
+        
+        // 2. History Lookup (Priority 1: Exact & Partial Match)
+        // Sort history by date (newest first) to prefer recent habits
+        // Note: History should already be sorted by caller, but we ensure relevance.
+        
+        // 2a. Exact/Strong Match
+        if let exactMatch = history.first(where: { normalize($0.name) == normalizedDescription }) {
+            print("🧠 [Adaptive] Exact Match Found: \(exactMatch.name)")
+            return (exactMatch.category, exactMatch.subcategory, cleanedDescription, .learning)
         }
         
-        // B. Context-Aware Keywords (Time-based priority)
+        // 2b. Contains Match (e.g. "Tabaco" in "Tabaco de liar")
+        if let containsMatch = history.first(where: { normalize($0.name).contains(normalizedDescription) || normalizedDescription.contains(normalize($0.name)) }) {
+             print("🧠 [Adaptive] Contains Match Found: \(containsMatch.name)")
+             return (containsMatch.category, containsMatch.subcategory, cleanedDescription, .learning)
+        }
+        
+        // 2c. Fuzzy Match (Levenshtein) - for typos
+        if normalizedDescription.count > 3 {
+            var bestFuzzy: Expense?
+            var minDistance = Int.max
+            
+            // Limit search to recent unique items to improve perf if history is huge?
+            // For now, full search (assuming UserDataManager filters or limited size).
+            for expense in history.prefix(500) { // Optimization: Look at last 500
+                let dist = levenshteinDistance(normalize(expense.name), normalizedDescription)
+                let threshold = normalizedDescription.count > 5 ? 2 : 1
+                
+                if dist <= threshold && dist < minDistance {
+                    minDistance = dist
+                    bestFuzzy = expense
+                }
+            }
+            
+            if let best = bestFuzzy {
+                print("🧠 [Adaptive] Fuzzy Match Found: \(best.name) (Dist: \(minDistance))")
+                return (best.category, best.subcategory, cleanedDescription, .learning)
+            }
+        }
+        
+        // 3. Context-Aware Keywords (Time-based priority)
         for def in GlobalKeywords {
             if let timeRange = def.timeContext, timeRange.contains(currentHour) {
                 for keyword in def.keywords {
@@ -310,15 +347,16 @@ final class SmartTransactionParser: TransactionParserProtocol {
             }
         }
         
-        // C. Fuzzy Keyword Matching (Levenshtein for typos)
+        // 4. Fuzzy Keyword Matching (Static Dictionary)
+        let words = normalized.components(separatedBy: " ").filter { $0.count > 2 }
         for def in GlobalKeywords where def.timeContext == nil {
             for keyword in def.keywords {
+                // Exact keyword contains
                 if normalized.contains(keyword) {
-                    print("✅ [MATCH] Found keyword '\(keyword)' -> \(def.category)")
                     return (def.category, def.subcategory, cleanedDescription, .keyword)
                 }
                 
-                // Fuzzy match for longer keywords
+                // Fuzzy keyword
                 if keyword.count > 4 {
                     for word in words {
                         let distance = levenshteinDistance(word, keyword)
@@ -331,14 +369,13 @@ final class SmartTransactionParser: TransactionParserProtocol {
             }
         }
         
-        // D. NER Fallback - extract entity but still use cleaned description
+        // 5. NER Fallback
         if let entity = extractEntity(from: original) {
-            // Use entity if it's more specific than cleaned description
             let finalDescription = entity.count > cleanedDescription.count ? entity : cleanedDescription
             return ("🛒 Compras", nil, finalDescription, .ner)
         }
         
-        // E. Generic Fallback
+        // 6. Generic Fallback
         return (nil, nil, cleanedDescription, .fallback)
     }
     
@@ -377,27 +414,40 @@ final class SmartTransactionParser: TransactionParserProtocol {
         // Work on the ORIGINAL text (preserve user's capitalization and exact words)
         var clean = original
         
-        // Remove commands (case-insensitive)
+        // 1. Remove meta-commands (Prefixes)
+        for command in Self.metaCommands {
+            if let range = clean.range(of: command, options: [.caseInsensitive, .anchored]) {
+                clean.removeSubrange(range)
+            }
+        }
+        
+        // 2. Remove commands via Regex (legacy robust)
         clean = Patterns.commands.stringByReplacingMatches(in: clean, options: [], range: NSRange(clean.startIndex..., in: clean), withTemplate: "")
         
-        // Remove amounts and euro symbols
+        // 3. Remove fillers (STOP WORDS)
+        // We split by words and check against set
+        let words = clean.components(separatedBy: .whitespaces)
+        let filteredWords = words.filter { !Self.fillers.contains($0.lowercased()) }
+        clean = filteredWords.joined(separator: " ")
+        
+        // 4. Remove amounts and euro symbols
         clean = Patterns.simpleAmount.stringByReplacingMatches(in: clean, options: [], range: NSRange(clean.startIndex..., in: clean), withTemplate: "")
         clean = Patterns.compositeAmount.stringByReplacingMatches(in: clean, options: [], range: NSRange(clean.startIndex..., in: clean), withTemplate: "")
         
-        // Remove standalone euro symbols
+        // 5. Remove standalone euro symbols
         clean = clean.replacingOccurrences(of: "€", with: "")
         
-        // Remove prepositions and articles
+        // 6. Remove prepositions and articles
         let wordsToRemove = [" en ", " de ", " para ", " por ", " con ", " el ", " la ", " los ", " las ", " un ", " una ", " unos ", " unas "]
         for word in wordsToRemove {
             clean = clean.replacingOccurrences(of: word, with: " ", options: .caseInsensitive)
         }
         
-        // Clean up multiple spaces
+        // 7. Clean up multiple spaces
         clean = clean.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         clean = clean.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Capitalize first letter
+        // 8. Capitalize first letter
         if !clean.isEmpty {
             clean = clean.prefix(1).uppercased() + clean.dropFirst()
         }
@@ -475,8 +525,8 @@ final class SmartTransactionParser: TransactionParserProtocol {
 // MARK: - Static Convenience (Backward Compatibility)
 
 extension SmartTransactionParser {
-    static func parse(_ text: String) async -> SmartTransaction? {
-        let result = await shared.parse(text)
+    static func parse(_ text: String, history: [Expense] = []) async -> SmartTransaction? {
+        let result = await shared.parse(text, history: history)
         switch result {
         case .success(let transaction):
             return transaction
