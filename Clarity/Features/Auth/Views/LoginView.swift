@@ -19,7 +19,7 @@ struct LoginView: View {
                     // Logo & Title
                     VStack(spacing: Spacing.md) {
                         Image(systemName: "sparkles")
-                            .font(.system(size: 60))
+                            .font(.system(size: 90))
                             .foregroundStyle(Color.clarityGradient)
                         
                         Text("Clarity")

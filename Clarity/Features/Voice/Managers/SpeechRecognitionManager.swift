@@ -1,5 +1,6 @@
 // SpeechRecognitionManager.swift
-// Native iOS speech recognition with audio level monitoring
+// Native iOS speech recognition with robust audio session handling
+// Optimized for co-existence with System Sounds
 
 import Foundation
 import Speech
@@ -15,327 +16,186 @@ class SpeechRecognitionManager {
     var audioLevel: Float = 0.0
     var hasPermission = false
     var lastError: RecognitionError?
-    var didStopDueToSilence = false  // Flag for UI to observe
     
+    // Internal
     private var speechRecognizer: SFSpeechRecognizer?
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var audioEngine = AVAudioEngine()
     
-    // Use DispatchWorkItem instead of Timer for thread safety
-    private var silenceWorkItem: DispatchWorkItem?
-    private var settings: VoiceSettings
-    
-    // Buffer management
+    // Safety & Logging
     private var bufferCount: Int = 0
-    private let maxBuffers: Int = 500  // ~5 seconds at 100 buffers/sec
-    
-    // Retry logic
-    private var retryCount = 0
-    private let maxRetries = 2
-    
-    // Logging
+    private let maxBuffers = 800 // Safety limit (~8 seconds)
     private let logger = Logger(subsystem: "com.clarity.app", category: "Voice")
     
-    init(settings: VoiceSettings = .load()) {
-        self.settings = settings
+    init() {
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "es-ES"))
     }
     
-    // MARK: - Permission Handling
+    // MARK: - Pre-warming (Crucial for Speed)
     
-    func requestPermissions() async -> Bool {
-        logger.info("🎤 Requesting permissions...")
-        
-        // Request speech recognition permission
-        let speechStatus = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status == .authorized)
-            }
-        }
-        
-        // Request microphone permission
-        let micStatus = await AVAudioApplication.requestRecordPermission()
-        
-        let granted = speechStatus && micStatus
-        await MainActor.run {
-            self.hasPermission = granted
-        }
-        
-        logger.info("🎤 Permissions: speech=\(speechStatus), mic=\(micStatus)")
-        return granted
-    }
-    
-    func checkPermissions() -> Bool {
-        let speechStatus = SFSpeechRecognizer.authorizationStatus() == .authorized
-        let micStatus = AVAudioApplication.shared.recordPermission == .granted
-        let granted = speechStatus && micStatus
-        hasPermission = granted
-        return granted
-    }
-    
-    // MARK: - Recording Control
-    
-    // MARK: - Pre-warming
-    
-    /// Prepares the audio engine for instant recording (Zero Latency)
     func prepare() {
         Task {
             do {
                 let audioSession = AVAudioSession.sharedInstance()
+                // .playAndRecord is key here. .duckOthers lowers music instead of stopping it.
+                // .defaultToSpeaker ensures we don't go to receiver (earpiece).
                 try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
                 try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
-                logger.info("🔥 Audio Engine Pre-warmed (Ready via duckOthers)")
+                logger.info("🔥 Audio Engine Pre-warmed")
             } catch {
                 logger.error("❌ Pre-warming failed: \(error.localizedDescription)")
             }
         }
     }
-
+    
     // MARK: - Recording Control
     
     func startRecording() throws {
-        logger.info("🎤 Starting recording...")
+        logger.info("🎤 Starting recording pipeline...")
         
-        // Reset silence flag
-        didStopDueToSilence = false
-        
-        // Cancel any ongoing tasks first
+        // 1. Clean previous state
         cleanupResources()
-        
-        // Reset state
         transcript = ""
         interimTranscript = ""
         lastError = nil
         bufferCount = 0
         
-        // Setup audio session (if not already prepared or needs re-activation)
-        // We ensure settings are correct here too
+        // 2. Configure Audio Session (Robust)
+        let audioSession = AVAudioSession.sharedInstance()
         do {
-            let audioSession = AVAudioSession.sharedInstance()
-            // Using duckOthers to lower music volume instead of stopping it
-            try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
+                try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
             try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
-            logger.error("❌ Audio session setup failed: \(error.localizedDescription)")
+            logger.error("❌ Audio Session Config Failed: \(error.localizedDescription)")
             throw RecognitionError.audioEngineFailure
         }
         
-        // Create recognition request
+        // 3. Create Request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-        guard let recognitionRequest = recognitionRequest else {
-            throw RecognitionError.requestCreationFailed
-        }
-        
+        guard let recognitionRequest = recognitionRequest else { fatalError("Unable to create request") }
         recognitionRequest.shouldReportPartialResults = true
-        recognitionRequest.requiresOnDeviceRecognition = false
+        recognitionRequest.requiresOnDeviceRecognition = false // Allow server-side for better accuracy if needed
         
-        // Get the input node and its output format
+        // 4. Configure Input Node
         let inputNode = audioEngine.inputNode
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         
-        // Validate format
+        // Safety check for valid format (prevents crash on silent input)
         guard recordingFormat.sampleRate > 0 else {
-            logger.error("❌ Invalid audio format")
+            logger.error("❌ Invalid Audio Format: Sample rate is 0")
             throw RecognitionError.microphoneUnavailable
         }
         
-        // Install tap with the input node's output format
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             guard let self = self else { return }
             self.recognitionRequest?.append(buffer)
             self.extractAudioLevel(from: buffer)
             
-            // Memory Safety: Stop if we exceed buffer limit
+            // Memory Safety Limit
             self.bufferCount += 1
             if self.bufferCount > self.maxBuffers {
-                DispatchQueue.main.async {
-                    self.logger.warning("⚠️ Auto-stopping: buffer limit reached")
-                    self.stopRecording()
-                }
+                self.stopRecording()
             }
         }
         
-        // Prepare and start the audio engine
+        // 5. Start Engine
         audioEngine.prepare()
-        
         do {
             try audioEngine.start()
         } catch {
-            logger.error("❌ Audio engine start failed: \(error.localizedDescription)")
-            cleanupResources()
+            logger.error("❌ Audio Engine Start Failed: \(error.localizedDescription)")
             throw RecognitionError.audioEngineFailure
         }
         
-        // Start recognition task
+        // 6. Start Task
         recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             guard let self = self else { return }
             
             if let result = result {
-                let bestTranscription = result.bestTranscription
-                
+                let bestString = result.bestTranscription.formattedString
+                // Update properties on Main Actor through Observation machinery (implicitly)
                 DispatchQueue.main.async {
                     if result.isFinal {
-                        self.transcript = (self.transcript + " " + bestTranscription.formattedString)
-                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        self.transcript = bestString
                         self.interimTranscript = ""
-                        self.logger.info("✅ Final transcript: '\(self.transcript)'")
+                        self.logger.info("✅ Final Transcript: \(bestString)")
                     } else {
-                        self.interimTranscript = bestTranscription.formattedString
+                        self.interimTranscript = bestString
                     }
-                    
-                    // Reset silence timer on speech activity
-                    self.resetSilenceTimer()
                 }
             }
             
             if let error = error {
-                self.logger.error("❌ Recognition error: \(error.localizedDescription)")
+                // Ignore "Success" or "User Cancelled" type errors usually
+                if (error as NSError).code != 203 { // 203 is Retry usually, but let's log everything for now
+                     self.logger.error("❌ Recognition error: \(error.localizedDescription)")
+                }
+                
                 DispatchQueue.main.async {
                     self.lastError = .unknownError(error)
-                    self.stopRecording()
                 }
+                // Don't necessarily stop here, let the UI decide, unless it's fatal
             }
         }
         
         isListening = true
-        retryCount = 0  // Reset retry count on successful start
-        logger.info("✅ Recording started successfully")
+        logger.info("✅ Recording active")
     }
     
     func stopRecording() {
-        logger.info("🛑 Stopping recording...")
-        cleanupResources()
-        logger.info("✅ Recording stopped. Transcript: '\(self.transcript)'")
-    }
-    
-    // MARK: - Cleanup
-    
-    private func cleanupResources() {
-        // 1. Cancel silence timer first
-        silenceWorkItem?.cancel()
-        silenceWorkItem = nil
-        
-        // 2. Stop recognition
-        recognitionTask?.cancel()
-        recognitionTask = nil
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-        
-        // 3. Stop audio engine
         if audioEngine.isRunning {
             audioEngine.stop()
-            audioEngine.inputNode.removeTap(onBus: 0)
-        }
-        
-        // 4. Deactivate audio session
-        let audioSession = AVAudioSession.sharedInstance()
-        try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
-        
-        // 5. Reset state
-        isListening = false
-        audioLevel = 0.0
-        bufferCount = 0
-    }
-    
-    // MARK: - Retry Logic
-    
-    func startRecordingWithRetry() async throws {
-        do {
-            try startRecording()
-            retryCount = 0
-        } catch {
-            lastError = .unknownError(error)
-            
-            if retryCount < maxRetries {
-                retryCount += 1
-                logger.warning("⚠️ Retry \(self.retryCount)/\(self.maxRetries)")
-                try await Task.sleep(nanoseconds: 500_000_000) // 0.5s
-                try await startRecordingWithRetry()
-            } else {
-                logger.error("❌ Max retries reached")
-                throw error
-            }
+            recognitionRequest?.endAudio()
+            isListening = false
+            logger.info("🛑 Recording stopped")
         }
     }
     
-    // MARK: - Silence Detection (Thread-safe with DispatchWorkItem)
-    
-    private func resetSilenceTimer() {
-        // Cancel previous work item
-        silenceWorkItem?.cancel()
+    private func cleanupResources() {
+        recognitionTask?.cancel()
+        recognitionTask = nil
         
-        // Create new work item
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self = self else { return }
-            self.logger.info("🔇 Silence detected, stopping...")
-            DispatchQueue.main.async {
-                self.didStopDueToSilence = true
-            }
-            self.stopRecording()
+        // Always remove tap if it persists, regardless of engine state
+        // Wrapped in try-catch logic implicitly by API safety, but direct call is safe
+        audioEngine.inputNode.removeTap(onBus: 0)
+        
+        if audioEngine.isRunning {
+            audioEngine.stop()
         }
-        
-        silenceWorkItem = workItem
-        
-        // Schedule on main queue
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + settings.silenceTimeout,
-            execute: workItem
-        )
     }
-    
-    // MARK: - Audio Level Extraction
     
     private func extractAudioLevel(from buffer: AVAudioPCMBuffer) {
         guard let channelData = buffer.floatChannelData else { return }
-        
         let channelDataValue = channelData.pointee
         let channelDataValueArray = stride(from: 0, to: Int(buffer.frameLength), by: buffer.stride)
             .map { channelDataValue[$0] }
         
         let rms = sqrt(channelDataValueArray.map { $0 * $0 }.reduce(0, +) / Float(buffer.frameLength))
         let avgPower = 20 * log10(rms)
-        
-        // Normalize to 0-1 range (assuming -50 to 0 dB range)
         let normalizedLevel = max(0, min(1, (avgPower + 50) / 50))
         
-        DispatchQueue.main.async { [weak self] in
-            self?.audioLevel = normalizedLevel
+        DispatchQueue.main.async {
+            self.audioLevel = normalizedLevel
         }
     }
     
-    // MARK: - Update Settings
-    
-    func updateSettings(_ newSettings: VoiceSettings) {
-        self.settings = newSettings
+    // Permission Helpers
+    func checkPermissions() -> Bool {
+        return SFSpeechRecognizer.authorizationStatus() == .authorized && AVAudioApplication.shared.recordPermission == .granted
     }
     
-    // MARK: - Error Types
-    
-    enum RecognitionError: LocalizedError {
-        case requestCreationFailed
+    enum RecognitionError: Error, LocalizedError {
         case audioEngineFailure
         case microphoneUnavailable
-        case recognitionTimeout
-        case permissionDenied
         case unknownError(Error)
         
         var errorDescription: String? {
             switch self {
-            case .requestCreationFailed:
-                return "No se pudo crear la solicitud de reconocimiento."
-            case .audioEngineFailure:
-                return "No se pudo iniciar el micrófono. Intenta de nuevo."
-            case .microphoneUnavailable:
-                return "Micrófono no disponible. Verifica los permisos."
-            case .recognitionTimeout:
-                return "Tiempo de espera agotado. Intenta hablar más claro."
-            case .permissionDenied:
-                return "Se necesitan permisos de micrófono y reconocimiento de voz."
-            case .unknownError(let error):
-                return error.localizedDescription
+            case .audioEngineFailure: return "Error en el motor de audio"
+            case .microphoneUnavailable: return "Micrófono no disponible"
+            case .unknownError(let e): return e.localizedDescription
             }
         }
     }
 }
-

@@ -344,8 +344,10 @@ final class HomeViewModel {
     }
     
     private func extractEmoji(from category: String) -> String {
-        let components = category.components(separatedBy: " ")
-        return components.count > 1 ? components.last ?? "" : ""
+        // Extract all emoji characters from the string (works with or without spaces)
+        return category.filter { scalar in
+            scalar.unicodeScalars.contains { $0.properties.isEmoji && $0.properties.isEmojiPresentation }
+        }.map { String($0) }.joined()
     }
     
     private func colorForCategory(_ name: String) -> Color {

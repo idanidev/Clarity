@@ -57,26 +57,7 @@ struct HomeView: View {
                     )
                 }
                 // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
-
-                .sheet(isPresented: $voiceCoordinator.showConfirmation) {
-                    if let expense = voiceCoordinator.pendingExpense {
-                        VoiceConfirmationSheet(
-                            expense: expense,
-                            wasFullyDetected: voiceCoordinator.wasFullyDetected,
-                            categories: UserDataManager.shared.categories,
-                            speechManager: speechManager,
-                            onConfirm: { confirmed in
-                                Task {
-                                    await voiceCoordinator.saveExpense(confirmed, viewModel: viewModel)
-                                    UserDataManager.shared.completeOnboarding() // Sync onboarding
-                                }
-                            },
-                            onCancel: {
-                                voiceCoordinator.reset()
-                            }
-                        )
-                    }
-                }
+                // VoiceConfirmationSheet is now handled by VoiceExpenseButton directly
                 .onChange(of: voiceCoordinator.errorMessage) { _, newValue in
                     if let error = newValue {
                         FeedbackManager.shared.show(.error, title: "Error de Voz", message: error)

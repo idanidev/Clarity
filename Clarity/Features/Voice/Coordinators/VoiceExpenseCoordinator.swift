@@ -1,101 +1,89 @@
 // VoiceExpenseCoordinator.swift
 // Coordinator for voice expense flow
+// Optimized: Unified state, removed redundant showConfirmation
 
 import Foundation
 import SwiftUI
 import Observation
 
+// MARK: - Unified Voice State (Single Source of Truth)
+enum VoiceFlowState: Equatable {
+    case idle
+    case recording
+    case locked        // Recording but hands-free
+    case processing
+    case confirming    // Data ready, waiting for sheet
+    case saving
+    case success
+    case error(String)
+}
+
 @MainActor
 @Observable
 class VoiceExpenseCoordinator {
-    // UI State
-    var showRecording = false
-    var showConfirmation = false
+    // MARK: - State (SINGLE SOURCE OF TRUTH)
+    private(set) var state: VoiceFlowState = .idle
+    
+    // UI State (derived from state for specific needs)
     var showSuccessToast = false
-    var showError = false
+    
+    var showError: Bool {
+        if case .error(_) = state { return true }
+        return false
+    }
     
     // Data State
     var pendingExpense: Expense?
     var wasFullyDetected = false
-    var isProcessing = false
     
     // Messages
-    var errorMessage: String?
+    var errorMessage: String? {
+        if case .error(let msg) = state { return msg }
+        return nil
+    }
     var successMessage = ""
     
     // Dependencies
     private var stats = VoiceStats.load()
     private var settings = VoiceSettings.load()
     
-    enum State: Equatable {
-        case idle
-        case requesting
-        case recording
-        case processing
-        case confirming
-        case saving
-        case success
-        case error(String)
-    }
-    
-    private(set) var state: State = .idle
-    
     // MARK: - Computed Properties for UI
     
-    var buttonGradient: LinearGradient {
+    var buttonColor: Color {
         switch state {
-        case .recording:
-            return LinearGradient(
-                colors: [.red, .pink],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .processing:
-            return LinearGradient(
-                colors: [.orange, .yellow],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        default:
-            return LinearGradient(
-                colors: [.purple, .blue],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        case .recording, .locked: return .white
+        case .processing: return .orange
+        case .success: return .green
+        case .error: return .red
+        case .idle, .confirming, .saving: return Color.clarityPrimary
         }
     }
     
     var buttonIcon: String {
         switch state {
+        case .idle: return "mic.fill"
         case .recording: return "mic.fill"
+        case .locked: return "stop.fill"
         case .processing: return "waveform"
-        default: return "mic"
+        case .success: return "checkmark"
+        case .error: return "exclamationmark.triangle.fill"
+        default: return "mic.fill"
         }
     }
     
-    var shadowColor: Color {
-        switch state {
-        case .recording: return .red.opacity(0.5)
-        case .processing: return .orange.opacity(0.5)
-        default: return .purple.opacity(0.5)
-        }
+    var isRecordingActive: Bool {
+        state == .recording || state == .locked
     }
     
     // MARK: - Actions
     
-    // MARK: - Actions (New Inline Logic)
-    
-    /// Starts recording immediately (called on Hold/Tap)
     func startRecording(speechManager: SpeechRecognitionManager) {
-        guard !isProcessing, state == .idle else { return }
+        guard state == .idle else { return }
         
         Task {
-            // Check permissions silently (assumed handled by onboarding, but safety check)
             if !speechManager.checkPermissions() {
-                // Determine if we should request? For now, if no permission, show error
                 await MainActor.run {
-                    errorMessage = "Faltan permisos de micrófono"
-                    showError = true
+                    state = .error("Faltan permisos de micrófono")
                 }
                 return
             }
@@ -104,24 +92,25 @@ class VoiceExpenseCoordinator {
                 try speechManager.startRecording()
                 await MainActor.run {
                     state = .recording
-                    showRecording = true // Used for UI visibility if needed, or remove if fully inline
                     if settings.vibration {
                         HapticManager.shared.impact(.medium)
                     }
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Error al iniciar: \(error.localizedDescription)"
-                    showError = true
-                    state = .idle
+                    state = .error("Error al iniciar: \(error.localizedDescription)")
                 }
             }
         }
     }
     
-    /// Cancels current recording (called on Slide Left)
+    func lockRecording() {
+        guard state == .recording else { return }
+        state = .locked
+    }
+    
     func cancelRecording(speechManager: SpeechRecognitionManager) {
-        guard state == .recording || state == .processing else { return }
+        guard state == .recording || state == .locked else { return }
         
         speechManager.stopRecording()
         reset()
@@ -131,28 +120,15 @@ class VoiceExpenseCoordinator {
         }
     }
     
-    /// Stops recording and processes the result (called on Release)
     func stopAndFinish(speechManager: SpeechRecognitionManager) {
-        guard state == .recording else { return }
+        guard state == .recording || state == .locked else { return }
         
-        // Manual stop logic
-        // Get transcript before stop (or from manager buffer)
-        // SpeechManager usually updates `transcript` property
-        
-        // We let the manager know we want to stop
         speechManager.stopRecording()
         
-        // Trigger processing processing
         let text = (speechManager.transcript + " " + speechManager.interimTranscript)
             .trimmingCharacters(in: .whitespacesAndNewlines)
             
         handleTranscript(text, categories: UserDataManager.shared.categories)
-    }
-
-    /// Transitions to locked state (Hands-free)
-    func lockRecording() {
-        // Just state update if needed, mostly UI handled
-        // Could ensure coordinator knows we are locked 
     }
     
     func handleTranscript(_ transcript: String, categories: [Category]) {
@@ -161,42 +137,54 @@ class VoiceExpenseCoordinator {
         print("📝 Transcript: '\(transcript)'")
         
         guard !transcript.isEmpty else {
-            errorMessage = "No se detectó ningún gasto. Intenta de nuevo."
-            showError = true
+            state = .error("No se detectó ningún gasto. Intenta de nuevo.")
             stats.recordFailure()
-            reset()
             return
         }
         
-        // Parse
-        guard let parsed = ExpenseParser.parse(transcript, categories: categories) else {
-            errorMessage = "No se pudo entender el gasto. Intenta ser más específico (ej: '25 en supermercado')"
-            showError = true
-            stats.recordFailure()
-            reset()
-            return
+        Task {
+            // Ultimate Parser: Result-based API
+            let result = await SmartTransactionParser.shared.parse(transcript)
+            
+            switch result {
+            case .success(let parsed):
+                print("✅ Parsed: amount=\(parsed.amount), merchant=\(parsed.merchant), source=\(parsed.detectionSource.rawValue)")
+                
+                let categoryName = parsed.category ?? categories.first?.name ?? "Otros"
+                
+                // Decimal -> Double bridge for legacy model
+                let amountDouble = NSDecimalNumber(decimal: parsed.amount).doubleValue
+                
+                pendingExpense = Expense(
+                    amount: amountDouble,
+                    name: parsed.merchant,
+                    category: categoryName,
+                    subcategory: parsed.subcategory,
+                    date: Formatters.isoString(from: parsed.date),
+                    paymentMethod: "Tarjeta"
+                )
+                
+                wasFullyDetected = parsed.confidence >= 0.8 &&
+                                  parsed.category != nil &&
+                                  parsed.subcategory != nil
+                
+                // Reinforce learning if confident
+                if wasFullyDetected, let category = parsed.category {
+                    await UserLearningManager.shared.learn(
+                        merchant: parsed.merchant,
+                        category: category,
+                        subcategory: parsed.subcategory
+                    )
+                }
+                
+                state = .confirming
+                
+            case .failure(let error):
+                // Specific error messages
+                state = .error(error.localizedDescription)
+                stats.recordFailure()
+            }
         }
-        
-        print("✅ Parsed: amount=\(parsed.amount), category=\(parsed.category ?? "nil"), confidence=\(parsed.confidence)")
-        
-        // Create pending expense
-        let categoryName = parsed.category ?? categories.first?.name ?? "Otros"
-        
-        pendingExpense = Expense(
-            amount: parsed.amount,
-            name: parsed.name,
-            category: categoryName,
-            subcategory: parsed.subcategory,
-            date: Formatters.isoString(from: Date()),
-            paymentMethod: "Tarjeta"
-        )
-        
-        wasFullyDetected = parsed.confidence >= 0.8 && 
-                          parsed.category != nil && 
-                          parsed.subcategory != nil
-        
-        state = .confirming
-        showConfirmation = true
     }
     
     func saveExpense(_ expense: Expense, viewModel: HomeViewModel) async {
@@ -206,12 +194,10 @@ class VoiceExpenseCoordinator {
             let repository = DependencyContainer.shared.expenseRepository
             _ = try await repository.addExpense(expense)
             
-            // Success!
             stats.recordSuccess()
             successMessage = "\(Formatters.currency(expense.amount)) - \(expense.name)"
             
             await MainActor.run {
-                showConfirmation = false
                 state = .success
                 
                 withAnimation(.bouncy) {
@@ -223,10 +209,8 @@ class VoiceExpenseCoordinator {
                 }
             }
             
-            // Reload expenses
             await viewModel.loadExpenses(silent: true)
             
-            // Auto-hide toast
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             await MainActor.run {
                 withAnimation(.bouncy) {
@@ -237,29 +221,23 @@ class VoiceExpenseCoordinator {
             
         } catch {
             stats.recordFailure()
-            errorMessage = "Error al guardar: \(error.localizedDescription)"
-            showError = true
+            state = .error("Error al guardar: \(error.localizedDescription)")
             
             if settings.vibration {
                 HapticManager.shared.notification(.error)
             }
-            
-            reset()
         }
     }
     
     func reset() {
-            // Reset
-            state = .idle
-            pendingExpense = nil
-            wasFullyDetected = false
-            isProcessing = false
-            showRecording = false
-            showConfirmation = false
+        state = .idle
+        pendingExpense = nil
+        wasFullyDetected = false
     }
     
     func clearError() {
-        showError = false
-        errorMessage = nil
+        if case .error = state {
+            state = .idle
+        }
     }
 }

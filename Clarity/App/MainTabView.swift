@@ -97,30 +97,7 @@ struct MainTabView: View {
 
         }
         // Sheets and alerts
-        // Sheets and alerts
-        // VoiceRecordingSheet removed (inline UI)
-        .sheet(isPresented: $voiceCoordinator.showConfirmation) {
-            if let expense = voiceCoordinator.pendingExpense {
-                VoiceConfirmationSheet(
-                    expense: expense,
-                    wasFullyDetected: voiceCoordinator.wasFullyDetected,
-                    categories: userDataManager.categories,
-                    speechManager: speechManager,
-                    onConfirm: { confirmed in
-                        Task {
-                            await voiceCoordinator.saveExpense(
-                                confirmed,
-                                viewModel: homeViewModel
-                            )
-                            UserDataManager.shared.completeOnboarding()
-                        }
-                    },
-                    onCancel: {
-                        voiceCoordinator.reset()
-                    }
-                )
-            }
-        }
+        // VoiceRecordingSheet and VoiceConfirmationSheet are now handled inline by VoiceExpenseButton
         .sheet(isPresented: $showManualExpense) {
             AddExpenseSheet {
                 Task { await homeViewModel.refresh() }
@@ -137,7 +114,10 @@ struct MainTabView: View {
             .presentationDetents([.large])
             .presentationBackground(.regularMaterial)
         }
-        .alert("Error de Voz", isPresented: $voiceCoordinator.showError) {
+        .alert("Error de Voz", isPresented: Binding(
+            get: { voiceCoordinator.showError },
+            set: { if !$0 { voiceCoordinator.clearError() } }
+        )) {
             Button("OK", role: .cancel) {
                 voiceCoordinator.clearError()
             }
