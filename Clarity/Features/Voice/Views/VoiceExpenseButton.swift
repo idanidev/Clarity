@@ -71,8 +71,8 @@ struct VoiceExpenseButton: View {
             }
         }
         .onAppear {
-            speechManager.prepare()
-            // Configure audio session for system sounds
+            // Configure audio session for system sounds ONLY
+            // Speech audio session is now pre-warmed on touchDown (dynamic pre-warming)
             configureAudioSession()
         }
     }
@@ -81,12 +81,13 @@ struct VoiceExpenseButton: View {
     
     private var recordingCapsule: some View {
         HStack {
-            // Visualizer
+            // Visualizer (GPU-Accelerated for 120Hz ProMotion)
             HStack(spacing: 3) {
                 ForEach(0..<4, id: \.self) { i in
                     VisualizerBar(audioLevel: speechManager.audioLevel, index: i)
                 }
             }
+            .drawingGroup() // Offload to GPU/Metal for fluid 120FPS
             .padding(.leading, 12)
             
             Text(isLocked ? "Grabando..." : "Suelta para enviar")
@@ -187,6 +188,10 @@ struct VoiceExpenseButton: View {
     
     private func handleDragChanged(_ value: DragGesture.Value) {
         if !isRecording && !isLocked && !isProcessing {
+            // Dynamic Pre-Warming (iOS 26 Elite) - Activate audio on touchDown
+            // Gaining ~100ms before user starts speaking
+            speechManager.prepare()
+            
             startRecordingSequence()
         }
         
@@ -222,8 +227,8 @@ struct VoiceExpenseButton: View {
     // MARK: - Actions (The Fix)
     
     private func startRecordingSequence() {
-        // 1. IMMEDIATE Feedback (Visual + Haptic - Subtle)
-        HapticManager.shared.impact(.light)
+        // 1. IMMEDIATE Feedback (Visual + Haptic - Premium Core Haptics)
+        VoiceHapticsEngine.shared.playRecordingStart()
         
         withAnimation(.spring(response: 0.3)) {
             isRecording = true
@@ -257,8 +262,8 @@ struct VoiceExpenseButton: View {
     }
     
     private func finishRecording() {
-        // Haptic + Sound: End Recording (LOUDER)
-        HapticManager.shared.impact(.light)
+        // Haptic + Sound: End Recording (Premium Haptic)
+        VoiceHapticsEngine.shared.playRecordingEnd()
         AudioServicesPlayAlertSound(1105) // End Recording sound
         speechManager.stopRecording()
         
@@ -284,12 +289,12 @@ struct VoiceExpenseButton: View {
                 if case .error = voiceCoordinator.state {
                     // ERROR - No audio, parsing failed, etc.
                     AudioServicesPlaySystemSound(1053) // Error sound
-                    HapticManager.shared.notification(.error)
+                    VoiceHapticsEngine.shared.playError()
                     resetState()
                 } else if voiceCoordinator.state == .confirming || voiceCoordinator.pendingExpense != nil {
                     // SUCCESS - Valid expense detected
                     AudioServicesPlaySystemSound(1001) // Success chime
-                    HapticManager.shared.notification(.success)
+                    VoiceHapticsEngine.shared.playSuccess()
                     
                     withAnimation(.spring(response: 0.3)) {
                         isProcessing = false

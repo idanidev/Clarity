@@ -157,6 +157,20 @@ final class SmartTransactionParser: TransactionParserProtocol {
         static let commands = try! NSRegularExpression(pattern: #"^(añademe|añade|añadir|anademe|anade|anadir|gasta|gastado|he gastado|compra|comprado|he comprado|paga|pagado|he pagado|apunta|pon|registra)\s+"#, options: .caseInsensitive)
     }
     
+    // MARK: - Stop-Words (Phase 3: Parser Intelligence)
+    
+    /// Spanish fillers to remove from transcripts
+    private static let fillers: Set<String> = [
+        "ehmm", "ehm", "mmm", "esto", "pues", "bueno", "ya", "vale",
+        "osea", "o sea", "tipo", "como", "asi", "así", "entonces"
+    ]
+    
+    /// Meta-commands that don't add value to expense description
+    private static let metaCommands: Set<String> = [
+        "me he gastado", "me gaste", "apuntame", "apúntame", "registra",
+        "pon", "anota", "guarda", "he comprado", "he pagado"
+    ]
+    
     // MARK: - Main API (Result Type)
     
     func parse(_ text: String) async -> Result<SmartTransaction, ParserError> {

@@ -28,8 +28,20 @@ class SpeechRecognitionManager {
     private let maxBuffers = 800 // Safety limit (~8 seconds)
     private let logger = Logger(subsystem: "com.clarity.app", category: "Voice")
     
+    // Audio Session Resilience (iOS 26 Elite)
+    private var audioSessionState: AudioSessionState = .idle
+    private var retryAttempts = 0
+    private let maxRetries = 3
+    private var wasInterrupted = false
+    private var hasRegisteredObservers = false
+    
     init() {
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "es-ES"))
+        setupInterruptionObservers()
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Pre-warming (Crucial for Speed)
@@ -183,6 +195,108 @@ class SpeechRecognitionManager {
     // Permission Helpers
     func checkPermissions() -> Bool {
         return SFSpeechRecognizer.authorizationStatus() == .authorized && AVAudioApplication.shared.recordPermission == .granted
+    }
+    
+    
+    // MARK: - Audio Session Resilience (iOS 26 Elite)
+    
+    private func setupInterruptionObservers() {
+        // Prevent duplicate registrations (memory leak fix)
+        guard !hasRegisteredObservers else {
+            return
+        }
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleInterruption),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
+        hasRegisteredObservers = true
+        logger.info("🔔 Audio interruption observers registered")
+    }
+    
+    @objc private func handleInterruption(notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeValue = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeValue) else {
+            return
+        }
+        
+        switch type {
+        case .began:
+            logger.warning("⚠️ Audio interruption BEGAN (incoming call/notification)")
+            audioSessionState = .interrupted
+            wasInterrupted = true
+            
+            // Pause, clean buffers, save state
+            if isListening {
+                logger.info("📦 Saving state and cleaning buffers...")
+                audioEngine.pause()
+                recognitionTask?.finish() // Gracefully finish instead of cancel
+                isListening = false
+            }
+            
+        case .ended:
+            logger.info("✅ Audio interruption ENDED - Attempting recovery")
+            
+            guard let optionsValue = userInfo[AVAudioSessionInterruptionOptionKey] as? UInt else {
+                return
+            }
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsValue)
+            
+            if options.contains(.shouldResume) {
+                logger.info("🔄 System suggests resuming - Reactivating audio session")
+                attemptAudioRecovery()
+            } else {
+                logger.warning("🚫 System does not suggest resuming - Manual restart required")
+                audioSessionState = .needsRecovery
+            }
+            
+        @unknown default:
+            logger.error("❓ Unknown interruption type")
+        }
+    }
+    
+    private func attemptAudioRecovery() {
+        Task {
+            do {
+                let audioSession = AVAudioSession.sharedInstance()
+                try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+                audioSessionState = .active
+                wasInterrupted = false
+                retryAttempts = 0
+                logger.info("✅ Audio session recovered successfully")
+            } catch {
+                retryAttempts += 1
+                logger.error("❌ Recovery attempt \(self.retryAttempts)/\(self.maxRetries) failed: \(error.localizedDescription)")
+                
+                if self.retryAttempts < self.maxRetries {
+                    // Exponential backoff: 0.5s, 1s, 2s
+                    let delay = pow(2.0, Double(self.retryAttempts - 1)) * 0.5
+                    logger.info("🔄 Retrying in \(delay)s...")
+                    
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    attemptAudioRecovery()
+                } else {
+                    logger.error("🚫 Max retries reached - Audio session in zombie state")
+                    audioSessionState = .failed
+                }
+            }
+        }
+    }
+    
+    // Expose session state for UI
+    var sessionState: AudioSessionState {
+        audioSessionState
+    }
+    
+    enum AudioSessionState {
+        case idle
+        case active
+        case interrupted
+        case needsRecovery
+        case failed
     }
     
     enum RecognitionError: Error, LocalizedError {
