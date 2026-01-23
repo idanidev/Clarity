@@ -97,7 +97,9 @@ struct EditExpenseSheet: View {
                     speechManager.stopRecording()
                 } else {
                     HapticManager.shared.impact(.medium)
-                    try? speechManager.startRecording()
+                    Task {
+                        try? await speechManager.startRecording()
+                    }
                 }
             } label: {
                 Label(speechManager.isListening ? "Escuchando..." : "Dictar",

@@ -248,7 +248,9 @@ struct VoiceConfirmationSheet: View {
         progress = 1.0
         
         // Start listening for commands
-        try? speechManager.startRecording()
+        Task {
+            try? await speechManager.startRecording()
+        }
     }
     
     private func stopTimer() {

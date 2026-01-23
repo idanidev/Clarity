@@ -22,7 +22,6 @@ final class UserDataManager {
     var categories: [Category] = []
     var expenses: [Expense] = [] // Cache for Voice Parser
     var paymentMethods: [String] = []
-    var paymentMethods: [String] = []
     var isLoading = false
     var error: String? // Simplificado a String para UI directa
     var userDocument: UserDocument?

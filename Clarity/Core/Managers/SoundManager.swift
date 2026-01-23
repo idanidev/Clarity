@@ -8,6 +8,7 @@
 import Foundation
 import AVFoundation
 import UIKit
+import OSLog
 
 /// Pro-Audio Manager implementing robust playback and session management.
 /// Ensures audio plays even in silent mode and handles session lifecycles correctly.
@@ -51,7 +52,7 @@ final class SoundManager: NSObject {
     func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth, .duckOthers])
+            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
             try session.setActive(true, options: .notifyOthersOnDeactivation)
             logger.info("✅ Audio Session configured: PlayAndRecord, DefaultToSpeaker, DuckOthers")
         } catch {

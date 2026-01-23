@@ -100,7 +100,7 @@ class VoiceExpenseCoordinator {
                 
                 await MainActor.run {
                     if settings.vibration {
-                        VoiceHapticsEngine.shared.play(.recordingStart)
+                        VoiceHapticsEngine.shared.playRecordingStart()
                     }
                 }
             } catch {
@@ -133,7 +133,7 @@ class VoiceExpenseCoordinator {
         
         speechManager.stopRecording()
         SoundManager.shared.play(.endRecording)
-        if settings.vibration { VoiceHapticsEngine.shared.play(.recordingEnd) }
+        if settings.vibration { VoiceHapticsEngine.shared.playRecordingEnd() }
         
         let text = (speechManager.transcript + " " + speechManager.interimTranscript)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -160,7 +160,7 @@ class VoiceExpenseCoordinator {
             )
             
             SoundManager.shared.play(.success)
-            if settings.vibration { VoiceHapticsEngine.shared.play(.success) }
+            if settings.vibration { VoiceHapticsEngine.shared.playSuccess() }
             
             switch result {
             case .success(let parsed):
@@ -195,7 +195,7 @@ class VoiceExpenseCoordinator {
             case .failure(let error):
                 // Specific error messages
                 SoundManager.shared.play(.error)
-                if settings.vibration { VoiceHapticsEngine.shared.play(.error) }
+                if settings.vibration { VoiceHapticsEngine.shared.playError() }
                 
                 state = .error(error.localizedDescription)
                 stats.recordFailure()

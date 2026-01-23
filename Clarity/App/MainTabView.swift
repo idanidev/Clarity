@@ -57,7 +57,7 @@ struct MainTabView: View {
                 .tag(0)
                 
                 NavigationStack {
-                    BudgetsView()
+                    FinancialDashboardView()
                 }
                 .tabItem {
                     Image(systemName: "target")
@@ -74,7 +74,7 @@ struct MainTabView: View {
                     .tag(2)
                 
                 NavigationStack {
-                    AIAssistantView()
+                    AIAdvisorView()
                 }
                 .tabItem {
                     Image(systemName: "sparkles")

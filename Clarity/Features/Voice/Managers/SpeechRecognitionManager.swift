@@ -49,7 +49,7 @@ class SpeechRecognitionManager {
     func prepare() {
         Task {
             // Delegate to Pro SoundManager
-            await SoundManager.shared.configureAudioSession()
+            SoundManager.shared.configureAudioSession()
             logger.info("🔥 Audio Engine Pre-warmed (Pro)")
         }
     }
@@ -60,7 +60,7 @@ class SpeechRecognitionManager {
         logger.info("🎤 Starting recording pipeline (Pro)...")
         
         // 1. Play Start Sound & Haptics (Immediate Feedback)
-        await SoundManager.shared.play(.startRecording)
+        SoundManager.shared.play(.startRecording)
         
         // 2. Technical Delay (0.2s) - Clean Input Channel
         // This prevents the "ding" sound from being recorded in the transcript
@@ -74,7 +74,7 @@ class SpeechRecognitionManager {
         bufferCount = 0
         
         // 4. Ensure Audio Session is Robust
-        await SoundManager.shared.configureAudioSession()
+        SoundManager.shared.configureAudioSession()
         
         // 3. Create Request
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()

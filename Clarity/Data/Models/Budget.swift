@@ -4,7 +4,8 @@
 import Foundation
 import FirebaseFirestore
 
-struct MonthlyBudget: Codable, Identifiable {
+// Note: Renamed from MonthlyBudget to CategoryBudget to avoid conflict with FinancialModels.MonthlyBudget
+struct CategoryBudget: Codable, Identifiable {
     var id: String { month }
     let month: String // "YYYY-MM"
     let categories: [String: Double] // ["Alimentacion🫄": 400, "Ocio 🍻": 200]

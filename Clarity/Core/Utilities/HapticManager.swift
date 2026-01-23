@@ -15,6 +15,42 @@ final class HapticManager {
     private init() {
         setupEngine()
     }
+    
+    // MARK: - Public API (Pro)
+    
+    func prepare() {
+        // Pre-warm generators
+        let impact = UIImpactFeedbackGenerator(style: .soft)
+        impact.prepare()
+        
+        let notification = UINotificationFeedbackGenerator()
+        notification.prepare()
+        
+        let selection = UISelectionFeedbackGenerator()
+        selection.prepare()
+        
+        // Ensure Core Haptics engine is running
+        try? engine?.start()
+    }
+    
+    func playSoftImpact() {
+        // "Mechanical Click" - High precision, low intensity
+        let generator = UIImpactFeedbackGenerator(style: .soft)
+        generator.prepare()
+        generator.impactOccurred(intensity: 0.6)
+    }
+    
+    func playSlideTick() {
+        let generator = UISelectionFeedbackGenerator()
+        generator.prepare()
+        generator.selectionChanged()
+    }
+    
+    func playSuccess() {
+        let generator = UINotificationFeedbackGenerator()
+        generator.prepare()
+        generator.notificationOccurred(.success)
+    }
 
     // MARK: - Setup
 
