@@ -7,66 +7,66 @@ import SwiftUI
 struct HomeView: View {
     @State private var viewModel: HomeViewModel
     private var userDataManager = UserDataManager.shared
-    
+
     // UI State
-    @State private var selectedView = 0 // 0 = Tabla, 1 = Gráfico, 2 = Calendario, 3 = VS
+    @State private var selectedView = 0  // 0 = Tabla, 1 = Gráfico, 2 = Calendario, 3 = VS
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
-    
+
     // Voice & FAB
     // showVoiceSheet removed
-    @State private var showAddExpense = false // New state for manual entry
+    @State private var showAddExpense = false  // New state for manual entry
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
-    @State private var speechManager = SpeechRecognitionManager()
-    
+    @State private var speechManager = SpeechRecognitionManager.shared
+
     @MainActor
     init(viewModel: HomeViewModel? = nil) {
         let vm = viewModel ?? DependencyContainer.shared.makeHomeViewModel()
         _viewModel = State(initialValue: vm)
     }
-    
+
     var body: some View {
         mainContent
-                .background(DesignTokens.Colors.background) // Adaptive background
-                .navigationTitle("") // Hidden title as requested
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(DesignTokens.Colors.background, for: .navigationBar)
-                .toolbarBackgroundVisibility(.visible, for: .navigationBar)
-                .refreshable { await viewModel.refresh() }
-                .task { await viewModel.loadExpenses() }
-                .sheet(item: $expenseToEdit) { expense in
-                    EditExpenseSheet(expense: expense) {
-                        Task { await viewModel.refresh() }
+            .background(DesignTokens.Colors.background)  // Adaptive background
+            .navigationTitle("")  // Hidden title as requested
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(DesignTokens.Colors.background, for: .navigationBar)
+            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+            .refreshable { await viewModel.refresh() }
+            .task { await viewModel.loadExpenses() }
+            .sheet(item: $expenseToEdit) { expense in
+                EditExpenseSheet(expense: expense) {
+                    Task { await viewModel.refresh() }
+                }
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showAddExpense) {
+                AddExpenseSheet {
+                    Task { await viewModel.refresh() }
+                }
+                .presentationDetents([.large])
+            }
+            .sheet(isPresented: $showFilterSheet) {
+                ExpenseFilterSheet(
+                    filter: $viewModel.selectedFilter,
+                    availableCategories: UserDataManager.shared.categoryNames,
+                    onApply: {
+                        // Trigger reload to fetch data if date range changed
+                        Task { await viewModel.loadExpenses() }
                     }
-                    .presentationDetents([.large])
+                )
+            }
+            // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
+            // VoiceConfirmationSheet is now handled by VoiceExpenseButton directly
+            .onChange(of: voiceCoordinator.errorMessage) { _, newValue in
+                if let error = newValue {
+                    FeedbackManager.shared.show(.error, title: "Error de Voz", message: error)
+                    voiceCoordinator.clearError()
                 }
-                .sheet(isPresented: $showAddExpense) {
-                    AddExpenseSheet {
-                        Task { await viewModel.refresh() }
-                    }
-                    .presentationDetents([.large])
-                }
-                .sheet(isPresented: $showFilterSheet) {
-                    ExpenseFilterSheet(
-                        filter: $viewModel.selectedFilter,
-                        availableCategories: UserDataManager.shared.categoryNames,
-                        onApply: {
-                            // Trigger reload to fetch data if date range changed
-                            Task { await viewModel.loadExpenses() }
-                        }
-                    )
-                }
-                // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
-                // VoiceConfirmationSheet is now handled by VoiceExpenseButton directly
-                .onChange(of: voiceCoordinator.errorMessage) { _, newValue in
-                    if let error = newValue {
-                        FeedbackManager.shared.show(.error, title: "Error de Voz", message: error)
-                        voiceCoordinator.clearError()
-                    }
-                }
-                // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
+            }
+        // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
     }
-    
+
     // MARK: - Main Content
     private var mainContent: some View {
         ZStack(alignment: .bottom) {
@@ -86,8 +86,8 @@ struct HomeView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: selectedView)
-            .padding(.bottom, 60) // Space for floating bar
-            
+            .padding(.bottom, 60)  // Space for floating bar
+
             // Floating Bottom Bar
             segmentedPicker
         }
@@ -107,22 +107,22 @@ struct HomeView: View {
             .background(.regularMaterial)
             .clipShape(Capsule())
             .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-            .frame(maxWidth: .infinity, alignment: .center) // Force center
-            
+            .frame(maxWidth: .infinity, alignment: .center)  // Force center
+
             // Voice Button Aligned Right
             HStack {
                 Spacer()
-                VoiceExpenseButton(
+                SimpleVoiceButton(
                     viewModel: viewModel,
                     categories: UserDataManager.shared.categories
                 )
-                .offset(y: 4) // "mas abajo" slightly to align nicely vs capsule
+                .offset(y: 4)  // "mas abajo" slightly to align nicely vs capsule
             }
             .padding(.trailing, DesignTokens.Spacing.md)
         }
         .padding(.bottom, DesignTokens.Spacing.sm)
     }
-    
+
     // MARK: - Tab 1: List View
     private var listView: some View {
         VStack(spacing: 0) {
@@ -139,7 +139,13 @@ struct HomeView: View {
                     available: savings
                 )
                 .padding(.horizontal, DesignTokens.Spacing.sm)
-                .padding(.top, DesignTokens.Spacing.xxs)
+                .padding(.top, 12)  // Espacio limpio desde navigation bar
+
+                // Month Selector (NEW)
+                MonthSelectorView(currentMonth: $viewModel.selectedMonth) {
+                    Task { await viewModel.onMonthChanged() }
+                }
+                .padding(.horizontal, DesignTokens.Spacing.sm)
 
                 // Search Bar Moderna + Filter Button
                 HStack(spacing: DesignTokens.Spacing.xs) {
@@ -150,11 +156,11 @@ struct HomeView: View {
                             // Handled automatically by ViewModel bindings
                         }
                     )
-                    
+
                     // Clear Filter Button (only if active)
                     if viewModel.selectedFilter.hasActiveFilters {
                         Button {
-                            viewModel.selectedFilter = ExpenseFilter() // Reset
+                            viewModel.selectedFilter = ExpenseFilter()  // Reset
                             HapticManager.shared.notification(.success)
                         } label: {
                             Image(systemName: "xmark.circle.fill")
@@ -167,19 +173,26 @@ struct HomeView: View {
                         }
                         .transition(.scale.combined(with: .opacity))
                     }
-                    
+
                     Button {
                         showFilterSheet = true
                         HapticManager.shared.selection()
                     } label: {
                         // Purple icon if active filters
-                        Image(systemName: viewModel.selectedFilter.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                            .font(.system(size: 22))
-                            .foregroundColor(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary)
-                            .frame(width: 44, height: 44)
-                            .background(DesignTokens.Colors.surface)
-                            .clipShape(Circle())
-                            .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        Image(
+                            systemName: viewModel.selectedFilter.hasActiveFilters
+                                ? "line.3.horizontal.decrease.circle.fill"
+                                : "line.3.horizontal.decrease.circle"
+                        )
+                        .font(.system(size: 22))
+                        .foregroundColor(
+                            viewModel.selectedFilter.hasActiveFilters
+                                ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary
+                        )
+                        .frame(width: 44, height: 44)
+                        .background(DesignTokens.Colors.surface)
+                        .clipShape(Circle())
+                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
                     }
                 }
                 .padding(.horizontal, DesignTokens.Spacing.sm)
@@ -211,14 +224,12 @@ struct HomeView: View {
         }
     }
 
-
-    
     // MARK: - Tab 2: Chart View
     private var chartView: some View {
         ScrollView {
             VStack(spacing: 20) {
                 if viewModel.filteredExpenses.isEmpty {
-                   ContentUnavailableView("Sin datos para gráficos", systemImage: "chart.pie")
+                    ContentUnavailableView("Sin datos para gráficos", systemImage: "chart.pie")
                 } else {
                     // Donut Chart - Comparativa ahora en tab VS de ExpensesView
                     DonutChartView(
@@ -230,19 +241,18 @@ struct HomeView: View {
             .padding(.bottom, 80)
         }
     }
-    
+
     // MARK: - Tab 3: Calendar View
     private var calendarView: some View {
         VStack {
-            if viewModel.allExpenses.isEmpty {
+            if viewModel.filteredExpenses.isEmpty {
                 ContentUnavailableView("Sin datos para calendario", systemImage: "calendar")
             } else {
-                ExpenseCalendarView(expenses: viewModel.allExpenses)
+                ExpenseCalendarView(expenses: viewModel.filteredExpenses)
             }
         }
     }
 
-    
     private func viewModeButton(icon: String, index: Int) -> some View {
         Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -251,50 +261,48 @@ struct HomeView: View {
             HapticManager.shared.selection()
         } label: {
             Image(systemName: icon)
-                .font(.system(size: 18, weight: selectedView == index ? .semibold : .medium)) // Slightly smaller icon
+                .font(.system(size: 18, weight: selectedView == index ? .semibold : .medium))  // Slightly smaller icon
                 .foregroundStyle(selectedView == index ? Color.white : Color.primary.opacity(0.5))
-                .frame(width: 44, height: 36) // More compact
+                .frame(width: 44, height: 36)  // More compact
         }
         .background(
-             Capsule()
-                 .fill(selectedView == index ? DesignTokens.Colors.accent : Color.clear)
+            Capsule()
+                .fill(selectedView == index ? DesignTokens.Colors.accent : Color.clear)
         )
     }
-    
+
     // MARK: - Tab 4: Comparison View (VS)
     private var comparisonView: some View {
-        MonthComparisonView(expenses: viewModel.allExpenses)
+        MonthComparisonView(expenses: viewModel.filteredExpenses)
     }
-    
+
     // MARK: - Helpers
     private var monthlyIncome: Double {
         userDataManager.userDocument?.income ?? 0
     }
-    
+
     private var filteredTotal: Double {
         viewModel.filteredExpenses.reduce(0) { $0 + $1.amount }
     }
-    
+
     private var dateFilteredTotal: Double {
         viewModel.dateFilteredExpenses.reduce(0) { $0 + $1.amount }
     }
-    
-    private var savings: Double {
-        monthlyIncome - dateFilteredTotal
-    }
-    
 
-    
+    private var savings: Double {
+        viewModel.calculatedSavings
+    }
+
     private func buildChartData() -> [CategoryChartData] {
         var categoryTotals: [String: (amount: Double, color: Color)] = [:]
-        
+
         for expense in viewModel.filteredExpenses {
             let category = expense.category
             let currentTotal = categoryTotals[category]?.amount ?? 0
             let color = UserDataManager.shared.color(for: category)
             categoryTotals[category] = (currentTotal + expense.amount, color)
         }
-        
+
         return categoryTotals.map { key, value in
             CategoryChartData(
                 name: key,
@@ -304,12 +312,12 @@ struct HomeView: View {
             )
         }.sorted { $0.amount > $1.amount }
     }
-    
+
     // MARK: - View States
     private var loadingView: some View {
         ExpenseListSkeleton()
     }
-    
+
     private var emptyStateView: some View {
         VStack {
             Spacer()
@@ -321,7 +329,7 @@ struct HomeView: View {
             Spacer()
         }
     }
-    
+
     private func errorView(_ msg: String) -> some View {
         ContentUnavailableView {
             Label("Error", systemImage: "exclamationmark.triangle")

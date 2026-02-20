@@ -9,6 +9,7 @@ struct CategoryPickerView: View {
     @Binding var selectedSubcategory: String?
     
     @State private var searchText = ""
+    @State private var showingNewCategorySheet = false
     
     private var categories: [Category] {
         UserDataManager.shared.categories
@@ -47,30 +48,29 @@ struct CategoryPickerView: View {
     
     var body: some View {
         List {
+            // NUEVO: Sección para crear nueva categoría
+            Section {
+                Button {
+                    showingNewCategorySheet = true
+                    HapticManager.shared.selection()
+                } label: {
+                    Label("Nueva Categoría", systemImage: "plus.circle.fill")
+                        .font(.clarityBody.weight(.medium))
+                        .foregroundStyle(Color.clarityPrimary)
+                }
+                .listRowBackground(Color.bgCard)
+            } footer: {
+                Text("Crea tus propias categorías personalizadas. Todas las categorías requieren al menos una subcategoría.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
             ForEach(filteredCategories) { category in
                 Section {
-                    // Option 1: Select just the main category (General)
-                    // Only show "General" option if the category name itself matches OR if we are showing the whole category because of a subcategory match
-                    // To simplify: Always show "General" if the section is visible, unless user is searching specifically for a subcategory?
-                    // Let's keep it simple: Show header + general option + matching subs.
+                    // ELIMINADO: La opción "General / Sin subcategoría" ya no existe
+                    // Los gastos DEBEN tener una subcategoría
                     
-                    Button {
-                        select(category: category.name, sub: nil)
-                    } label: {
-                        HStack {
-                            Text("General / Sin subcategoría")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            if isSelected(cat: category.name, sub: nil) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(category.uiColor)
-                            }
-                        }
-                    }
-                    .listRowBackground(Color.bgCard)
-                    
-                    // Option 2: Select subcategories
+                    // Seleccionar subcategorías
                     ForEach(category.subcategories, id: \.self) { subcategory in
                         Button {
                             select(category: category.name, sub: subcategory)
@@ -115,6 +115,9 @@ struct CategoryPickerView: View {
         .navigationTitle("Seleccionar Categoría")
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always), prompt: "Buscar categoría...")
+        .sheet(isPresented: $showingNewCategorySheet) {
+            CategoryCreationSheet()
+        }
     }
     
     private func select(category: String, sub: String?) {

@@ -59,9 +59,12 @@ struct RecurringExpensesView: View {
         }
         .task {
             loadExpenses()
+            // Recuperar gastos perdidos al abrir la vista
+            await LocalRecurringExpenseManager.shared.recoverMissedExpenses()
         }
         .refreshable {
             loadExpenses()
+            await LocalRecurringExpenseManager.shared.recoverMissedExpenses()
         }
     }
     

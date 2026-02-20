@@ -14,77 +14,126 @@ struct SummaryCard: View {
     var iconColor: Color = .gray
     var gradient: LinearGradient? = nil
     var isAnimated: Bool = true
-    
+
     @State private var animateValue = false
-    
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    // 📱 Responsive sizing based on screen width
+    private var screenWidth: CGFloat {
+        UIScreen.main.bounds.width
+    }
+
+    private var isSmallDevice: Bool {
+        screenWidth <= 375 // iPhone SE, iPhone 12/13/14 mini
+    }
+
+    private var iconSize: CGFloat {
+        isSmallDevice ? 24 : 28
+    }
+
+    private var iconFontSize: CGFloat {
+        isSmallDevice ? 11 : 12
+    }
+
+    private var valueSize: CGFloat {
+        isSmallDevice ? 13 : 15
+    }
+
+    private var titleSize: CGFloat {
+        isSmallDevice ? 10 : 11
+    }
+
+    private var verticalPadding: CGFloat {
+        isSmallDevice ? 8 : 10
+    }
+
+    private var horizontalPadding: CGFloat {
+        isSmallDevice ? 6 : 8
+    }
+
+    private var cardSpacing: CGFloat {
+        isSmallDevice ? 6 : 8
+    }
+
     var body: some View {
-        VStack(spacing: 10) {
-            // Icono con gradiente
+        VStack(spacing: cardSpacing) {
+            // Icono con gradiente - RESPONSIVE
             ZStack {
                 Circle()
                     .fill(gradient ?? LinearGradient(colors: [valueColor, valueColor.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 32, height: 32)
-                    .shadow(color: valueColor.opacity(0.3), radius: 6, y: 3)
-                
+                    .frame(width: iconSize, height: iconSize)
+                    .shadow(color: valueColor.opacity(0.3), radius: 4, y: 2)
+
                 Image(systemName: icon)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: iconFontSize, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            
-            // Valor principal
+
+            // Valor principal - RESPONSIVE
             Text(value)
-                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .font(.system(size: valueSize, weight: .bold, design: .rounded))
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.6)
+                .minimumScaleFactor(0.5)
                 .opacity(animateValue ? 1 : 0)
                 .scaleEffect(animateValue ? 1 : 0.8)
-            
-            // Título
+
+            // Título - RESPONSIVE
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(.system(size: titleSize, weight: .medium))
                 .foregroundStyle(DesignTokens.Colors.textSecondary)
-                
+
             // Subtítulo opcional
             if let subtitle = subtitle {
                  Text(subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: titleSize - 1, weight: .medium))
                     .foregroundStyle(DesignTokens.Colors.textTertiary)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 10)
+        .padding(.vertical, verticalPadding)
+        .padding(.horizontal, horizontalPadding)
         .background {
             ZStack {
-                // Fondo base adaptativo
-                Color(.secondarySystemBackground)
+                // 🎨 GLASSMORPHISM PROFESIONAL
+                // Capa base con blur
+                RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
+                    .fill(.ultraThinMaterial)
 
-                // Gradiente de fondo sutil
+                // Gradiente de acento ultra sutil
                 if let gradient = gradient {
-                    gradient.opacity(0.15)
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
+                        .fill(gradient.opacity(0.08))
                 } else {
-                    valueColor.opacity(0.12)
+                    RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
+                        .fill(valueColor.opacity(0.06))
                 }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.medium))
         .overlay(
+            // Borde sutil con gradiente
             RoundedRectangle(cornerRadius: DesignTokens.Radius.medium)
-                .stroke(
+                .strokeBorder(
                     LinearGradient(
-                        colors: [valueColor.opacity(0.3), valueColor.opacity(0.1)],
+                        colors: [
+                            Color.white.opacity(0.2),
+                            Color.white.opacity(0.05)
+                        ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 1
+                    lineWidth: 0.5
                 )
         )
-        .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
-        .shadow(color: valueColor.opacity(0.1), radius: 8, y: 4)
+        // Sombras profesionales iOS-style (múltiples capas)
+        .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 4)
+        .shadow(color: valueColor.opacity(0.08), radius: 12, x: 0, y: 6)
         .onAppear {
             if isAnimated {
-                withAnimation(.bouncy(duration: 0.5).delay(0.1)) {
+                // 🎭 Animación de entrada suave estilo iOS
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.75, blendDuration: 0).delay(0.05)) {
                     animateValue = true
                 }
             } else {
@@ -92,12 +141,12 @@ struct SummaryCard: View {
             }
         }
         .onChange(of: value) { _, _ in
-            // Animación al cambiar valor
+            // 🎭 Animación de cambio de valor ultra smooth
             if isAnimated {
-                withAnimation(.bouncy(duration: 0.3)) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                     animateValue = false
                 }
-                withAnimation(.bouncy(duration: 0.3).delay(0.1)) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.75).delay(0.08)) {
                     animateValue = true
                 }
             }
@@ -112,9 +161,16 @@ struct SummaryCardsView: View {
     let savings: Double
     let savingsPercentage: Int
     let available: Double
-    
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    // 📱 Spacing responsive
+    private var cardSpacing: CGFloat {
+        UIScreen.main.bounds.width <= 375 ? 8 : 10
+    }
+
     var body: some View {
-        HStack(spacing: DesignTokens.Spacing.sm) {
+        HStack(spacing: cardSpacing) {
             // Card 1: Total (Violeta con gradiente)
             SummaryCard(
                 icon: "chart.bar.fill",

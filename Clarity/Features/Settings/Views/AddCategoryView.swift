@@ -6,17 +6,18 @@ import SwiftUI
 struct AddCategoryView: View {
     @Environment(\.dismiss) private var dismiss
     let onSave: (Category) -> Void
-    
+
     @State private var name = ""
     @State private var selectedColor = CategoryColors.indigo
     @State private var subcategories: [String] = []
     @State private var showAddSubcategory = false
     @State private var newSubcategoryName = ""
-    
+    @State private var showColorPicker = false
+
     var isValid: Bool {
         !name.isEmpty && !subcategories.isEmpty
     }
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -26,39 +27,41 @@ struct AddCategoryView: View {
                         Circle()
                             .fill(Color(hex: selectedColor) ?? .gray)
                             .frame(width: 44, height: 44)
-                        
+
                         TextField("Ej: Transporte, Salud, etc.", text: $name)
                             .font(.body)
                     }
                 }
-                
-                // Color - compact iOS style
+
+                // Color - compact button to open advanced picker
                 Section("Color") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
-                        ForEach(CategoryColors.allCases, id: \.self) { colorHex in
-                            Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    selectedColor = colorHex
-                                }
-                                HapticManager.shared.selection()
-                            } label: {
-                                Circle()
-                                    .fill(Color(hex: colorHex) ?? .gray)
-                                    .frame(width: 36, height: 36)
-                                    .overlay {
-                                        if selectedColor == colorHex {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundStyle(.white)
-                                        }
-                                    }
-                            }
-                            .buttonStyle(.plain)
+                    Button {
+                        showColorPicker = true
+                    } label: {
+                        HStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(hex: selectedColor) ?? .gray)
+                                .frame(width: 44, height: 44)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                                )
+
+                            Text(selectedColor.uppercased())
+                                .font(.system(.body, design: .monospaced))
+                                .foregroundColor(.primary)
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
+                        .contentShape(Rectangle())
                     }
-                    .padding(.vertical, 4)
+                    .buttonStyle(.plain)
                 }
-                
+
                 // Subcategories
                 Section {
                     ForEach(subcategories.indices, id: \.self) { index in
@@ -69,11 +72,11 @@ struct AddCategoryView: View {
                     }
                     .onDelete { subcategories.remove(atOffsets: $0) }
                     .onMove { subcategories.move(fromOffsets: $0, toOffset: $1) }
-                    
+
                     if showAddSubcategory {
                         HStack {
                             TextField("Nombre de subcategoría", text: $newSubcategoryName)
-                            
+
                             Button {
                                 guard !newSubcategoryName.isEmpty else { return }
                                 withAnimation(.bouncy) {
@@ -86,7 +89,7 @@ struct AddCategoryView: View {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
                             }
-                            
+
                             Button {
                                 showAddSubcategory = false
                                 newSubcategoryName = ""
@@ -118,7 +121,7 @@ struct AddCategoryView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Crear") {
                         let category = Category(
@@ -136,6 +139,11 @@ struct AddCategoryView: View {
                     .fontWeight(.semibold)
                 }
             }
+        }
+        .sheet(isPresented: $showColorPicker) {
+            AdvancedColorPickerView(selectedColor: $selectedColor)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 }

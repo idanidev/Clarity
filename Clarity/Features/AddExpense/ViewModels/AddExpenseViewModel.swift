@@ -17,7 +17,29 @@ class AddExpenseViewModel {
     // but enum with rawValue usually works fine if it's Equatable.
     // Assuming PaymentMethod is simple enum, it works with @Observable.
     var paymentMethod: PaymentMethod = .tarjeta
-    var notes: String = ""
+    var notes: String = "" {
+        didSet { wasAutoCategorized = false } // Reset flag on manual notes edit if needed? Usually not.
+    }
+    
+    // MARK: - Auto-Suggest Logic
+    // We observe 'name' changes via onChange in View or setter here if possible. 
+    // In @Observable, we don't have didSet on observable properties easily without setter override.
+    // Better to expose a method `updateName(_:)` or rely on View `.onChange`.
+    // Let's create a specific method to handle name updates to trigger suggestion.
+    
+    func onNameChange(_ newName: String) {
+        self.name = newName
+        
+        // Only auto-categorize if user hasn't manually selected yet (or if field is empty)
+        // Adjust logic: if category is empty OR was previously auto-filled
+        if !newName.isEmpty && (category.isEmpty || wasAutoCategorized) {
+            if let suggestion = SmartTransactionParser.suggestCategory(for: newName) {
+                self.category = suggestion.category
+                self.subcategory = suggestion.subcategory
+                self.wasAutoCategorized = true
+            }
+        }
+    }
     
     // MARK: - State
     var isLoading = false

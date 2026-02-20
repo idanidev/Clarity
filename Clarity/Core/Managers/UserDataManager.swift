@@ -94,7 +94,12 @@ final class UserDataManager {
             allMethods.formUnion(customMethods)
             self.paymentMethods = allMethods.sorted()
             print("✅ UserDataManager: Loaded \(categories.count) categories, \(savedFilters.count) filters, Default: \(defaultFilter?.name ?? "None")")
-            
+
+            // 🔄 Ejecutar migración de categorías (solo una vez)
+            Task {
+                try? await service.migrateExpenseCategoriesFromSlashToDash(userId: userId)
+            }
+
             // Sync Tips
             if let settings = self.userDocument?.settings, settings.hasCompletedOnboarding == true {
                 // Invalidate all tips if user already completed onboarding
@@ -149,15 +154,25 @@ final class UserDataManager {
     
     func updateCategory(_ category: Category) async {
         guard let userId = userId else { return }
-        // Si el nombre cambia, tendríamos que manejar el borrado del antiguo en el servicio
-        // Por simplicidad del refactor, asumimos actualización directa o mejora en el servicio
-        // El servicio original tenía lógica de borrado si cambiaba ID.
-        // Lo delegamos al servicio:
+
+        // Buscar el nombre antiguo de la categoría para actualizar gastos si cambió
+        let oldName = categories.first(where: { $0.id == category.id })?.name
+
         do {
-            try await service.saveCategory(category, userId: userId)
+            try await service.saveCategory(category, userId: userId, oldName: oldName)
             await loadUserData()
         } catch {
             self.error = "Error al actualizar: \(error.localizedDescription)"
+        }
+    }
+    
+    func addSubcategory(_ subcategoryName: String, toCategoryId categoryId: String) async {
+        guard let userId = userId else { return }
+        do {
+            try await service.addSubcategory(subcategoryName, toCategoryId: categoryId, userId: userId)
+            await loadUserData() // Refresh state
+        } catch {
+            self.error = "Error al añadir subcategoría: \(error.localizedDescription)"
         }
     }
     
@@ -376,12 +391,54 @@ final class UserDataManager {
                 .collection("users")
                 .document(userId)
                 .updateData(["savedFilters": data])
-            logger.info("✅ Filter deleted")
         } catch {
-            logger.error("❌ Error deleting filter: \(error.localizedDescription)")
             self.error = "Error al eliminar filtro: \(error.localizedDescription)"
-            
-            // Revert local on error (complicated without cache, skipping complexity for now)
+        }
+        
+        // 3. Update UserDefaults backup
+        if let encoded = try? JSONEncoder().encode(currentFilters) {
+            UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
+        }
+    }
+    
+    func updateFilter(_ updatedFilter: ExpenseFilter) async {
+        guard var document = userDocument, let userId = userId else { 
+            logger.warning("⚠️ No userDocument or userId available")
+            return 
+        }
+        
+        logger.info("🔄 Updating filter '\(updatedFilter.name ?? "unnamed")' (ID: \(updatedFilter.id))")
+        
+        // 1. Update Local
+        var currentFilters = document.savedFilters ?? []
+        if let index = currentFilters.firstIndex(where: { $0.id == updatedFilter.id }) {
+            logger.info("✅ Found filter at index \(index), updating...")
+            currentFilters[index] = updatedFilter
+            document.savedFilters = currentFilters
+            self.userDocument = document
+        } else {
+            logger.error("❌ Filter not found in local cache")
+            self.error = "Filtro no encontrado"
+            return
+        }
+        
+        // 2. Update Remote
+        do {
+            let data = try Firestore.Encoder().encode(currentFilters)
+            try await Firestore.firestore()
+                .collection("users")
+                .document(userId)
+                .updateData(["savedFilters": data])
+            logger.info("✅ Filter updated in Firestore")
+        } catch {
+            logger.error("❌ Error updating filter in Firestore: \(error.localizedDescription)")
+            self.error = "Error al actualizar filtro: \(error.localizedDescription)"
+        }
+        
+        // 3. Update UserDefaults backup
+        if let encoded = try? JSONEncoder().encode(currentFilters) {
+            UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
+            logger.info("✅ Filter backed up to UserDefaults")
         }
     }
 }

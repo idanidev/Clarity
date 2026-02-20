@@ -7,7 +7,7 @@ import TipKit // Added for potential future tips in this sheet
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
-    @State private var speechManager = SpeechRecognitionManager()
+    @State private var speechManager = SpeechRecognitionManager.shared
     let onSave: () -> Void
     
     var body: some View {
@@ -48,7 +48,7 @@ struct AddExpenseSheet: View {
         }
         .onChange(of: speechManager.transcript) { _, newTranscript in
             if !newTranscript.isEmpty {
-                viewModel.name = newTranscript
+                viewModel.onNameChange(newTranscript)
             }
         }
     }
@@ -77,17 +77,9 @@ struct AddExpenseSheet: View {
             TextField("¿En qué gastaste?", text: $viewModel.name)
                 .font(.clarityBody)
                 .accessibilityLabel("Descripción del gasto")
+                .accessibilityLabel("Descripción del gasto")
                 .onChange(of: viewModel.name) { _, newValue in
-                    // Auto-categorize only if category empty or was auto-filled
-                    guard viewModel.category.isEmpty || viewModel.wasAutoCategorized else { return }
-                    guard newValue.count >= 3 else { return } // Wait for 3+ chars
-                    
-                    // Use SmartTransactionParser helper if available, or fallback to new Parser
-                    if let suggestion = SmartTransactionParser.suggestCategory(for: newValue) {
-                        viewModel.category = suggestion.0
-                        viewModel.subcategory = suggestion.1
-                        viewModel.wasAutoCategorized = true
-                    }
+                    viewModel.onNameChange(newValue)
                 }
             
             // Dictate button
@@ -110,7 +102,7 @@ struct AddExpenseSheet: View {
     }
     
     private var categorySection: some View {
-        Section("Categoría") {
+        Section {
             NavigationLink {
                 CategoryPickerView(
                     selectedCategory: $viewModel.category,
@@ -122,20 +114,44 @@ struct AddExpenseSheet: View {
                 }
             } label: {
                 HStack {
-                    Text(viewModel.category.isEmpty ? "Seleccionar" : viewModel.category)
-                        .foregroundStyle(viewModel.category.isEmpty ? .secondary : .primary)
-                    Spacer()
-                    if let sub = viewModel.subcategory {
-                        Text(sub)
+                    // Si no hay categoría seleccionada
+                    if viewModel.category.isEmpty {
+                        Text("Seleccionar")
                             .foregroundStyle(.secondary)
-                    }
-                    // Auto-fill indicator
-                    if viewModel.wasAutoCategorized && !viewModel.category.isEmpty {
-                        Image(systemName: "sparkles")
-                            .font(.caption)
-                            .foregroundStyle(.yellow)
+                    } else {
+                        // Mostrar categoría
+                        Text(viewModel.category)
+                            .foregroundStyle(.primary)
+                        
+                        Spacer()
+                        
+                        // Mostrar subcategoría (OBLIGATORIO)
+                        if let sub = viewModel.subcategory {
+                            Text(sub)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            // Si hay categoría pero no subcategoría, mostrar advertencia
+                            Text("Elige subcategoría")
+                                .foregroundStyle(.orange)
+                                .font(.caption.weight(.medium))
+                        }
+                        
+                        // Auto-fill indicator
+                        if viewModel.wasAutoCategorized && !viewModel.category.isEmpty {
+                            Image(systemName: "sparkles")
+                                .font(.caption)
+                                .foregroundStyle(.yellow)
+                        }
                     }
                 }
+            }
+        } header: {
+            Text("Categoría")
+        } footer: {
+            if !viewModel.category.isEmpty && viewModel.subcategory == nil {
+                Text("⚠️ Las subcategorías son obligatorias para todos los gastos")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
             }
         }
     }

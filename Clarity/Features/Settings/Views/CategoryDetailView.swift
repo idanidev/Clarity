@@ -17,6 +17,27 @@ struct CategoryDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var hasChanges = false
     @State private var isSaving = false
+    @State private var showNameChangeWarning = false
+    @State private var showAddSubcategorySheet = false
+    
+    // Validación de caracteres prohibidos
+    private let forbiddenChars: [Character] = ["/", "~", "*", "[", "]"]
+    
+    private var nameContainsForbiddenChars: Bool {
+        name.contains(where: { forbiddenChars.contains($0) })
+    }
+    
+    private var forbiddenCharsInName: [Character] {
+        name.filter { forbiddenChars.contains($0) }
+    }
+    
+    private var isValidName: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !nameContainsForbiddenChars
+    }
+    
+    private var nameHasChanged: Bool {
+        name != originalCategory.name
+    }
     
     init(category: Category, onUpdate: @escaping () -> Void) {
         self.originalCategory = category
@@ -29,7 +50,7 @@ struct CategoryDetailView: View {
     var body: some View {
         Form {
             // Name with inline preview
-            Section("Nombre") {
+            Section {
                 HStack(spacing: 12) {
                     Circle()
                         .fill(Color(hex: selectedColor) ?? .gray)
@@ -37,7 +58,47 @@ struct CategoryDetailView: View {
                     
                     TextField("Nombre de la categoría", text: $name)
                         .font(.body)
+                        .autocorrectionDisabled()
                         .onChange(of: name) { _, _ in hasChanges = true }
+                }
+            } header: {
+                Text("Nombre")
+            } footer: {
+                if nameContainsForbiddenChars {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("No puedes usar estos caracteres:")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.orange)
+                            
+                            Text(forbiddenCharsInName.map { String($0) }.joined(separator: " "))
+                                .font(.caption.monospaced().weight(.bold))
+                                .foregroundStyle(.red)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.red.opacity(0.1))
+                                .cornerRadius(6)
+                            
+                            Text("Caracteres prohibidos: / ~ * [ ]")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } else if nameHasChanged {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                        
+                        Text("Los gastos existentes mantendrán esta categoría con su nuevo nombre.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
             
@@ -161,7 +222,18 @@ struct CategoryDetailView: View {
                     }
                 }
             } header: {
-                Text("Subcategorías")
+                HStack {
+                    Text("Subcategorías")
+                    Spacer()
+                    Button {
+                        showAddSubcategorySheet = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.body)
+                            .foregroundStyle(Color.clarityPrimary)
+                    }
+                }
+                .textCase(nil)
             } footer: {
                 if !subcategories.isEmpty {
                     Text("Toca para editar • Desliza para eliminar • Arrastra para reordenar")
@@ -193,11 +265,16 @@ struct CategoryDetailView: View {
             
             ToolbarItem(placement: .confirmationAction) {
                 Button("Guardar") {
-                    Task {
-                        await saveChanges()
+                    // Si el nombre cambió, mostrar advertencia primero
+                    if nameHasChanged {
+                        showNameChangeWarning = true
+                    } else {
+                        Task {
+                            await saveChanges()
+                        }
                     }
                 }
-                .disabled(!hasChanges || name.isEmpty || isSaving)
+                .disabled(!hasChanges || !isValidName || isSaving)
                 .fontWeight(.semibold)
             }
         }
@@ -213,6 +290,30 @@ struct CategoryDetailView: View {
             }
         } message: {
             Text("Esta acción no se puede deshacer.")
+        }
+        .sheet(isPresented: $showAddSubcategorySheet) {
+            AddSubcategorySheet(category: originalCategory) {
+                // Recargar las subcategorías cuando se añade una nueva
+                Task {
+                    await UserDataManager.shared.loadUserData()
+                    // Actualizar las subcategorías locales
+                    if let updatedCategory = UserDataManager.shared.categories.first(where: { $0.id == originalCategory.id }) {
+                        subcategories = updatedCategory.subcategories
+                        hasChanges = true
+                    }
+                    onUpdate()
+                }
+            }
+        }
+        .alert("Cambio de nombre", isPresented: $showNameChangeWarning) {
+            Button("Cancelar", role: .cancel) { }
+            Button("Guardar cambios") {
+                Task {
+                    await saveChanges()
+                }
+            }
+        } message: {
+            Text("Al cambiar el nombre de '\(originalCategory.name)' a '\(name)', los gastos existentes se actualizarán automáticamente para reflejar el nuevo nombre.")
         }
     }
     

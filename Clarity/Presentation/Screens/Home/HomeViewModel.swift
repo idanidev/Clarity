@@ -2,15 +2,16 @@
 // ViewModel for the main expense list/dashboard
 
 import Foundation
+import OSLog
 import SwiftUI
 
 enum HomeViewState: Equatable {
     case idle
     case loading
     case loaded([Expense])
-    case error(AppError) // Changed from String
+    case error(AppError)  // Changed from String
     case empty
-    
+
     static func == (lhs: HomeViewState, rhs: HomeViewState) -> Bool {
         switch (lhs, rhs) {
         case (.idle, .idle), (.loading, .loading), (.empty, .empty): return true
@@ -24,9 +25,17 @@ enum HomeViewState: Equatable {
 @MainActor
 @Observable
 final class HomeViewModel {
-    
+
     // Output
     private(set) var state: HomeViewState = .idle
+
+    // Month selector state
+    var selectedMonth: Date = Date() {
+        didSet {
+            updateFilterForSelectedMonth()
+        }
+    }
+
     var selectedFilter: ExpenseFilter = ExpenseFilter() {
         didSet { applyFilters() }
     }
@@ -34,77 +43,191 @@ final class HomeViewModel {
         didSet {
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(nanoseconds: 300_000_000) // 300ms
+                try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms
                 if !Task.isCancelled {
                     applyFilters()
                 }
             }
         }
     }
-    
+
     private var searchTask: Task<Void, Never>?
-    
+
     // Data for View
     var categoryGroups: [CategoryGroup] = []
     var filteredExpenses: [Expense] = []
-    var dateFilteredExpenses: [Expense] = [] // For Savings calculation
+    var dateFilteredExpenses: [Expense] = []  // For filtered view
+    var currentMonthExpenses: [Expense] = []  // Para cálculo de AHORROS (sin filtros)
     var income: Double = 0
-    var showAddExpense = false // From DashboardViewModel
-    
+    var showAddExpense = false  // From DashboardViewModel
+    var currentMonthlyBudget: MonthlyBudget? = nil  // For savingsAllocated
+    var previousMonthlyBudget: MonthlyBudget? = nil  // Para cálculo de ahorros
+
     // Computed properties (from DashboardViewModel)
     var totalFilteredAmount: Double {
         filteredExpenses.reduce(0) { $0 + $1.amount }
     }
-    
+
     var calculatedSavings: Double {
-        let periodExpenses = dateFilteredExpenses.reduce(0) { $0 + $1.amount }
-        
+        // IMPORTANTE: Usar gastos REALES del mes actual, NO los filtrados
+        let periodExpenses = currentMonthExpenses.reduce(0) { $0 + $1.amount }
+        let savingsAllocated = currentMonthlyBudget?.savingsAllocated ?? 0
+
+        logger.debug("💰 CALCULANDO AHORROS:")
+        logger.debug(
+            "   - Current month expenses: \(self.currentMonthExpenses.count) gastos = €\(periodExpenses)"
+        )
+        logger.debug("   - Previous month income: €\(self.previousMonthIncome)")
+        logger.debug("   - Savings allocated: €\(savingsAllocated)")
+        logger.debug(
+            "   - Resultado: €\(self.previousMonthIncome) - €\(periodExpenses) - €\(savingsAllocated) = €\(self.previousMonthIncome - periodExpenses - savingsAllocated)"
+        )
+
         // Calculate duration in months to adjust income
         let (startStr, endStr) = selectedFilter.dateRangeForQuery()
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        
+
         guard let start = formatter.date(from: startStr),
-              let end = formatter.date(from: endStr) else {
-            return income - periodExpenses
+            let end = formatter.date(from: endStr)
+        else {
+            // Usar nómina del mes anterior para gastos del mes actual
+            return previousMonthIncome - periodExpenses - savingsAllocated
         }
-        
+
         // Calculate exact days
         let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
-        
+
+        // ⚠️ SAFEGUARD: Warn if range is suspiciously long (possible bug)
+        if days > 45 {
+            logger.warning(
+                "⚠️ SAVINGS ALERT: Calculating for \(days) days (\(String(format: "%.1f", Double(days)/30.44)) months)"
+            )
+            logger.warning("   Start: \(startStr), End: \(endStr)")
+            logger.warning(
+                "   Possible incorrect date filtering — expected ~30 days for monthly view")
+        }
+
         // Logic:
         // - "This Month" / "Last Month" (approx 28-31 days) -> 1x Income
         // - "Today" / "Yesterday" (1 day) -> 1x Income (Budget view mostly)
         // - "Last 3 Months" (90 days) -> 3x Income
-        
+
         // Threshold: If duration is significantly more than a standard month (e.g. > 45 days), scale it.
         // Otherwise, assume it's a monthly view or sub-monthly view where we want to compare against full Monthly Budget.
         let finalIncome: Double
         if days > 45 {
-             let months = Double(days) / 30.44 // Average days in month
-             finalIncome = income * months
+            let months = Double(days) / 30.44  // Average days in month
+            // Para múltiples meses, usar la nómina del mes anterior como base
+            finalIncome = previousMonthIncome * months
         } else {
-             finalIncome = income
+            // Para vista mensual, usar la nómina del mes ANTERIOR
+            // porque con la nómina de diciembre pagas los gastos de enero
+            finalIncome = previousMonthIncome
         }
-        
-        return finalIncome - periodExpenses
+
+        return finalIncome - periodExpenses - savingsAllocated
     }
-    
+
+    /// Income for the currently selected month (from MonthlyBudget)
+    private var monthlyIncome: Double {
+        return currentMonthlyBudget?.income ?? income
+    }
+
+    /// Income del mes ANTERIOR al seleccionado (para cálculo de ahorros)
+    /// La nómina de diciembre se usa para pagar gastos de enero
+    private var previousMonthIncome: Double {
+        // Si tenemos el budget del mes anterior cargado, usarlo
+        if let previousBudget = previousMonthlyBudget {
+            return previousBudget.income
+        }
+
+        // Fallback: usar el mismo income del mes actual
+        // (asumiendo que la nómina es estable)
+        return currentMonthlyBudget?.income ?? income
+    }
+
+    /// Load MonthlyBudget from Firebase for a specific month
+    private func loadMonthlyBudget(for date: Date) async {
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: date)
+        let month = calendar.component(.month, from: date)
+
+        do {
+            currentMonthlyBudget = try await financialService.fetchMonthlyBudget(
+                year: year,
+                month: month
+            )
+
+            if let budget = currentMonthlyBudget {
+                logger.debug("💰 Loaded budget for \(month)/\(year): €\(budget.income)")
+            } else {
+                logger.info("⚠️ No budget found for \(month)/\(year), using global income fallback")
+            }
+        } catch {
+            print("❌ Error loading budget for \(month)/\(year): \(error.localizedDescription)")
+            currentMonthlyBudget = nil
+        }
+
+        // Cargar también el budget del mes ANTERIOR para cálculo de ahorros
+        guard let previousDate = calendar.date(byAdding: .month, value: -1, to: date) else {
+            return
+        }
+
+        let previousYear = calendar.component(.year, from: previousDate)
+        let previousMonth = calendar.component(.month, from: previousDate)
+
+        do {
+            previousMonthlyBudget = try await financialService.fetchMonthlyBudget(
+                year: previousYear,
+                month: previousMonth
+            )
+
+            if let prevBudget = previousMonthlyBudget {
+                logger.debug(
+                    "💰 Loaded PREVIOUS month budget (\(previousMonth)/\(previousYear)): €\(prevBudget.income)"
+                )
+            } else {
+                logger.info(
+                    "⚠️ No budget found for previous month (\(previousMonth)/\(previousYear))")
+            }
+        } catch {
+            logger.error("❌ Error loading previous month budget: \(error.localizedDescription)")
+            previousMonthlyBudget = nil
+        }
+    }
+
     // Internal
     private let getExpensesUseCase: GetExpensesUseCase
     private let deleteExpenseUseCase: DeleteExpenseUseCase
     private let addExpenseUseCase: AddExpenseUseCase
     private let recurringRepository = RecurringExpenseRepository()
-    
+    private let financialService = FinancialService()
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "HomeViewModel")
+
+    // Cached formatters (DateFormatter is expensive to create)
+    private let filterDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+    private let monthDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM yyyy"
+        f.locale = Locale(identifier: "es_ES")
+        return f
+    }()
+
     // Exposed for View Logic (loading check)
     var allExpenses: [Expense] = []
-    var allRecurringRules: [RecurringExpense] = [] // Keep them for reference
-    
+    var allRecurringRules: [RecurringExpense] = []  // Keep them for reference
+
     // Pagination
     var currentPage = 0
     var hasMorePages = true
     var isLoadingMore = false
-    
+
     init(
         getExpensesUseCase: GetExpensesUseCase,
         deleteExpenseUseCase: DeleteExpenseUseCase,
@@ -113,173 +236,282 @@ final class HomeViewModel {
         self.getExpensesUseCase = getExpensesUseCase
         self.deleteExpenseUseCase = deleteExpenseUseCase
         self.addExpenseUseCase = addExpenseUseCase
-        
-        // Load income and default filter
+
+        // Load income
         self.income = UserDataManager.shared.userDocument?.income ?? 0
+
+        // ✅ FIX: Force "This Month" filter by default to prevent summing ALL history
         if let savedDefault = UserDataManager.shared.defaultFilter {
             self.selectedFilter = savedDefault
+        } else {
+            // Default to current month to show realistic savings (income - current month expenses)
+            self.selectedFilter = ExpenseFilter(dateRange: .thisMonth)
+            print("📅 No saved filter - defaulting to This Month to prevent historical accumulation")
+        }
+
+        // 🆕 Load current month's budget for accurate income
+        Task {
+            await loadMonthlyBudget(for: Date())
         }
     }
-    
+
     // MARK: - Intents
-    
+
     func deleteExpense(_ expense: Expense) async {
         guard let id = expense.id else { return }
         do {
             try await deleteExpenseUseCase.execute(id: id)
             await loadExpenses()
-            FeedbackManager.shared.show(.success, title: "Gasto eliminado", message: "\(expense.name) se ha borrado correctamente")
+            FeedbackManager.shared.show(
+                .success, title: "Gasto eliminado",
+                message: "\(expense.name) se ha borrado correctamente")
         } catch {
             state = .error(.deletionFailed(error.localizedDescription))
-            FeedbackManager.shared.show(.error, title: "Error al borrar", message: error.localizedDescription)
+            FeedbackManager.shared.show(
+                .error, title: "Error al borrar", message: error.localizedDescription)
         }
     }
-    
+
     // Flag to track if we've attempted to apply the default filter
     private var hasAppliedDefaultFilter = false
-    
+
     func loadExpenses(silent: Bool = false) async {
         print("🔍 loadExpenses called (silent: \(silent))")
+
+        // ✅ ESPERAR a que UserDataManager termine de cargar ANTES de continuar
+        if !UserDataManager.shared.hasLoaded {
+            logger.info("⏳ Waiting for UserDataManager to load...")
+            await UserDataManager.shared.loadUserData()
+            logger.info("✅ UserDataManager loaded!")
+        }
+
         // Refresh income
         self.income = UserDataManager.shared.userDocument?.income ?? 0
-        
-        let hasData = UserDataManager.shared.hasLoaded
-        let defaultFilter = UserDataManager.shared.defaultFilter
-        print("👤 UserData loaded: \(hasData), Default Filter present: \(defaultFilter != nil)")
-        
-        // Try to apply default filter if not yet done and available
-        if !hasAppliedDefaultFilter, let defaultFilter = UserDataManager.shared.defaultFilter {
-            print("🏠 Apply Default Filter: \(defaultFilter.name ?? "Unnamed")")
-            self.selectedFilter = defaultFilter
-            self.hasAppliedDefaultFilter = true
-        } else if !hasAppliedDefaultFilter, UserDataManager.shared.hasLoaded {
-            // If UserData is loaded but no default filter, mark as applied to stop trying
-            print("🏠 UserData loaded but no Default Filter found. Marking as checked.")
-            self.hasAppliedDefaultFilter = true
-        } else if !hasAppliedDefaultFilter {
-            print("⏳ UserData not ready yet, skipping default filter check for now.")
+
+        // SIEMPRE intentar aplicar filtro predeterminado si existe y aún no se ha aplicado
+        if !hasAppliedDefaultFilter {
+            if let defaultFilter = UserDataManager.shared.defaultFilter {
+                logger.debug("🏠 ✅ Applying Default Filter: '\(defaultFilter.name ?? "Unnamed")'")
+                self.selectedFilter = defaultFilter
+                self.hasAppliedDefaultFilter = true
+            } else {
+                logger.debug("🏠 ⚠️ No default filter found, using 'Este mes'")
+                self.hasAppliedDefaultFilter = true
+            }
         }
-        
+
         if !silent && allExpenses.isEmpty {
             state = .loading
         }
-        
+
         currentPage = 0
         hasMorePages = true
-        
-        do {
 
-            
+        do {
+            // Load current month's budget to get savingsAllocated
+            let calendar = Calendar.current
+            let now = Date()
+            let currentYear = calendar.component(.year, from: now)
+            let currentMonth = calendar.component(.month, from: now)
+
+            do {
+                self.currentMonthlyBudget = try await financialService.fetchMonthlyBudget(
+                    year: currentYear, month: currentMonth)
+                logger.debug(
+                    "💰 Loaded monthly budget with savingsAllocated: €\(self.currentMonthlyBudget?.savingsAllocated ?? 0)"
+                )
+            } catch {
+                logger.warning("⚠️ Failed to load monthly budget: \(error)")
+            }
+
             // Fetch Expenses and Rules in parallel for Sanitization
             // robust error handling: if rules fail, we still want expenses
-            async let expensesTask = getExpensesUseCase.executePaginated(page: 0, filter: selectedFilter)
-            
-            // Safe fetch for rules
+            async let expensesTask = getExpensesUseCase.executePaginated(
+                page: 0, filter: selectedFilter)
+
             var rules: [RecurringExpense] = []
             do {
                 rules = try await recurringRepository.fetchAll()
             } catch {
-                print("⚠️ Failed to load recurring rules: \(error)")
+                logger.warning("⚠️ Failed to load recurring rules: \(error)")
             }
-            
+
             let result = try await expensesTask
             self.allRecurringRules = rules
-            
+
             // Sanitize Result
             // Logic: Deduplicate by period and remove misplaced annuals
             let sanitized = ExpenseSanitizer.sanitize(expenses: result.expenses, rules: rules)
-            
+
             self.allExpenses = sanitized
             self.hasMorePages = result.hasMore
-            
 
             applyFilters()
         } catch {
-            print("❌ Error loading expenses: \(error)")
+            logger.error("❌ Error loading expenses: \(error)")
             if !silent {
                 state = .error(.dataLoadingFailed(error.localizedDescription))
             }
         }
     }
-    
+
     func loadMore() async {
         guard hasMorePages, !isLoadingMore else { return }
         isLoadingMore = true
-        
+
         do {
             currentPage += 1
-            let result = try await getExpensesUseCase.executePaginated(page: currentPage, filter: selectedFilter)
-            
+            let result = try await getExpensesUseCase.executePaginated(
+                page: currentPage, filter: selectedFilter)
+
             self.allExpenses.append(contentsOf: result.expenses)
             self.hasMorePages = result.hasMore
-            
-            applyFilters() // Re-apply filters to new full set
+
+            applyFilters()  // Re-apply filters to new full set
         } catch {
             // Silently fail or show toast? For infinite scroll, usually silent or small indicator
             print("Error loading more: \(error)")
-            currentPage -= 1 // Revert page logic
+            currentPage -= 1  // Revert page logic
         }
-        
+
         isLoadingMore = false
     }
-    
+
     func refresh() async {
         await loadExpenses(silent: true)
     }
-    
-    // MARK: - Logic
-    
-    private func applyFilters() {
-        // 1. Base is already sanitized
-        let uniqueExpenses = allExpenses
-        
-        // 2. Date Filter (Base for everything)
-        let dateRange = selectedFilter.dateRangeForQuery()
-        let inDateRange = uniqueExpenses.filter {
-            $0.date >= dateRange.0 && $0.date <= dateRange.1
+
+    // MARK: - Helpers
+
+    /// Updates the filter to match the selected month (used by MonthSelectorView)
+    private func updateFilterForSelectedMonth() {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.year, .month], from: selectedMonth)
+
+        guard let startOfMonth = calendar.date(from: components),
+            let endOfMonth = calendar.date(
+                byAdding: DateComponents(month: 1, day: -1), to: startOfMonth)
+        else {
+            return
         }
-        self.dateFilteredExpenses = inDateRange
-        
+
+        var newFilter = selectedFilter
+        newFilter.dateRange = .custom
+        newFilter.customStartDate = startOfMonth
+        newFilter.customEndDate = endOfMonth
+        selectedFilter = newFilter
+
+        logger.debug(
+            "📅 Month changed to: \(self.monthDateFormatter.string(from: self.selectedMonth))")
+    }
+
+    /// Called when month selector changes (triggers refresh)
+    func onMonthChanged() async {
+        await loadMonthlyBudget(for: selectedMonth)
+        await loadExpenses()
+    }
+
+    // monthDateFormatter is defined as a private let above
+
+    private func applyFilters() {
+        logger.debug("📋 Applying filters: \(self.selectedFilter.dateRange.rawValue)")
+
+        // Calcular gastos del MES SELECCIONADO para el cálculo de ahorros (sin filtros)
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: selectedMonth)
+        let month = calendar.component(.month, from: selectedMonth)
+
+        var startComponents = DateComponents()
+        startComponents.year = year
+        startComponents.month = month
+        startComponents.day = 1
+
+        var endComponents = DateComponents()
+        endComponents.year = year
+        endComponents.month = month + 1
+        endComponents.day = 0  // Último día del mes
+
+        if let monthStart = calendar.date(from: startComponents),
+            let monthEnd = calendar.date(from: endComponents)
+        {
+            let startStr = filterDateFormatter.string(from: monthStart)
+            let endStr = filterDateFormatter.string(from: monthEnd)
+
+            currentMonthExpenses = allExpenses.filter { expense in
+                expense.date >= startStr && expense.date <= endStr
+            }
+            let totalAmount = currentMonthExpenses.reduce(0) { $0 + $1.amount }
+            logger.debug(
+                "💰 Gastos del mes \(month)/\(year) para AHORROS: \(self.currentMonthExpenses.count) gastos = €\(totalAmount)"
+            )
+        } else {
+            currentMonthExpenses = []
+        }
+
+        // Filter by date range (según filtro del usuario)
+        let (startStr, endStr) = selectedFilter.dateRangeForQuery()
+        dateFilteredExpenses = allExpenses.filter { expense in
+            expense.date >= startStr && expense.date <= endStr
+        }
+
         // 3. Apply other filters (Category, Payment, Search)
-        var result = inDateRange
-        
+        var result = dateFilteredExpenses  // Use the newly filtered dateFilteredExpenses
+
         // Search
         if !searchText.isEmpty {
             result = result.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                $0.category.localizedCaseInsensitiveContains(searchText) ||
-                ($0.subcategory?.localizedCaseInsensitiveContains(searchText) ?? false)
+                $0.name.localizedCaseInsensitiveContains(searchText)
+                    || $0.category.localizedCaseInsensitiveContains(searchText)
+                    || ($0.subcategory?.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
-        
+
         // Category Filter
         if !selectedFilter.selectedCategories.isEmpty {
             result = result.filter { expense in
-                selectedFilter.selectedCategories.contains { category in
-                    expense.category.localizedCaseInsensitiveContains(category.components(separatedBy: " ").first ?? category)
+                selectedFilter.selectedCategories.contains { filterCategory in
+                    // Normalizar categorías: reemplazar `/` y `-` por espacios para comparación
+                    let normalizedExpenseCategory = expense.category
+                        .replacingOccurrences(of: " / ", with: " ")
+                        .replacingOccurrences(of: " - ", with: " ")
+                        .lowercased()
+
+                    let normalizedFilterCategory =
+                        filterCategory
+                        .replacingOccurrences(of: " / ", with: " ")
+                        .replacingOccurrences(of: " - ", with: " ")
+                        .lowercased()
+
+                    // Comparar solo la primera palabra (categoría principal)
+                    let expenseFirstWord =
+                        normalizedExpenseCategory.components(separatedBy: " ").first ?? ""
+                    let filterFirstWord =
+                        normalizedFilterCategory.components(separatedBy: " ").first ?? ""
+
+                    return expenseFirstWord == filterFirstWord
                 }
             }
         }
-        
+
         // Payment Method Filter
         if !selectedFilter.selectedPaymentMethods.isEmpty {
             result = result.filter { expense in
                 selectedFilter.selectedPaymentMethods.contains(expense.paymentMethod)
             }
         }
-        
+
         self.filteredExpenses = result
-        
+
         // 4. Build Groups
         buildCategoryGroups(from: result)
-        
+
         if result.isEmpty {
             state = .empty
         } else {
             state = .loaded(result)
         }
     }
-    
+
     private func deduplicate(expenses: [Expense]) -> [Expense] {
         var seen = Set<String>()
         return expenses.filter { expense in
@@ -289,14 +521,14 @@ final class HomeViewModel {
             return true
         }
     }
-    
+
     private func buildCategoryGroups(from expenses: [Expense]) {
         var groups: [String: CategoryGroup] = [:]
-        
+
         for expense in expenses {
             let categoryName = extractCategoryName(from: expense.category)
             let emoji = extractEmoji(from: expense.category)
-            
+
             if groups[categoryName] == nil {
                 groups[categoryName] = CategoryGroup(
                     name: categoryName,
@@ -307,13 +539,15 @@ final class HomeViewModel {
                     subcategories: []
                 )
             }
-            
+
             groups[categoryName]?.totalAmount += expense.amount
             groups[categoryName]?.expenseCount += 1
-            
+
             // Add to subcategory
             let subcategoryName = expense.subcategory ?? "Sin subcategoría"
-            if let subIndex = groups[categoryName]?.subcategories.firstIndex(where: { $0.name == subcategoryName }) {
+            if let subIndex = groups[categoryName]?.subcategories.firstIndex(where: {
+                $0.name == subcategoryName
+            }) {
                 groups[categoryName]?.subcategories[subIndex].totalAmount += expense.amount
                 groups[categoryName]?.subcategories[subIndex].expenseCount += 1
                 groups[categoryName]?.subcategories[subIndex].expenses.append(expense)
@@ -328,7 +562,7 @@ final class HomeViewModel {
                 )
             }
         }
-        
+
         self.categoryGroups = Array(groups.values).sorted {
             if $0.totalAmount == $1.totalAmount {
                 return $0.name < $1.name
@@ -336,20 +570,22 @@ final class HomeViewModel {
             return $0.totalAmount > $1.totalAmount
         }
     }
-    
+
     // MARK: - Helpers
     private func extractCategoryName(from category: String) -> String {
         let components = category.components(separatedBy: " ")
         return components.first ?? category
     }
-    
+
     private func extractEmoji(from category: String) -> String {
         // Extract all emoji characters from the string (works with or without spaces)
         return category.filter { scalar in
-            scalar.unicodeScalars.contains { $0.properties.isEmoji && $0.properties.isEmojiPresentation }
+            scalar.unicodeScalars.contains {
+                $0.properties.isEmoji && $0.properties.isEmojiPresentation
+            }
         }.map { String($0) }.joined()
     }
-    
+
     private func colorForCategory(_ name: String) -> Color {
         UserDataManager.shared.color(for: name)
     }

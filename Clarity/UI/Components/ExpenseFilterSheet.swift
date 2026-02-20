@@ -15,6 +15,8 @@ struct ExpenseFilterSheet: View {
     @State private var maxAmountText: String = ""
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
+    @State private var filterToEdit: ExpenseFilter?
+    @State private var isEditMode = false
     
     init(
         filter: Binding<ExpenseFilter>,
@@ -165,8 +167,45 @@ struct ExpenseFilterSheet: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    // Save Button (Always visible if active filters)
-                    if filter.hasActiveFilters {
+                    // Save/Update Button
+                    if isEditMode {
+                        // Modo edición - Actualizar filtro existente
+                        Button {
+                            Task {
+                                await updateExistingFilter()
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark")
+                                Text("Actualizar '\(newPresetName)'")
+                            }
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.green.opacity(0.1))
+                            .foregroundStyle(.green)
+                            .clipShape(Capsule())
+                        }
+                        
+                        // Botón para cancelar edición
+                        Button {
+                            isEditMode = false
+                            filterToEdit = nil
+                            HapticManager.shared.selection()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "xmark")
+                                Text("Cancelar")
+                            }
+                            .font(.caption.weight(.bold))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.red.opacity(0.1))
+                            .foregroundStyle(.red)
+                            .clipShape(Capsule())
+                        }
+                    } else if filter.hasActiveFilters {
+                        // Modo normal - Guardar nuevo
                         Button {
                             showSavePresetAlert = true
                             HapticManager.shared.selection()
@@ -419,13 +458,27 @@ struct ExpenseFilterSheet: View {
         }
         .contextMenu {
             Button {
+                // Cargar el filtro para editarlo
+                filter = preset
+                filterToEdit = preset
+                isEditMode = true
+                newPresetName = preset.name ?? ""
+                HapticManager.shared.selection()
+            } label: {
+                Label("Editar", systemImage: "pencil")
+            }
+            
+            Button {
                 Task {
                     UserDataManager.shared.saveDefaultFilter(preset)
                     await MainActor.run { HapticManager.shared.notification(.success) }
                 }
             } label: {
-                Label("Marcar como predeterminado", systemImage: "star")
+                Label(isSavedDefault ? "Predeterminado" : "Marcar como predeterminado", systemImage: "star")
             }
+            .disabled(isSavedDefault)
+            
+            Divider()
             
             Button(role: .destructive) {
                 Task { await UserDataManager.shared.deleteFilter(preset) }
@@ -456,6 +509,36 @@ struct ExpenseFilterSheet: View {
                 newPresetName = ""
                 HapticManager.shared.notification(.success)
             }
+        }
+    }
+    
+    private func updateExistingFilter() async {
+        guard let filterToEdit = filterToEdit else { 
+            print("❌ No filterToEdit available")
+            return 
+        }
+        
+        var updatedFilter = filter
+        updatedFilter.id = filterToEdit.id  // Mantener el mismo ID
+        updatedFilter.name = newPresetName.isEmpty ? filterToEdit.name : newPresetName
+        
+        print("🔄 Updating filter:")
+        print("   - ID: \(updatedFilter.id)")
+        print("   - Name: \(updatedFilter.name ?? "nil")")
+        print("   - Date Range: \(updatedFilter.dateRange.rawValue)")
+        print("   - Categories: \(updatedFilter.selectedCategories)")
+        print("   - Payment Methods: \(updatedFilter.selectedPaymentMethods)")
+        
+        await UserDataManager.shared.updateFilter(updatedFilter)
+        
+        // IMPORTANTE: Recargar data para reflejar cambios
+        await UserDataManager.shared.loadUserData()
+        
+        await MainActor.run {
+            HapticManager.shared.notification(.success)
+            isEditMode = false
+            self.filterToEdit = nil
+            newPresetName = ""
         }
     }
 }

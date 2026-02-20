@@ -36,6 +36,9 @@ struct AIAdvisorView: View {
                             }
                         }
                         .padding()
+                        .onTapGesture {
+                            isInputFocused = false
+                        }
                     }
                     .onChange(of: viewModel.messages.count) { _, _ in
                         // Auto-scroll to bottom
@@ -83,6 +86,8 @@ struct AIAdvisorView: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                     }
+                    .accessibilityLabel("Opciones del chat")
+                    .accessibilityHint("Cambia el proveedor de inteligencia artificial o limpia el historial")
                 }
             }
             .alert("Error", isPresented: Binding(
@@ -122,7 +127,13 @@ struct AIAdvisorView: View {
                 ForEach(viewModel.suggestions, id: \.self) { suggestion in
                     Button {
                         Task {
-                            await viewModel.sendSuggestion(suggestion)
+                            if suggestion.contains("Analiza") {
+                                // Trigger Auditor Mode
+                                await viewModel.triggerDeepAnalysis()
+                            } else {
+                                // Normal chat
+                                await viewModel.sendSuggestion(suggestion)
+                            }
                         }
                     } label: {
                         Text(suggestion)
@@ -171,6 +182,8 @@ struct AIAdvisorView: View {
                     .foregroundStyle(viewModel.canSend ? Color.clarityPrimary : .gray)
             }
             .disabled(!viewModel.canSend)
+            .accessibilityLabel("Enviar mensaje")
+            .accessibilityHint("Envía tu consulta al asesor financiero")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)

@@ -7,14 +7,14 @@ import TipKit
 struct EditExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: EditExpenseViewModel
-    @State private var speechManager = SpeechRecognitionManager()
+    @State private var speechManager = SpeechRecognitionManager.shared
     let onSave: () -> Void
-    
+
     init(expense: Expense, onSave: @escaping () -> Void) {
         _viewModel = State(initialValue: EditExpenseViewModel(expense: expense))
         self.onSave = onSave
     }
-    
+
     var body: some View {
         NavigationStack {
             Form {
@@ -31,7 +31,7 @@ struct EditExpenseSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
                         Task {
@@ -45,7 +45,7 @@ struct EditExpenseSheet: View {
                 }
             }
             .alert("Error", isPresented: $viewModel.showError) {
-                Button("OK") { }
+                Button("OK") {}
             } message: {
                 Text(viewModel.errorMessage ?? "Error desconocido")
             }
@@ -56,16 +56,16 @@ struct EditExpenseSheet: View {
             }
         }
     }
-    
+
     // MARK: - Sections
-    
+
     private var amountSection: some View {
         Section {
             HStack(alignment: .center) {
                 Text("€")
                     .font(.largeTitle)
                     .foregroundStyle(.secondary)
-                
+
                 TextField("0.00", value: $viewModel.amount, format: .number)
                     .font(.system(size: 48, weight: .bold, design: .monospaced))
                     .keyboardType(.decimalPad)
@@ -75,22 +75,22 @@ struct EditExpenseSheet: View {
             .padding(.vertical, Spacing.sm)
         }
     }
-    
+
     private var descriptionSection: some View {
         Section("Descripción") {
             TextField("¿En qué gastaste?", text: $viewModel.name)
                 .font(.clarityBody)
                 .accessibilityLabel("Descripción del gasto")
                 .onChange(of: viewModel.name) { _, newValue in
-                     if viewModel.category.isEmpty {
-                         guard newValue.count >= 3 else { return }
-                         if let suggestion = SmartTransactionParser.suggestCategory(for: newValue) {
-                             viewModel.category = suggestion.0
-                             viewModel.subcategory = suggestion.1
-                         }
-                     }
+                    if viewModel.category.isEmpty {
+                        guard newValue.count >= 3 else { return }
+                        if let suggestion = SmartTransactionParser.suggestCategory(for: newValue) {
+                            viewModel.category = suggestion.0
+                            viewModel.subcategory = suggestion.1
+                        }
+                    }
                 }
-            
+
             // Dictate button
             Button {
                 if speechManager.isListening {
@@ -102,14 +102,16 @@ struct EditExpenseSheet: View {
                     }
                 }
             } label: {
-                Label(speechManager.isListening ? "Escuchando..." : "Dictar",
-                      systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill")
-                    .foregroundStyle(speechManager.isListening ? .red : Color.clarityPrimary)
-                    .symbolEffect(.pulse, isActive: speechManager.isListening)
+                Label(
+                    speechManager.isListening ? "Escuchando..." : "Dictar",
+                    systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill"
+                )
+                .foregroundStyle(speechManager.isListening ? .red : Color.clarityPrimary)
+                .symbolEffect(.pulse, isActive: speechManager.isListening)
             }
         }
     }
-    
+
     private var categorySection: some View {
         Section("Categoría") {
             NavigationLink {
@@ -130,7 +132,7 @@ struct EditExpenseSheet: View {
             }
         }
     }
-    
+
     private var dateSection: some View {
         Section("Fecha") {
             DatePicker(
@@ -143,7 +145,7 @@ struct EditExpenseSheet: View {
             .accessibilityLabel("Fecha del gasto")
         }
     }
-    
+
     private var paymentSection: some View {
         Section("Método de pago") {
             Picker("", selection: $viewModel.paymentMethod) {
@@ -155,7 +157,7 @@ struct EditExpenseSheet: View {
             .pickerStyle(.navigationLink)
         }
     }
-    
+
     private var notesSection: some View {
         Section("Notas") {
             TextField("Notas adicionales...", text: $viewModel.notes, axis: .vertical)

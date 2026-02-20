@@ -14,35 +14,38 @@ struct MainTabView: View {
 
     // Centralized managers
     @State private var coordinator = AppCoordinator()
-    @State private var feedbackManager = FeedbackManager.shared
 
     // Voice components
-    @State private var speechManager = SpeechRecognitionManager()
+    @State private var speechManager = SpeechRecognitionManager.shared
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
-    
+
     init() {
-        // Configure Glassmorphic Tab Bar
+        // Configure Glassmorphic Tab Bar (adapts to light/dark mode)
         let appearance = UITabBarAppearance()
         appearance.configureWithTransparentBackground()
-        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterialDark)
-        appearance.backgroundColor = UIColor.black.withAlphaComponent(0.2)
-        
-        // Item appearance
+        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
+
+        // Item appearance - adapts to color scheme
         let itemAppearance = UITabBarItemAppearance()
-        itemAppearance.normal.iconColor = UIColor.white.withAlphaComponent(0.5)
-        itemAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor.white.withAlphaComponent(0.5)]
-        
+        itemAppearance.normal.iconColor = UIColor.secondaryLabel
+        itemAppearance.normal.titleTextAttributes = [
+            .foregroundColor: UIColor.secondaryLabel
+        ]
+
         itemAppearance.selected.iconColor = UIColor(Color.clarityPrimary)
-        itemAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(Color.clarityPrimary)]
-        
+        itemAppearance.selected.titleTextAttributes = [
+            .foregroundColor: UIColor(Color.clarityPrimary)
+        ]
+
         appearance.stackedLayoutAppearance = itemAppearance
         appearance.inlineLayoutAppearance = itemAppearance
         appearance.compactInlineLayoutAppearance = itemAppearance
-        
+
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
-    
+
     var body: some View {
         ZStack {
             // TabView
@@ -55,7 +58,7 @@ struct MainTabView: View {
                     Text("Gastos")
                 }
                 .tag(0)
-                
+
                 NavigationStack {
                     FinancialDashboardView()
                 }
@@ -64,7 +67,7 @@ struct MainTabView: View {
                     Text("Metas")
                 }
                 .tag(1)
-                
+
                 // Espacio para botón central
                 Color.clear
                     .tabItem {
@@ -72,7 +75,7 @@ struct MainTabView: View {
                         Text("Añadir")
                     }
                     .tag(2)
-                
+
                 NavigationStack {
                     AIAdvisorView()
                 }
@@ -81,7 +84,7 @@ struct MainTabView: View {
                     Text("IA")
                 }
                 .tag(3)
-                
+
                 NavigationStack {
                     SettingsView()
                 }
@@ -92,12 +95,9 @@ struct MainTabView: View {
                 .tag(4)
             }
             .tint(Color.clarityPrimary)
-            
-            
 
         }
         // Sheets and alerts
-        // VoiceRecordingSheet and VoiceConfirmationSheet are now handled inline by VoiceExpenseButton
         .sheet(isPresented: $showManualExpense) {
             AddExpenseSheet {
                 Task { await homeViewModel.refresh() }
@@ -114,10 +114,13 @@ struct MainTabView: View {
             .presentationDetents([.large])
             .presentationBackground(.regularMaterial)
         }
-        .alert("Error de Voz", isPresented: Binding(
-            get: { voiceCoordinator.showError },
-            set: { if !$0 { voiceCoordinator.clearError() } }
-        )) {
+        .alert(
+            "Error de Voz",
+            isPresented: Binding(
+                get: { voiceCoordinator.showError },
+                set: { if !$0 { voiceCoordinator.clearError() } }
+            )
+        ) {
             Button("OK", role: .cancel) {
                 voiceCoordinator.clearError()
             }
@@ -138,30 +141,31 @@ struct MainTabView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .overlay(alignment: .top) {
-            if let message = feedbackManager.currentMessage {
-                FeedbackOverlay(message: message) {
-                    feedbackManager.dismiss()
-                }
-            }
-        }
         .task {
             await userDataManager.loadUserData()
+
+            // Verificar y crear gastos recurrentes pendientes
+            await LocalRecurringExpenseManager.shared.checkAndCreatePendingExpenses()
+
+            // Verificar si necesita crear backup automático (cada 7 días)
+            await BackupManager.shared.checkAndCreateAutoBackup()
         }
         .onOpenURL { url in
             if url.scheme == "clarity" && url.host == "add-expense" {
                 // Parse optional input parameter
                 var inputPhrase: String?
                 if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-                   let queryItems = components.queryItems {
+                    let queryItems = components.queryItems
+                {
                     inputPhrase = queryItems.first(where: { $0.name == "input" })?.value
                 }
-                
+
                 // Small delay to ensure clean state transition if coming from background
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     if let phrase = inputPhrase, !phrase.isEmpty {
                         // Use the existing voice logic to parse the text
-                        voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
+                        voiceCoordinator.handleTranscript(
+                            phrase, categories: userDataManager.categories)
                     } else {
                         // Fallback to manual entry
                         showManualExpense = true

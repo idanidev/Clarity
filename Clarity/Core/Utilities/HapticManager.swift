@@ -1,7 +1,7 @@
+import CoreHaptics
 // HapticManager.swift
 // Sistema avanzado de hápticos con Core Haptics y patrones personalizados
 import UIKit
-import CoreHaptics
 
 @MainActor
 final class HapticManager {
@@ -15,37 +15,37 @@ final class HapticManager {
     private init() {
         setupEngine()
     }
-    
+
     // MARK: - Public API (Pro)
-    
+
     func prepare() {
         // Pre-warm generators
         let impact = UIImpactFeedbackGenerator(style: .soft)
         impact.prepare()
-        
+
         let notification = UINotificationFeedbackGenerator()
         notification.prepare()
-        
+
         let selection = UISelectionFeedbackGenerator()
         selection.prepare()
-        
+
         // Ensure Core Haptics engine is running
         try? engine?.start()
     }
-    
+
     func playSoftImpact() {
         // "Mechanical Click" - High precision, low intensity
         let generator = UIImpactFeedbackGenerator(style: .soft)
         generator.prepare()
-        generator.impactOccurred(intensity: 0.6)
+        generator.impactOccurred(intensity: 0.25)
     }
-    
+
     func playSlideTick() {
         let generator = UISelectionFeedbackGenerator()
         generator.prepare()
         generator.selectionChanged()
     }
-    
+
     func playSuccess() {
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
@@ -167,6 +167,10 @@ final class HapticManager {
         impact(.medium)
     }
 
+    func playImpact(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        impact(style)
+    }
+
     func heavyTap() {
         impact(.heavy)
     }
@@ -250,134 +254,168 @@ enum HapticPattern {
         case .expenseAdded:
             // Quick double tap - success feeling
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.8),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7)
-                ], relativeTime: 0),
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.8)
-                ], relativeTime: 0.08)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.8),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7),
+                    ], relativeTime: 0),
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.8),
+                    ], relativeTime: 0.08),
             ]
 
         case .expenseDeleted:
             // Strong single thud - deletion feeling
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 1.0),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3),
+                    ], relativeTime: 0)
             ]
 
         case .expenseEdited:
             // Gentle tap - subtle feedback
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
+                    ], relativeTime: 0)
             ]
 
         case .expenseDuplicated:
             // Triple tap - copy feeling
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.6)
-                ], relativeTime: 0),
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7)
-                ], relativeTime: 0.06),
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.7),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.8)
-                ], relativeTime: 0.12)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.6),
+                    ], relativeTime: 0),
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7),
+                    ], relativeTime: 0.06),
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.7),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.8),
+                    ], relativeTime: 0.12),
             ]
 
         case .swipeAction:
             // Light click - interaction feedback
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.4),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.4),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
+                    ], relativeTime: 0)
             ]
 
         case .buttonPress:
             // Crisp tap - button press
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.6)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.6),
+                    ], relativeTime: 0)
             ]
 
         case .longPress:
             // Continuous buzz - long press acknowledged
             events = [
-                CHHapticEvent(eventType: .hapticContinuous, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3)
-                ], relativeTime: 0, duration: 0.15)
+                CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.6),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.3),
+                    ], relativeTime: 0, duration: 0.15)
             ]
 
         case .dataRefresh:
             // Quick pulse - refresh feedback
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.4)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.4),
+                    ], relativeTime: 0)
             ]
 
         case .voiceRecognition:
             // Gentle pulse - listening
             events = [
-                CHHapticEvent(eventType: .hapticContinuous, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.3),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.2)
-                ], relativeTime: 0, duration: 0.1)
+                CHHapticEvent(
+                    eventType: .hapticContinuous,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.3),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.2),
+                    ], relativeTime: 0, duration: 0.1)
             ]
 
         case .voiceSuccess:
             // Success pattern - recognized
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.7),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.6)
-                ], relativeTime: 0),
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.9),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7)
-                ], relativeTime: 0.1)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.7),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.6),
+                    ], relativeTime: 0),
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.9),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.7),
+                    ], relativeTime: 0.1),
             ]
 
         case .voiceError:
             // Error pattern - recognition failed
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.8),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.2)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.8),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.2),
+                    ], relativeTime: 0)
             ]
 
         case .filterApplied:
             // Selection feedback
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.5),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
+                    ], relativeTime: 0)
             ]
 
         case .tabSwitch:
             // Tab change feedback
             events = [
-                CHHapticEvent(eventType: .hapticTransient, parameters: [
-                    CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.4),
-                    CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5)
-                ], relativeTime: 0)
+                CHHapticEvent(
+                    eventType: .hapticTransient,
+                    parameters: [
+                        CHHapticEventParameter(parameterID: .hapticIntensity, value: 0.4),
+                        CHHapticEventParameter(parameterID: .hapticSharpness, value: 0.5),
+                    ], relativeTime: 0)
             ]
         }
 

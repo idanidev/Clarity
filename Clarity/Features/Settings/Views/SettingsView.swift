@@ -1,15 +1,15 @@
 // SettingsView.swift
 // Settings screen
 
-import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
+import SwiftUI
 
 struct SettingsView: View {
     @Environment(AuthViewModel.self) var authViewModel
     @State private var showLogoutConfirm = false
     @AppStorage("app.theme") private var selectedTheme: String = "system"
-    
+
     var body: some View {
         NavigationStack {
             List {
@@ -18,37 +18,43 @@ struct SettingsView: View {
                     if let email = authViewModel.currentUser?.email {
                         LabeledContent("Email", value: email)
                     }
-                    
+
                     if let name = authViewModel.userDocument?.displayName {
                         LabeledContent("Nombre", value: name)
                     }
-                    
+
                     NavigationLink {
                         SubscriptionView()
                     } label: {
                         HStack {
                             Text("Suscripción")
                             Spacer()
-                            Text(authViewModel.userDocument?.subscription?.plan.capitalized ?? "Free")
-                                .foregroundStyle(.secondary)
+                            Text(
+                                authViewModel.userDocument?.subscription?.plan.capitalized ?? "Free"
+                            )
+                            .foregroundStyle(.secondary)
                         }
                     }
                 }
-                
+
                 // Preferences Section
                 Section("Preferencias") {
                     NavigationLink("Categorías") {
                         CategoriesManagementView()
                     }
-                    
+
+                    NavigationLink("Historial de Nóminas") {
+                        MonthlyBudgetsView()
+                    }
+
                     NavigationLink("Gastos Recurrentes") {
                         RecurringExpensesView()
                     }
-                    
+
                     NavigationLink("Notificaciones") {
                         NotificationsView()
                     }
-                    
+
                     // Theme Picker
                     Picker("Tema", selection: $selectedTheme) {
                         Label("Claro", systemImage: "sun.max.fill").tag("light")
@@ -59,21 +65,33 @@ struct SettingsView: View {
                         saveThemeToFirebase(newTheme)
                     }
                 }
-                
+
                 // Data Section
                 Section("Datos") {
+                    NavigationLink {
+                        BackupSettingsView()
+                    } label: {
+                        Label("Copias de Seguridad", systemImage: "arrow.clockwise.icloud")
+                    }
+
                     Button {
                         exportCSV()
                     } label: {
                         Label("Exportar a CSV", systemImage: "square.and.arrow.up")
                     }
-                    
+
+                    NavigationLink {
+                        ImportFlowView()
+                    } label: {
+                        Label("Importar CSV", systemImage: "square.and.arrow.down")
+                    }
+
                     if let fileURL = exportedFileURL {
                         ShareLink(item: fileURL) {
                             Label("Compartir CSV", systemImage: "square.and.arrow.up")
                         }
                     }
-                    
+
                     Button {
                         // PDF export - complex feature for future
                         HapticManager.shared.notification(.warning)
@@ -83,20 +101,20 @@ struct SettingsView: View {
                     .disabled(true)
                     .opacity(0.5)
                 }
-                
+
                 // About Section
                 Section("Información") {
                     LabeledContent("Versión", value: "1.0.0")
-                    
+
                     Link(destination: URL(string: "https://clarity-gastos.web.app/privacy")!) {
                         Text("Política de Privacidad")
                     }
-                    
+
                     Link(destination: URL(string: "https://clarity-gastos.web.app/terms")!) {
                         Text("Términos de Servicio")
                     }
                 }
-                
+
                 // Logout Section
                 Section {
                     Button(role: .destructive) {
@@ -119,14 +137,14 @@ struct SettingsView: View {
                 Button("Cerrar Sesión", role: .destructive) {
                     authViewModel.signOut()
                 }
-                Button("Cancelar", role: .cancel) { }
+                Button("Cancelar", role: .cancel) {}
             }
         }
     }
-    
+
     @State private var exportedFileURL: URL?
     @State private var showingShareSheet = false
-    
+
     private func exportCSV() {
         Task {
             do {
@@ -139,10 +157,10 @@ struct SettingsView: View {
         }
     }
     // MARK: - Theme Functions
-    
+
     private func saveThemeToFirebase(_ theme: String) {
         guard let userId = Auth.auth().currentUser?.uid else { return }
-        
+
         Task {
             do {
                 try await Firestore.firestore()
@@ -165,21 +183,21 @@ struct SubscriptionView: View {
                     HStack {
                         Text(plan.displayName)
                             .font(.clarityHeadline)
-                        
+
                         Spacer()
-                        
+
                         Text(plan.price)
                             .font(.claritySubheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.clarityPrimary)
                     }
-                    
+
                     ForEach(plan.features, id: \.self) { feature in
                         HStack(spacing: Spacing.xs) {
                             Image(systemName: "checkmark")
                                 .font(.caption)
                                 .foregroundStyle(.green)
-                            
+
                             Text(feature)
                                 .font(.clarityCaption)
                                 .foregroundStyle(.secondary)
@@ -197,4 +215,3 @@ struct SubscriptionView: View {
     SettingsView()
         .environment(AuthViewModel())
 }
-

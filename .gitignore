@@ -1,6 +1,10 @@
 
 # Clarity .gitignore
 functions/serviceAccountKey.json
+
+# API Keys — NEVER commit these
+Secrets.xcconfig
+# Secrets.swift is committed but with empty placeholders only
 .DS_Store
 *.xcuserstate
 xcuserdata/
