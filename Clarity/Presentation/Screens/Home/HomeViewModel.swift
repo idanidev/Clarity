@@ -69,64 +69,19 @@ final class HomeViewModel {
     }
 
     var calculatedSavings: Double {
-        // IMPORTANTE: Usar gastos REALES del mes actual, NO los filtrados
+        // Ahorro = Ingreso del mes anterior - Gastos REALES del mes seleccionado - Ahorro asignado
+        // NUNCA depende de los filtros del usuario, siempre usa el mes seleccionado completo
         let periodExpenses = currentMonthExpenses.reduce(0) { $0 + $1.amount }
         let savingsAllocated = currentMonthlyBudget?.savingsAllocated ?? 0
 
         logger.debug("💰 CALCULANDO AHORROS:")
         logger.debug(
-            "   - Current month expenses: \(self.currentMonthExpenses.count) gastos = €\(periodExpenses)"
+            "   - Gastos reales del mes: \(self.currentMonthExpenses.count) gastos = €\(periodExpenses)"
         )
-        logger.debug("   - Previous month income: €\(self.previousMonthIncome)")
-        logger.debug("   - Savings allocated: €\(savingsAllocated)")
-        logger.debug(
-            "   - Resultado: €\(self.previousMonthIncome) - €\(periodExpenses) - €\(savingsAllocated) = €\(self.previousMonthIncome - periodExpenses - savingsAllocated)"
-        )
+        logger.debug("   - Ingreso mes anterior: €\(self.previousMonthIncome)")
+        logger.debug("   - Ahorro asignado: €\(savingsAllocated)")
 
-        // Calculate duration in months to adjust income
-        let (startStr, endStr) = selectedFilter.dateRangeForQuery()
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        guard let start = formatter.date(from: startStr),
-            let end = formatter.date(from: endStr)
-        else {
-            // Usar nómina del mes anterior para gastos del mes actual
-            return previousMonthIncome - periodExpenses - savingsAllocated
-        }
-
-        // Calculate exact days
-        let days = Calendar.current.dateComponents([.day], from: start, to: end).day ?? 1
-
-        // ⚠️ SAFEGUARD: Warn if range is suspiciously long (possible bug)
-        if days > 45 {
-            logger.warning(
-                "⚠️ SAVINGS ALERT: Calculating for \(days) days (\(String(format: "%.1f", Double(days)/30.44)) months)"
-            )
-            logger.warning("   Start: \(startStr), End: \(endStr)")
-            logger.warning(
-                "   Possible incorrect date filtering — expected ~30 days for monthly view")
-        }
-
-        // Logic:
-        // - "This Month" / "Last Month" (approx 28-31 days) -> 1x Income
-        // - "Today" / "Yesterday" (1 day) -> 1x Income (Budget view mostly)
-        // - "Last 3 Months" (90 days) -> 3x Income
-
-        // Threshold: If duration is significantly more than a standard month (e.g. > 45 days), scale it.
-        // Otherwise, assume it's a monthly view or sub-monthly view where we want to compare against full Monthly Budget.
-        let finalIncome: Double
-        if days > 45 {
-            let months = Double(days) / 30.44  // Average days in month
-            // Para múltiples meses, usar la nómina del mes anterior como base
-            finalIncome = previousMonthIncome * months
-        } else {
-            // Para vista mensual, usar la nómina del mes ANTERIOR
-            // porque con la nómina de diciembre pagas los gastos de enero
-            finalIncome = previousMonthIncome
-        }
-
-        return finalIncome - periodExpenses - savingsAllocated
+        return previousMonthIncome - periodExpenses - savingsAllocated
     }
 
     /// Income for the currently selected month (from MonthlyBudget)

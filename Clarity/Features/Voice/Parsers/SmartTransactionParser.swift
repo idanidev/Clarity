@@ -720,6 +720,56 @@ final class SmartTransactionParser: TransactionParserProtocol {
 
         return matrix[n][m]
     }
+
+    // MARK: - Multi-Transaction Parsing
+
+    /// Splits a transcript into individual expense segments and parses each one.
+    /// Example: "10 euros en tabaco y 5 en café" → two transactions
+    func parseMultiple(_ text: String, history: [Expense] = []) async -> [SmartTransaction] {
+        let segments = splitIntoExpenseSegments(text)
+        var results: [SmartTransaction] = []
+        for segment in segments {
+            if case .success(let tx) = await parse(segment, history: history) {
+                results.append(tx)
+            }
+        }
+        return results
+    }
+
+    /// Splits text by "y" / "también" / "además" connectors only when BOTH sides contain an amount.
+    private func splitIntoExpenseSegments(_ text: String) -> [String] {
+        let connectorPattern = try? NSRegularExpression(
+            pattern: #"\s+(?:y|también|tambien|además|ademas)\s+"#,
+            options: .caseInsensitive
+        )
+        let nsText = text as NSString
+        let range = NSRange(location: 0, length: nsText.length)
+        guard let matches = connectorPattern?.matches(in: text, range: range), !matches.isEmpty
+        else { return [text] }
+
+        // Build segments
+        var segments: [String] = []
+        var lastEnd = text.startIndex
+        for match in matches {
+            if let matchRange = Range(match.range, in: text) {
+                segments.append(String(text[lastEnd..<matchRange.lowerBound]))
+                lastEnd = matchRange.upperBound
+            }
+        }
+        segments.append(String(text[lastEnd...]))
+
+        // Only split if every segment contains an amount
+        let allHaveAmount = segments.allSatisfy { hasAmount(normalize($0)) }
+        return allHaveAmount && segments.count > 1 ? segments : [text]
+    }
+
+    private func hasAmount(_ normalizedText: String) -> Bool {
+        let range = NSRange(normalizedText.startIndex..., in: normalizedText)
+        return Patterns.simpleAmount.firstMatch(in: normalizedText, options: [], range: range)
+            != nil
+            || Patterns.compositeAmount.firstMatch(in: normalizedText, options: [], range: range)
+                != nil
+    }
 }
 
 // MARK: - Static Convenience (Backward Compatibility)

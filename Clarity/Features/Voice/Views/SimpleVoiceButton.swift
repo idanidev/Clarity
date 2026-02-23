@@ -13,7 +13,8 @@ struct SimpleVoiceButton: View {
 
     @State private var speechManager = SpeechRecognitionManager.shared
     @State private var isRecording = false
-    @State private var parsedExpense: Expense?
+    @State private var pendingExpenses: [Expense] = []
+    @State private var isShowingExpenseSheet = false
     @State private var recordingTimer: Timer?
     @State private var silenceTimer: Timer?
     @State private var isStopping = false
@@ -98,22 +99,24 @@ struct SimpleVoiceButton: View {
         .animation(.spring(response: 0.3), value: isRecording)
         .animation(.spring(response: 0.3), value: isProcessing)
         .animation(.spring(response: 0.3), value: speechManager.interimTranscript)
-        .sheet(item: $parsedExpense) { expense in
-            VoiceConfirmationSheet(
-                expense: expense,
-                wasFullyDetected: true,
-                categories: categories,
-                speechManager: speechManager,
-                onConfirm: { confirmed in
-                    Task {
-                        await saveExpense(confirmed)
-                        parsedExpense = nil
+        .sheet(isPresented: $isShowingExpenseSheet, onDismiss: handleExpenseDismissed) {
+            if let expense = pendingExpenses.first {
+                VoiceConfirmationSheet(
+                    expense: expense,
+                    wasFullyDetected: true,
+                    categories: categories,
+                    speechManager: speechManager,
+                    onConfirm: { confirmed in
+                        Task {
+                            await saveExpense(confirmed)
+                            await advanceToNextExpense()
+                        }
+                    },
+                    onCancel: {
+                        Task { await advanceToNextExpense() }
                     }
-                },
-                onCancel: {
-                    parsedExpense = nil
-                }
-            )
+                )
+            }
         }
     }
 
@@ -202,36 +205,60 @@ struct SimpleVoiceButton: View {
 
     private func processTranscript(_ transcript: String) {
         Task {
-            let result = await SmartTransactionParser.shared.parse(
+            // Multi-expense: parse ALL segments at once
+            let parsed = await SmartTransactionParser.shared.parseMultiple(
                 transcript,
                 history: UserDataManager.shared.expenses
             )
 
             await MainActor.run {
-                switch result {
-                case .success(let parsed):
-                    let categoryName = parsed.category  // nil = user must pick in sheet
-                    parsedExpense = Expense(
-                        id: UUID().uuidString,
-                        amount: NSDecimalNumber(decimal: parsed.amount).doubleValue,
-                        name: parsed.merchant,
-                        category: categoryName ?? "",
-                        subcategory: parsed.subcategory,
-                        date: Formatters.isoString(from: parsed.date),
-                        paymentMethod: parsed.paymentMethod ?? "Tarjeta"
-                    )
-                    HapticManager.shared.playSuccess()
-
-                case .failure:
+                guard !parsed.isEmpty else {
                     HapticManager.shared.error()
                     FeedbackManager.shared.show(
-                        .error,
-                        title: "Error",
+                        .error, title: "Error",
                         message: "No se pudo procesar el gasto"
                     )
+                    return
                 }
+
+                // Build Expense objects for each parsed transaction
+                pendingExpenses = parsed.map { tx in
+                    Expense(
+                        id: UUID().uuidString,
+                        amount: NSDecimalNumber(decimal: tx.amount).doubleValue,
+                        name: tx.merchant,
+                        category: tx.category ?? "",
+                        subcategory: tx.subcategory,
+                        date: Formatters.isoString(from: tx.date),
+                        paymentMethod: tx.paymentMethod ?? "Tarjeta"
+                    )
+                }
+
+                HapticManager.shared.playSuccess()
+                isShowingExpenseSheet = true
             }
         }
+    }
+
+    /// Called after the sheet is dismissed (either confirmed or cancelled).
+    /// Removes the first pending expense and re-opens the sheet if more remain.
+    private func handleExpenseDismissed() {
+        // If the queue is empty, nothing to do
+        guard !pendingExpenses.isEmpty else { return }
+        // Remove the one we just handled
+        pendingExpenses.removeFirst()
+        // Open next one after a brief pause so SwiftUI can settle
+        if !pendingExpenses.isEmpty {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                isShowingExpenseSheet = true
+            }
+        }
+    }
+
+    /// Closes the current sheet, triggering handleExpenseDismissed via onDismiss.
+    @MainActor
+    private func advanceToNextExpense() {
+        isShowingExpenseSheet = false
     }
 
     private func saveExpense(_ expense: Expense) async {

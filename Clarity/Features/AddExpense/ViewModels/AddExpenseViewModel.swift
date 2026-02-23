@@ -7,32 +7,50 @@ import Observation
 @MainActor
 @Observable
 class AddExpenseViewModel {
-    // MARK: - Form Fields (No @Published needed)
+    // MARK: - Form Fields
     var amount: Double?
     var name: String = ""
     var category: String = ""
     var subcategory: String?
     var date: Date = Date()
-    // Explicitly ignoring PaymentMethod if it's enum-based and not Observable-compliant, 
-    // but enum with rawValue usually works fine if it's Equatable.
-    // Assuming PaymentMethod is simple enum, it works with @Observable.
     var paymentMethod: PaymentMethod = .tarjeta
-    var notes: String = "" {
-        didSet { wasAutoCategorized = false } // Reset flag on manual notes edit if needed? Usually not.
-    }
-    
+    var notes: String = ""
+
     // MARK: - Auto-Suggest Logic
-    // We observe 'name' changes via onChange in View or setter here if possible. 
-    // In @Observable, we don't have didSet on observable properties easily without setter override.
-    // Better to expose a method `updateName(_:)` or rely on View `.onChange`.
-    // Let's create a specific method to handle name updates to trigger suggestion.
-    
+
+    private var suggestionTask: Task<Void, Never>?
+
     func onNameChange(_ newName: String) {
         self.name = newName
-        
-        // Only auto-categorize if user hasn't manually selected yet (or if field is empty)
-        // Adjust logic: if category is empty OR was previously auto-filled
-        if !newName.isEmpty && (category.isEmpty || wasAutoCategorized) {
+
+        guard !newName.isEmpty && (category.isEmpty || wasAutoCategorized) else { return }
+        guard newName.count >= 3 else { return }
+
+        // Cancel previous lookup if user is still typing
+        suggestionTask?.cancel()
+
+        suggestionTask = Task {
+            // Priority 1: Check learned preferences (UserLearningManager)
+            if let learned = await UserLearningManager.shared.getPreference(for: newName) {
+                guard !Task.isCancelled else { return }
+                self.category = learned.category
+                self.subcategory = learned.subcategory
+                self.wasAutoCategorized = true
+                return
+            }
+
+            // Priority 2: Check expense history (exact/contains match)
+            if let historyMatch = await findCategoryInHistory(for: newName) {
+                guard !Task.isCancelled else { return }
+                self.category = historyMatch.category
+                self.subcategory = historyMatch.subcategory
+                self.wasAutoCategorized = true
+                return
+            }
+
+            guard !Task.isCancelled else { return }
+
+            // Priority 3: Fallback to keyword-based suggestion
             if let suggestion = SmartTransactionParser.suggestCategory(for: newName) {
                 self.category = suggestion.category
                 self.subcategory = suggestion.subcategory
@@ -40,13 +58,47 @@ class AddExpenseViewModel {
             }
         }
     }
-    
+
+    private func findCategoryInHistory(for text: String) async -> (category: String, subcategory: String?)? {
+        let normalized = text
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            let expenses = try await repository.getExpenses()
+
+            // Exact match
+            if let exact = expenses.first(where: {
+                $0.name.folding(options: .diacriticInsensitive, locale: .current)
+                    .lowercased()
+                    .trimmingCharacters(in: .whitespacesAndNewlines) == normalized
+            }) {
+                return (exact.category, exact.subcategory)
+            }
+
+            // Contains match
+            if let contains = expenses.first(where: {
+                let expNorm = $0.name.folding(options: .diacriticInsensitive, locale: .current)
+                    .lowercased()
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return expNorm.contains(normalized) || normalized.contains(expNorm)
+            }) {
+                return (contains.category, contains.subcategory)
+            }
+        } catch {
+            // Silently fall through to keyword matching
+        }
+
+        return nil
+    }
+
     // MARK: - State
     var isLoading = false
     var showError = false
     var errorMessage: String?
-    var wasAutoCategorized = false  // Track if category was auto-filled
-    
+    var wasAutoCategorized = false
+
     // MARK: - Dependencies
     private let repository = DependencyContainer.shared.expenseRepository
     
@@ -78,6 +130,12 @@ class AddExpenseViewModel {
 
         do {
             _ = try await repository.addExpense(expense)
+            // Teach the learning system this name→category association
+            await UserLearningManager.shared.learn(
+                merchant: name,
+                category: category,
+                subcategory: subcategory
+            )
             HapticManager.shared.expenseAdded()
             FeedbackManager.shared.show(.success, title: "Gasto añadido", message: "\(name) guardado correctamente")
         } catch {
