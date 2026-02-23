@@ -279,10 +279,27 @@ final class HomeViewModel {
                 logger.warning("⚠️ Failed to load monthly budget: \(error)")
             }
 
-            // Fetch Expenses and Rules in parallel for Sanitization
-            // robust error handling: if rules fail, we still want expenses
+            // Build a date-only filter for the selected month (no category/payment filters)
+            // This is used ONLY to calculate real savings — unaffected by user filters
+            let calendar2 = Calendar.current
+            let monthComponents = calendar2.dateComponents([.year, .month], from: selectedMonth)
+            let monthStart = calendar2.date(from: monthComponents) ?? selectedMonth
+            let monthEnd =
+                calendar2.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart)
+                ?? selectedMonth
+            let monthOnlyFilter = ExpenseFilter(
+                dateRange: .custom,
+                customStartDate: monthStart,
+                customEndDate: monthEnd
+            )
+
+            // Fetch Expenses in parallel:
+            // 1. With user's filter (for display)
+            // 2. With month-only filter (for savings calculation - no category/payment filters)
             async let expensesTask = getExpensesUseCase.executePaginated(
                 page: 0, filter: selectedFilter)
+            async let monthExpensesTask = getExpensesUseCase.executePaginated(
+                page: 0, filter: monthOnlyFilter)
 
             var rules: [RecurringExpense] = []
             do {
@@ -292,14 +309,23 @@ final class HomeViewModel {
             }
 
             let result = try await expensesTask
+            let monthResult = try await monthExpensesTask
             self.allRecurringRules = rules
 
             // Sanitize Result
             // Logic: Deduplicate by period and remove misplaced annuals
             let sanitized = ExpenseSanitizer.sanitize(expenses: result.expenses, rules: rules)
+            let sanitizedMonth = ExpenseSanitizer.sanitize(
+                expenses: monthResult.expenses, rules: rules)
 
             self.allExpenses = sanitized
+            self.currentMonthExpenses = sanitizedMonth  // ✅ Real month expenses, no user filters
             self.hasMorePages = result.hasMore
+
+            let totalRealExpenses = sanitizedMonth.reduce(0) { $0 + $1.amount }
+            logger.debug(
+                "💰 Gastos REALES del mes (sin filtros): \(sanitizedMonth.count) gastos = €\(totalRealExpenses)"
+            )
 
             applyFilters()
         } catch {
@@ -370,38 +396,8 @@ final class HomeViewModel {
 
     private func applyFilters() {
         logger.debug("📋 Applying filters: \(self.selectedFilter.dateRange.rawValue)")
-
-        // Calcular gastos del MES SELECCIONADO para el cálculo de ahorros (sin filtros)
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: selectedMonth)
-        let month = calendar.component(.month, from: selectedMonth)
-
-        var startComponents = DateComponents()
-        startComponents.year = year
-        startComponents.month = month
-        startComponents.day = 1
-
-        var endComponents = DateComponents()
-        endComponents.year = year
-        endComponents.month = month + 1
-        endComponents.day = 0  // Último día del mes
-
-        if let monthStart = calendar.date(from: startComponents),
-            let monthEnd = calendar.date(from: endComponents)
-        {
-            let startStr = filterDateFormatter.string(from: monthStart)
-            let endStr = filterDateFormatter.string(from: monthEnd)
-
-            currentMonthExpenses = allExpenses.filter { expense in
-                expense.date >= startStr && expense.date <= endStr
-            }
-            let totalAmount = currentMonthExpenses.reduce(0) { $0 + $1.amount }
-            logger.debug(
-                "💰 Gastos del mes \(month)/\(year) para AHORROS: \(self.currentMonthExpenses.count) gastos = €\(totalAmount)"
-            )
-        } else {
-            currentMonthExpenses = []
-        }
+        // NOTE: currentMonthExpenses is populated in loadExpenses() with a month-only fetch.
+        // We do NOT recompute it here to avoid overwriting with already-filtered allExpenses.
 
         // Filter by date range (según filtro del usuario)
         let (startStr, endStr) = selectedFilter.dateRangeForQuery()
