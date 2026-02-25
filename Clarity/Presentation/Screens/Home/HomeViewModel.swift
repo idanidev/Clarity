@@ -69,7 +69,7 @@ final class HomeViewModel {
     }
 
     var calculatedSavings: Double {
-        // Ahorro = Ingreso del mes anterior - Gastos REALES del mes seleccionado - Ahorro asignado
+        // Ahorro = Ingreso del mes seleccionado - Gastos REALES del mes seleccionado - Ahorro asignado
         // NUNCA depende de los filtros del usuario, siempre usa el mes seleccionado completo
         let periodExpenses = currentMonthExpenses.reduce(0) { $0 + $1.amount }
         let savingsAllocated = currentMonthlyBudget?.savingsAllocated ?? 0
@@ -78,10 +78,10 @@ final class HomeViewModel {
         logger.debug(
             "   - Gastos reales del mes: \(self.currentMonthExpenses.count) gastos = €\(periodExpenses)"
         )
-        logger.debug("   - Ingreso mes anterior: €\(self.previousMonthIncome)")
+        logger.debug("   - Ingreso del mes: €\(self.monthlyIncome)")
         logger.debug("   - Ahorro asignado: €\(savingsAllocated)")
 
-        return previousMonthIncome - periodExpenses - savingsAllocated
+        return monthlyIncome - periodExpenses - savingsAllocated
     }
 
     /// Income for the currently selected month (from MonthlyBudget)

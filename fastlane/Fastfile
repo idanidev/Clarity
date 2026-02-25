@@ -1,0 +1,54 @@
+default_platform(:ios)
+
+platform :ios do
+
+  # ─── Beta: TestFlight ───
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    increment_build_number(
+      xcodeproj: "Clarity.xcodeproj"
+    )
+
+    build_app(
+      project: "Clarity.xcodeproj",
+      scheme: "Clarity",
+      export_method: "app-store",
+      clean: true
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true
+    )
+  end
+
+  # ─── Release: App Store ───
+  desc "Build and upload to the App Store"
+  lane :release do
+    increment_build_number(
+      xcodeproj: "Clarity.xcodeproj"
+    )
+
+    build_app(
+      project: "Clarity.xcodeproj",
+      scheme: "Clarity",
+      export_method: "app-store",
+      clean: true
+    )
+
+    upload_to_app_store(
+      force: true,
+      skip_screenshots: true,
+      skip_metadata: false
+    )
+  end
+
+  # ─── Screenshots ───
+  desc "Capture App Store screenshots"
+  lane :screenshots do
+    capture_screenshots(
+      project: "Clarity.xcodeproj",
+      scheme: "Clarity"
+    )
+  end
+
+end
