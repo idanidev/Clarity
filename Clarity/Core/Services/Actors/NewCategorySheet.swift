@@ -105,7 +105,7 @@ struct NewCategorySheet: View {
                     ForEach(subcategories, id: \.self) { subcategory in
                         HStack {
                             Capsule()
-                                .fill(Color(hex: selectedColor)?.opacity(0.8) ?? .gray.opacity(0.8))
+                                .fill(Color(hex: selectedColor).opacity(0.8))
                                 .frame(width: 4, height: 16)
                             Text(subcategory)
                         }

@@ -15,14 +15,23 @@ final class SwiftDataService {
     }
     
     private init() {
+        let schema = Schema([
+            ExpenseModel.self
+        ])
+        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+
         do {
-            let schema = Schema([
-                ExpenseModel.self
-            ])
-            let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
             self.container = try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // If the persistent store is corrupted, try deleting and recreating
+            try? FileManager.default.removeItem(at: modelConfiguration.url)
+            do {
+                self.container = try ModelContainer(for: schema, configurations: [modelConfiguration])
+            } catch {
+                // Last resort: in-memory only so the app doesn't crash
+                let memoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+                self.container = try! ModelContainer(for: schema, configurations: [memoryConfig])
+            }
         }
     }
 }

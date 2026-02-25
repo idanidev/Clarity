@@ -281,31 +281,28 @@ struct SpectrumColorPicker: View {
         .padding()
         .onAppear {
             // Initialize from current selectedColor
-            if let color = Color(hex: selectedColor) {
-                let uiColor = UIColor(color)
-                var h: CGFloat = 0
-                var s: CGFloat = 0
-                var b: CGFloat = 0
-                var a: CGFloat = 0
-                uiColor.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-                hue = Double(h)
-                saturation = Double(s)
-                brightness = Double(b)
-            }
+            let initColor = Color(hex: selectedColor)
+            let uiColor1 = UIColor(initColor)
+            var h: CGFloat = 0
+            var s: CGFloat = 0
+            var b: CGFloat = 0
+            var a: CGFloat = 0
+            uiColor1.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            hue = Double(h)
+            saturation = Double(s)
+            brightness = Double(b)
         }
         .onChange(of: selectedColor) { _, newColor in
-            // Sync sliders when color changes externally (e.g. from other tabs)
-            if let color = Color(hex: newColor) {
-                let uiColor = UIColor(color)
-                var h: CGFloat = 0
-                var s: CGFloat = 0
-                var b: CGFloat = 0
-                var a: CGFloat = 0
-                uiColor.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-                hue = Double(h)
-                saturation = Double(s)
-                brightness = Double(b)
-            }
+            let color = Color(hex: newColor)
+            let uiColor2 = UIColor(color)
+            var h: CGFloat = 0
+            var s: CGFloat = 0
+            var b: CGFloat = 0
+            var a: CGFloat = 0
+            uiColor2.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
+            hue = Double(h)
+            saturation = Double(s)
+            brightness = Double(b)
         }
     }
 
@@ -375,32 +372,28 @@ struct SlidersColorPicker: View {
         }
         .padding()
         .onAppear {
-            // Initialize from selectedColor
-            if let color = Color(hex: selectedColor) {
-                let uiColor = UIColor(color)
-                var r: CGFloat = 0
-                var g: CGFloat = 0
-                var b: CGFloat = 0
-                var a: CGFloat = 0
-                uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-                red = Double(r)
-                green = Double(g)
-                blue = Double(b)
-            }
+            let initColor = Color(hex: selectedColor)
+            let uiColor3 = UIColor(initColor)
+            var r: CGFloat = 0
+            var g: CGFloat = 0
+            var b2: CGFloat = 0
+            var a: CGFloat = 0
+            uiColor3.getRed(&r, green: &g, blue: &b2, alpha: &a)
+            red = Double(r)
+            green = Double(g)
+            blue = Double(b2)
         }
         .onChange(of: selectedColor) { _, newColor in
-            // Sync sliders when color changes externally (e.g. from other tabs)
-            if let color = Color(hex: newColor) {
-                let uiColor = UIColor(color)
-                var r: CGFloat = 0
-                var g: CGFloat = 0
-                var b: CGFloat = 0
-                var a: CGFloat = 0
-                uiColor.getRed(&r, green: &g, blue: &b, alpha: &a)
-                red = Double(r)
-                green = Double(g)
-                blue = Double(b)
-            }
+            let color = Color(hex: newColor)
+            let uiColor4 = UIColor(color)
+            var r: CGFloat = 0
+            var g: CGFloat = 0
+            var b2: CGFloat = 0
+            var a: CGFloat = 0
+            uiColor4.getRed(&r, green: &g, blue: &b2, alpha: &a)
+            red = Double(r)
+            green = Double(g)
+            blue = Double(b2)
         }
     }
 

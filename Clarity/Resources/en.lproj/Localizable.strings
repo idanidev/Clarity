@@ -1,0 +1,97 @@
+/* Localizable.strings (English) */
+
+// General
+"app.name" = "Clarity";
+"common.save" = "Save";
+"common.cancel" = "Cancel";
+"common.delete" = "Delete";
+"common.edit" = "Edit";
+"common.done" = "Done";
+"common.ok" = "OK";
+"common.error" = "Error";
+"common.loading" = "Loading...";
+
+// Auth
+"auth.login" = "Sign In";
+"auth.register" = "Sign Up";
+"auth.logout" = "Sign Out";
+"auth.email" = "Email";
+"auth.password" = "Password";
+"auth.confirmPassword" = "Confirm Password";
+"auth.forgotPassword" = "Forgot your password?";
+"auth.noAccount" = "Don't have an account?";
+"auth.hasAccount" = "Already have an account?";
+
+// Dashboard
+"dashboard.title" = "My Expenses";
+"dashboard.monthlyTotal" = "Monthly total";
+"dashboard.noExpenses" = "No expenses this month";
+"dashboard.addFirst" = "Add your first expense to get started";
+
+// Add Expense
+"addExpense.title" = "New Expense";
+"addExpense.amount" = "Amount";
+"addExpense.description" = "Description";
+"addExpense.whatSpent" = "What did you spend on?";
+"addExpense.category" = "Category";
+"addExpense.subcategory" = "Subcategory";
+"addExpense.date" = "Date";
+"addExpense.paymentMethod" = "Payment method";
+"addExpense.notes" = "Notes";
+"addExpense.dictate" = "Dictate";
+
+// Categories
+"categories.alimentacion" = "Food";
+"categories.ocio" = "Leisure";
+"categories.vivienda" = "Housing";
+"categories.transporte" = "Transport";
+"categories.compras" = "Shopping";
+"categories.salud" = "Health";
+"categories.suscripciones" = "Subscriptions";
+"categories.educacion" = "Education";
+"categories.viajes" = "Travel";
+"categories.otros" = "Other";
+
+// Charts
+"charts.title" = "Charts";
+"charts.distribution" = "Expense Distribution";
+"charts.byCategory" = "By Category";
+
+// Budgets
+"budgets.title" = "Budgets";
+"budgets.exceeded" = "Budget exceeded!";
+"budgets.nearLimit" = "Near the limit";
+"budgets.remaining" = "Remaining";
+"budgets.noBudgets" = "No budgets";
+"budgets.setBudgets" = "Set up monthly budgets to control your spending";
+
+// AI Assistant
+"ai.title" = "AI Assistant";
+"ai.placeholder" = "Type your question...";
+"ai.quotaRemaining" = "%d queries remaining";
+"ai.unlimited" = "Unlimited queries";
+"ai.suggestions.analyze" = "Analyze my expenses this month";
+"ai.suggestions.compare" = "Compare with last month";
+"ai.suggestions.tips" = "Give me tips to save money";
+"ai.suggestions.category" = "Which category do I spend the most on?";
+
+// Settings
+"settings.title" = "Settings";
+"settings.account" = "Account";
+"settings.preferences" = "Preferences";
+"settings.categories" = "Categories";
+"settings.recurring" = "Recurring Expenses";
+"settings.notifications" = "Notifications";
+"settings.subscription" = "Subscription";
+"settings.export" = "Export Data";
+"settings.exportCSV" = "Export to CSV";
+"settings.exportPDF" = "Generate PDF Report";
+"settings.about" = "About";
+"settings.version" = "Version";
+"settings.privacy" = "Privacy Policy";
+"settings.terms" = "Terms of Service";
+
+// Subscription
+"subscription.free" = "Free";
+"subscription.pro" = "Pro";
+"subscription.premium" = "Premium";

@@ -46,6 +46,7 @@ struct SearchBarView: View {
                         .font(.system(size: 18))
                         .foregroundStyle(DesignTokens.Colors.textSecondary)
                 }
+                .accessibilityLabel("Limpiar búsqueda")
                 .transition(.scale.combined(with: .opacity))
             }
         }
@@ -110,7 +111,7 @@ struct ActiveFilterPillsView: View {
                         FilterPill(
                             text: method,
                             icon: paymentIcon(for: method),
-                            color: Color(hex: "#3B82F6")!,
+                            color: Color(hex: "#3B82F6"),
                             onRemove: {
                                 withAnimation(.bouncy) {
                                     filter.selectedPaymentMethods.remove(method)
@@ -125,7 +126,7 @@ struct ActiveFilterPillsView: View {
                         FilterPill(
                             text: category.components(separatedBy: " ").dropFirst().joined(separator: " "),
                             icon: "tag.circle.fill",
-                            color: Color(hex: "#10B981")!,
+                            color: Color(hex: "#10B981"),
                             onRemove: {
                                 withAnimation(.bouncy) {
                                     filter.selectedCategories.remove(category)
@@ -203,6 +204,9 @@ struct FilterPill: View {
                 .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
         .shadow(color: color.opacity(0.3), radius: 8, y: 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Filtro: \(text)")
+        .accessibilityHint("Pulsa dos veces para eliminar este filtro")
     }
 }
 

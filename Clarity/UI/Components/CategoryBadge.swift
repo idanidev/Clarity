@@ -77,6 +77,8 @@ struct CategoryBadge: View {
         }
         .buttonStyle(.plain)
         .disabled(onTap == nil)
+        .accessibilityLabel("\(category)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
     
     // MARK: - Computed Properties
@@ -135,21 +137,21 @@ extension CategoryBadge {
         let cat = category.lowercased()
         
         if cat.contains("vivienda") || cat.contains("casa") || cat.contains("hogar") {
-            return Color(hex: "#3B82F6")!  // Azul
+            return Color(hex: "#3B82F6")  // Azul
         } else if cat.contains("comida") || cat.contains("alimenta") || cat.contains("restaurante") {
-            return Color(hex: "#10B981")!  // Verde
+            return Color(hex: "#10B981")  // Verde
         } else if cat.contains("transporte") || cat.contains("coche") || cat.contains("moto") {
-            return Color(hex: "#F59E0B")!  // Ámbar
+            return Color(hex: "#F59E0B")  // Ámbar
         } else if cat.contains("ocio") || cat.contains("entretenimiento") {
-            return Color(hex: "#EC4899")!  // Rosa
+            return Color(hex: "#EC4899")  // Rosa
         } else if cat.contains("salud") {
-            return Color(hex: "#EF4444")!  // Rojo
+            return Color(hex: "#EF4444")  // Rojo
         } else if cat.contains("educación") || cat.contains("educacion") {
-            return Color(hex: "#8B5CF6")!  // Violeta
+            return Color(hex: "#8B5CF6")  // Violeta
         } else if cat.contains("compras") {
-            return Color(hex: "#FBBF24")!  // Amarillo
+            return Color(hex: "#FBBF24")  // Amarillo
         } else {
-            return Color(hex: "#6B7280")!  // Gris
+            return Color(hex: "#6B7280")  // Gris
         }
     }
     
@@ -159,37 +161,37 @@ extension CategoryBadge {
         
         if cat.contains("vivienda") || cat.contains("casa") {
             return LinearGradient(
-                colors: [Color(hex: "#3B82F6")!, Color(hex: "#2563EB")!],
+                colors: [Color(hex: "#3B82F6"), Color(hex: "#2563EB")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else if cat.contains("comida") || cat.contains("alimenta") {
             return LinearGradient(
-                colors: [Color(hex: "#10B981")!, Color(hex: "#059669")!],
+                colors: [Color(hex: "#10B981"), Color(hex: "#059669")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else if cat.contains("transporte") || cat.contains("coche") {
             return LinearGradient(
-                colors: [Color(hex: "#F59E0B")!, Color(hex: "#D97706")!],
+                colors: [Color(hex: "#F59E0B"), Color(hex: "#D97706")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else if cat.contains("ocio") {
             return LinearGradient(
-                colors: [Color(hex: "#EC4899")!, Color(hex: "#DB2777")!],
+                colors: [Color(hex: "#EC4899"), Color(hex: "#DB2777")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else if cat.contains("salud") {
             return LinearGradient(
-                colors: [Color(hex: "#EF4444")!, Color(hex: "#DC2626")!],
+                colors: [Color(hex: "#EF4444"), Color(hex: "#DC2626")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else {
             return LinearGradient(
-                colors: [Color(hex: "#8B5CF6")!, Color(hex: "#7C3AED")!],
+                colors: [Color(hex: "#8B5CF6"), Color(hex: "#7C3AED")],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

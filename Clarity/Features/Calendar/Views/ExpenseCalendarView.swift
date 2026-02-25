@@ -225,7 +225,7 @@ struct CalendarDayCell: View {
             if let expense = expense, expense > 0 {
                 Text("-\(Int(expense))€")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isToday ? .white : Color(hex: "#A78BFA")!)
+                    .foregroundColor(isToday ? .white : Color(hex: "#A78BFA"))
             }
         }
         .frame(maxWidth: .infinity)

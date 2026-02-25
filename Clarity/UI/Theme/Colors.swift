@@ -5,9 +5,9 @@ import SwiftUI
 
 extension Color {
     // MARK: - Brand Colors
-    static let clarityPrimary = Color(hex: "#8B5CF6")!    // Violet
-    static let claritySecondary = Color(hex: "#A855F7")!  // Purple
-    static let clarityAccent = Color(hex: "#6366F1")!     // Indigo
+    static let clarityPrimary = Color(hex: "#8B5CF6")    // Violet
+    static let claritySecondary = Color(hex: "#A855F7")  // Purple
+    static let clarityAccent = Color(hex: "#6366F1")     // Indigo
     
     // MARK: - Background Colors (OLED / True Black)
     static let bgPrimary = Color(UIColor { trait in
@@ -43,26 +43,26 @@ extension Color {
     // Tertiary: Subtle details
     static let textTertiary = Color.primary.opacity(0.4)
     
-    static let textAccent = Color(hex: "#8B5CF6")!
+    static let textAccent = Color(hex: "#8B5CF6")
     
     // MARK: - Semantic Colors
-    static let success = Color(hex: "#10B981")!
-    static let warning = Color(hex: "#F59E0B")!
-    static let error = Color(hex: "#EF4444")!
-    static let info = Color(hex: "#3B82F6")!
+    static let success = Color(hex: "#10B981")
+    static let warning = Color(hex: "#F59E0B")
+    static let error = Color(hex: "#EF4444")
+    static let info = Color(hex: "#3B82F6")
     
     // MARK: - Category Colors
     static let categoryColors: [String: Color] = [
-        "Vivienda": Color(hex: "#3B82F6")!,      // Blue
-        "Ocio": Color(hex: "#10B981")!,          // Green
-        "Coche/Moto": Color(hex: "#F59E0B")!,    // Amber
-        "Compras": Color(hex: "#FBBF24")!,       // Yellow
-        "Salud": Color(hex: "#EF4444")!,         // Red
-        "Educacion": Color(hex: "#EC4899")!,     // Pink
-        "Alimentacion": Color(hex: "#6366F1")!,  // Indigo
-        "Transporte": Color(hex: "#14B8A6")!,    // Teal
-        "Suscripciones": Color(hex: "#8B5CF6")!, // Violet
-        "Otros": Color(hex: "#6B7280")!,         // Gray
+        "Vivienda": Color(hex: "#3B82F6"),      // Blue
+        "Ocio": Color(hex: "#10B981"),          // Green
+        "Coche/Moto": Color(hex: "#F59E0B"),    // Amber
+        "Compras": Color(hex: "#FBBF24"),       // Yellow
+        "Salud": Color(hex: "#EF4444"),         // Red
+        "Educacion": Color(hex: "#EC4899"),     // Pink
+        "Alimentacion": Color(hex: "#6366F1"),  // Indigo
+        "Transporte": Color(hex: "#14B8A6"),    // Teal
+        "Suscripciones": Color(hex: "#8B5CF6"), // Violet
+        "Otros": Color(hex: "#6B7280"),         // Gray
     ]
     
     // MARK: - Glassmorphism Colors
@@ -92,13 +92,13 @@ extension Color {
     )
     
     static let brandGradient = LinearGradient(
-        colors: [Color(hex: "#3B82F6")!, Color(hex: "#8B5CF6")!],
+        colors: [Color(hex: "#3B82F6"), Color(hex: "#8B5CF6")],
         startPoint: .leading,
         endPoint: .trailing
     )
     
     static let brandGradientDiagonal = LinearGradient(
-        colors: [Color(hex: "#8B5CF6")!, Color(hex: "#6366F1")!],
+        colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
@@ -107,9 +107,9 @@ extension Color {
     /// Gradiente vibrante estilo SkillsMP para acentos especiales
     static let vibrantGradient = LinearGradient(
         colors: [
-            Color(hex: "#FF6B6B")!,  // Coral
-            Color(hex: "#4ECDC4")!,  // Turquesa
-            Color(hex: "#45B7D1")!   // Azul cielo
+            Color(hex: "#FF6B6B"),  // Coral
+            Color(hex: "#4ECDC4"),  // Turquesa
+            Color(hex: "#45B7D1")   // Azul cielo
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -118,9 +118,9 @@ extension Color {
     /// Gradiente sunset cálido
     static let sunsetGradient = LinearGradient(
         colors: [
-            Color(hex: "#FF6B9D")!,  // Rosa
-            Color(hex: "#FFA07A")!,  // Salmón
-            Color(hex: "#FFD93D")!   // Amarillo dorado
+            Color(hex: "#FF6B9D"),  // Rosa
+            Color(hex: "#FFA07A"),  // Salmón
+            Color(hex: "#FFD93D")   // Amarillo dorado
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -129,9 +129,9 @@ extension Color {
     /// Gradiente océano fresco
     static let oceanGradient = LinearGradient(
         colors: [
-            Color(hex: "#667EEA")!,  // Índigo
-            Color(hex: "#764BA2")!,  // Púrpura
-            Color(hex: "#F093FB")!   // Rosa claro
+            Color(hex: "#667EEA"),  // Índigo
+            Color(hex: "#764BA2"),  // Púrpura
+            Color(hex: "#F093FB")   // Rosa claro
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -140,9 +140,9 @@ extension Color {
     /// Gradiente aurora boreal
     static let auroraGradient = LinearGradient(
         colors: [
-            Color(hex: "#00F260")!,  // Verde brillante
-            Color(hex: "#0575E6")!,  // Azul eléctrico
-            Color(hex: "#00F260")!   // Verde brillante
+            Color(hex: "#00F260"),  // Verde brillante
+            Color(hex: "#0575E6"),  // Azul eléctrico
+            Color(hex: "#00F260")   // Verde brillante
         ],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
@@ -151,20 +151,21 @@ extension Color {
 
 // MARK: - Hex Color Extension
 extension Color {
-    init?(hex: String) {
+    init(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
-        
+
         var rgb: UInt64 = 0
-        
+
         guard Scanner(string: hexSanitized).scanHexInt64(&rgb) else {
-            return nil
+            self = .gray
+            return
         }
-        
+
         let r = Double((rgb & 0xFF0000) >> 16) / 255.0
         let g = Double((rgb & 0x00FF00) >> 8) / 255.0
         let b = Double(rgb & 0x0000FF) / 255.0
-        
+
         self.init(red: r, green: g, blue: b)
     }
     

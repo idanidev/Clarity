@@ -9,14 +9,14 @@ struct DonutChartContent: View {
     var filter: ExpenseFilter
     
     private let defaultColors: [Color] = [
-        Color(hex: "#8B5CF6")!,
-        Color(hex: "#3B82F6")!,
-        Color(hex: "#10B981")!,
-        Color(hex: "#F59E0B")!,
-        Color(hex: "#EF4444")!,
-        Color(hex: "#EC4899")!,
-        Color(hex: "#14B8A6")!,
-        Color(hex: "#FBBF24")!,
+        Color(hex: "#8B5CF6"),
+        Color(hex: "#3B82F6"),
+        Color(hex: "#10B981"),
+        Color(hex: "#F59E0B"),
+        Color(hex: "#EF4444"),
+        Color(hex: "#EC4899"),
+        Color(hex: "#14B8A6"),
+        Color(hex: "#FBBF24"),
     ]
     
     var body: some View {

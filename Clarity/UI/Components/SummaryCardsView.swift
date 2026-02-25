@@ -90,6 +90,8 @@ struct SummaryCard: View {
                     .foregroundStyle(DesignTokens.Colors.textTertiary)
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
         .frame(maxWidth: .infinity)
         .padding(.vertical, verticalPadding)
         .padding(.horizontal, horizontalPadding)
@@ -185,9 +187,9 @@ struct SummaryCardsView: View {
                 icon: "list.bullet.rectangle",
                 title: "Gastos",
                 value: "\(expenseCount)",
-                valueColor: Color(hex: "#3B82F6")!,
+                valueColor: Color(hex: "#3B82F6"),
                 gradient: LinearGradient(
-                    colors: [Color(hex: "#3B82F6")!, Color(hex: "#2563EB")!],
+                    colors: [Color(hex: "#3B82F6"), Color(hex: "#2563EB")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -201,8 +203,8 @@ struct SummaryCardsView: View {
                 valueColor: savings >= 0 ? .green : .red,
                 gradient: LinearGradient(
                     colors: savings >= 0 
-                        ? [Color(hex: "#10B981")!, Color(hex: "#059669")!]
-                        : [Color(hex: "#EF4444")!, Color(hex: "#DC2626")!],
+                        ? [Color(hex: "#10B981"), Color(hex: "#059669")]
+                        : [Color(hex: "#EF4444"), Color(hex: "#DC2626")],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

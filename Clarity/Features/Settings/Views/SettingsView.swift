@@ -104,14 +104,18 @@ struct SettingsView: View {
 
                 // About Section
                 Section("Información") {
-                    LabeledContent("Versión", value: "1.0.0")
+                    LabeledContent("Versión", value: appVersion)
 
-                    Link(destination: URL(string: "https://clarity-gastos.web.app/privacy")!) {
-                        Text("Política de Privacidad")
+                    if let privacyURL = URL(string: "https://clarity-gastos.web.app/privacy") {
+                        Link(destination: privacyURL) {
+                            Text("Política de Privacidad")
+                        }
                     }
 
-                    Link(destination: URL(string: "https://clarity-gastos.web.app/terms")!) {
-                        Text("Términos de Servicio")
+                    if let termsURL = URL(string: "https://clarity-gastos.web.app/terms") {
+                        Link(destination: termsURL) {
+                            Text("Términos de Servicio")
+                        }
                     }
                 }
 
@@ -140,6 +144,12 @@ struct SettingsView: View {
                 Button("Cancelar", role: .cancel) {}
             }
         }
+    }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
     }
 
     @State private var exportedFileURL: URL?

@@ -11,16 +11,16 @@ struct ChartsView: View {
     
     // Default colors for categories (in order)
     private let defaultColors: [Color] = [
-        Color(hex: "#8B5CF6")!,  // Violet
-        Color(hex: "#3B82F6")!,  // Blue
-        Color(hex: "#10B981")!,  // Green
-        Color(hex: "#F59E0B")!,  // Amber
-        Color(hex: "#EF4444")!,  // Red
-        Color(hex: "#EC4899")!,  // Pink
-        Color(hex: "#14B8A6")!,  // Teal
-        Color(hex: "#FBBF24")!,  // Yellow
-        Color(hex: "#6366F1")!,  // Indigo
-        Color(hex: "#6B7280")!,  // Gray
+        Color(hex: "#8B5CF6"),  // Violet
+        Color(hex: "#3B82F6"),  // Blue
+        Color(hex: "#10B981"),  // Green
+        Color(hex: "#F59E0B"),  // Amber
+        Color(hex: "#EF4444"),  // Red
+        Color(hex: "#EC4899"),  // Pink
+        Color(hex: "#14B8A6"),  // Teal
+        Color(hex: "#FBBF24"),  // Yellow
+        Color(hex: "#6366F1"),  // Indigo
+        Color(hex: "#6B7280"),  // Gray
     ]
     
     var body: some View {
@@ -218,19 +218,19 @@ struct ChartsView: View {
     private func colorForCategory(_ category: String, index: Int) -> Color {
         // Try to match known category names
         let categoryMap: [String: Color] = [
-            "Vivienda": Color(hex: "#3B82F6")!,
-            "Alimentacion": Color(hex: "#6366F1")!,
-            "Alimentación": Color(hex: "#6366F1")!,
-            "Ocio": Color(hex: "#10B981")!,
-            "Coche": Color(hex: "#F59E0B")!,
-            "Moto": Color(hex: "#F59E0B")!,
-            "Compras": Color(hex: "#FBBF24")!,
-            "Salud": Color(hex: "#EF4444")!,
-            "Educacion": Color(hex: "#EC4899")!,
-            "Educación": Color(hex: "#EC4899")!,
-            "Transporte": Color(hex: "#14B8A6")!,
-            "Suscripciones": Color(hex: "#8B5CF6")!,
-            "Otros": Color(hex: "#6B7280")!,
+            "Vivienda": Color(hex: "#3B82F6"),
+            "Alimentacion": Color(hex: "#6366F1"),
+            "Alimentación": Color(hex: "#6366F1"),
+            "Ocio": Color(hex: "#10B981"),
+            "Coche": Color(hex: "#F59E0B"),
+            "Moto": Color(hex: "#F59E0B"),
+            "Compras": Color(hex: "#FBBF24"),
+            "Salud": Color(hex: "#EF4444"),
+            "Educacion": Color(hex: "#EC4899"),
+            "Educación": Color(hex: "#EC4899"),
+            "Transporte": Color(hex: "#14B8A6"),
+            "Suscripciones": Color(hex: "#8B5CF6"),
+            "Otros": Color(hex: "#6B7280"),
         ]
         
         // Check if category name contains any known key

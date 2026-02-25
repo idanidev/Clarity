@@ -221,9 +221,12 @@ struct SimpleVoiceButton: View {
                     return
                 }
 
-                // Build Expense objects for each parsed transaction
-                pendingExpenses = parsed.map { tx in
-                    Expense(
+                var autoSavedCount = 0
+                var expensesToShow: [Expense] = []
+
+                // Build Expense objects and check for auto-save
+                for tx in parsed {
+                    let expense = Expense(
                         id: UUID().uuidString,
                         amount: NSDecimalNumber(decimal: tx.amount).doubleValue,
                         name: tx.merchant,
@@ -232,10 +235,35 @@ struct SimpleVoiceButton: View {
                         date: Formatters.isoString(from: tx.date),
                         paymentMethod: tx.paymentMethod ?? "Tarjeta"
                     )
+
+                    // Auto-save logic: enabled, high confidence, and a category was detected
+                    let isConfident = tx.confidence >= 0.7 && tx.category != nil
+
+                    if settings.autoConfirm && isConfident {
+                        Task { await saveExpense(expense, showFeedback: false) }
+                        autoSavedCount += 1
+                    } else {
+                        expensesToShow.append(expense)
+                    }
                 }
 
-                HapticManager.shared.playSuccess()
-                isShowingExpenseSheet = true
+                // If all were auto-saved
+                if autoSavedCount > 0 && expensesToShow.isEmpty {
+                    HapticManager.shared.playSuccess()
+                    FeedbackManager.shared.show(
+                        .success,
+                        title: "¡Guardado!",
+                        message: "Se han guardado \(autoSavedCount) gasto(s) automáticamente."
+                    )
+                    return
+                }
+
+                // If some (or all) need confirmation
+                if !expensesToShow.isEmpty {
+                    pendingExpenses = expensesToShow
+                    HapticManager.shared.playSuccess()
+                    isShowingExpenseSheet = true
+                }
             }
         }
     }
@@ -261,23 +289,27 @@ struct SimpleVoiceButton: View {
         isShowingExpenseSheet = false
     }
 
-    private func saveExpense(_ expense: Expense) async {
+    private func saveExpense(_ expense: Expense, showFeedback: Bool = true) async {
         do {
             _ = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
             await viewModel.refresh()
-            HapticManager.shared.playSuccess()
-            FeedbackManager.shared.show(
-                .success,
-                title: "Gasto añadido",
-                message: nil
-            )
+            if showFeedback {
+                HapticManager.shared.playSuccess()
+                FeedbackManager.shared.show(
+                    .success,
+                    title: "Gasto añadido",
+                    message: nil
+                )
+            }
         } catch {
-            HapticManager.shared.error()
-            FeedbackManager.shared.show(
-                .error,
-                title: "Error",
-                message: "No se pudo guardar el gasto"
-            )
+            if showFeedback {
+                HapticManager.shared.error()
+                FeedbackManager.shared.show(
+                    .error,
+                    title: "Error",
+                    message: "No se pudo guardar el gasto"
+                )
+            }
         }
     }
 

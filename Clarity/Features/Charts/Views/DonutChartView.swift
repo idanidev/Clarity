@@ -254,12 +254,12 @@ struct CategoryChartCard: View {
 #Preview {
     DonutChartView(
         categoryData: [
-            CategoryChartData(name: "Vivienda 🏠", amount: 650, percentage: 47.1, color: Color(hex: "#3B82F6")!),
-            CategoryChartData(name: "Alimentación 🥗", amount: 280, percentage: 20.3, color: Color(hex: "#6366F1")!),
-            CategoryChartData(name: "Transporte 🚎", amount: 150, percentage: 10.9, color: Color(hex: "#14B8A6")!),
-            CategoryChartData(name: "Ocio 🍻", amount: 120, percentage: 8.7, color: Color(hex: "#10B981")!),
-            CategoryChartData(name: "Compras 🛒", amount: 100, percentage: 7.2, color: Color(hex: "#FBBF24")!),
-            CategoryChartData(name: "Otros 📦", amount: 80, percentage: 5.8, color: Color(hex: "#6B7280")!)
+            CategoryChartData(name: "Vivienda 🏠", amount: 650, percentage: 47.1, color: Color(hex: "#3B82F6")),
+            CategoryChartData(name: "Alimentación 🥗", amount: 280, percentage: 20.3, color: Color(hex: "#6366F1")),
+            CategoryChartData(name: "Transporte 🚎", amount: 150, percentage: 10.9, color: Color(hex: "#14B8A6")),
+            CategoryChartData(name: "Ocio 🍻", amount: 120, percentage: 8.7, color: Color(hex: "#10B981")),
+            CategoryChartData(name: "Compras 🛒", amount: 100, percentage: 7.2, color: Color(hex: "#FBBF24")),
+            CategoryChartData(name: "Otros 📦", amount: 80, percentage: 5.8, color: Color(hex: "#6B7280"))
         ],
         total: 1380.00
     )

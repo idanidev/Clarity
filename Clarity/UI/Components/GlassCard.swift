@@ -123,7 +123,7 @@ extension GlassCard where Content == EmptyView {
     ZStack {
         // Fondo oscuro para visualizar el efecto glass
         LinearGradient(
-            colors: [.black, Color(hex: "#1a1a2e")!],
+            colors: [.black, Color(hex: "#1a1a2e")],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

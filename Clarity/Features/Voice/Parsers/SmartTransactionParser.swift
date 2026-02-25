@@ -69,7 +69,7 @@ private struct KeywordDefinition {
 private let GlobalKeywords: [KeywordDefinition] = [
     // Alimentación - Context Aware
     .init(
-        category: "🛒 Compras", subcategory: "Supermercado",
+        category: "Alimentacion🫄", subcategory: "Supermercado",
         keywords: [
             "supermercado", "mercado", "mercadona", "carrefour", "lidl", "aldi", "dia", "alcampo",
             "eroski", "consum", "ahorramas",
@@ -77,16 +77,16 @@ private let GlobalKeywords: [KeywordDefinition] = [
 
     // Restaurantes - Almuerzo (12-16h)
     .init(
-        category: "🍻 Ocio", subcategory: "Restaurantes",
+        category: "Alimentacion🫄", subcategory: "Restaurantes",
         keywords: ["restaurante", "cena", "almuerzo", "comida", "menu", "plato"],
         timeContext: 12...16),
     // Restaurantes - Cena (19-23h)
     .init(
-        category: "🍻 Ocio", subcategory: "Restaurantes", keywords: ["cena", "cenar"],
+        category: "Alimentacion🫄", subcategory: "Restaurantes", keywords: ["cena", "cenar"],
         timeContext: 19...23),
     // Fast Food - Any time
     .init(
-        category: "🍻 Ocio", subcategory: "Restaurantes",
+        category: "Alimentacion🫄", subcategory: "Restaurantes",
         keywords: [
             "pizza", "burguer", "hamburguesa", "sushi", "mcdonalds", "burger king", "telepizza",
             "just eat", "glovo", "uber eats",
@@ -94,114 +94,122 @@ private let GlobalKeywords: [KeywordDefinition] = [
 
     // Cafeterías - Desayuno (7-11h) / Merienda (16-19h)
     .init(
-        category: "🍻 Ocio", subcategory: "Cafeterías", keywords: ["desayuno", "cafe", "tostada"],
+        category: "Alimentacion🫄", subcategory: "Cafeterías",
+        keywords: ["desayuno", "cafe", "tostada"],
         timeContext: 7...11),
     .init(
-        category: "🍻 Ocio", subcategory: "Cafeterías", keywords: ["merienda", "cafe"],
+        category: "Alimentacion🫄", subcategory: "Cafeterías", keywords: ["merienda", "cafe"],
         timeContext: 16...19),
     .init(
-        category: "🍻 Ocio", subcategory: "Cafeterías", keywords: ["cafeteria", "starbucks"],
+        category: "Alimentacion🫄", subcategory: "Cafeterías", keywords: ["cafeteria", "starbucks"],
         timeContext: nil),
 
     // Transporte
     .init(
-        category: "🚎 Transporte", subcategory: "Gasolina",
+        category: "Transporte🚎", subcategory: "Gasolina",
         keywords: [
             "gasolina", "combustible", "diesel", "gasolinera", "repsol", "cepsa", "bp", "shell",
         ], timeContext: nil),
     .init(
-        category: "🚎 Transporte", subcategory: "Transporte público",
+        category: "Transporte🚎", subcategory: "Transporte público",
         keywords: ["metro", "autobus", "bus", "tren", "renfe", "cercanias", "transporte"],
         timeContext: nil),
     .init(
-        category: "🚎 Transporte", subcategory: "Taxi",
+        category: "Transporte🚎", subcategory: "Taxi",
         keywords: ["taxi", "uber", "cabify", "bolt"], timeContext: nil),
     .init(
-        category: "🚎 Transporte", subcategory: "Parking", keywords: ["parking", "aparcamiento"],
+        category: "Transporte🚎", subcategory: "Parking", keywords: ["parking", "aparcamiento"],
         timeContext: nil),
-    .init(category: "🚎 Transporte", subcategory: "Peajes", keywords: ["peaje"], timeContext: nil),
+    .init(category: "Transporte🚎", subcategory: "Peajes", keywords: ["peaje"], timeContext: nil),
 
     // Ocio
     .init(
-        category: "🍻 Ocio", subcategory: "Cine", keywords: ["cine", "pelicula"], timeContext: nil),
+        category: "Ocio 🍻", subcategory: "Cine", keywords: ["cine", "pelicula"], timeContext: nil),
     .init(
-        category: "🍻 Ocio", subcategory: "Bares",
-        keywords: ["cerveza", "birra", "copas", "bar", "discoteca"], timeContext: 18...23),
+        category: "Ocio 🍻", subcategory: "Bares",
+        keywords: ["cerveza", "birra", "copas", "bar", "discoteca", "pub"], timeContext: 18...23),
     .init(
-        category: "🍻 Ocio", subcategory: "Eventos", keywords: ["concierto", "teatro", "fiesta"],
+        category: "Ocio 🍻", subcategory: "Conciertos",
+        keywords: ["concierto", "teatro", "fiesta", "festival"],
         timeContext: nil),
 
     // Suscripciones
     .init(
-        category: "📺 Suscripciones", subcategory: "Streaming",
+        category: "Suscripciones📺", subcategory: "Netflix",  // Or just generic Netflix mapped to "Netflix" in DefaultCategory
         keywords: [
             "netflix", "spotify", "hbo", "disney", "prime video", "amazon prime", "dazn",
             "apple music", "youtube",
         ], timeContext: nil),
     .init(
-        category: "📺 Suscripciones", subcategory: "Apps", keywords: ["icloud", "chatgpt"],
+        category: "Suscripciones📺", subcategory: "iCloud", keywords: ["icloud", "chatgpt"],
         timeContext: nil),
 
     // Salud
     .init(
-        category: "🏥 Salud", subcategory: "Farmacia",
+        category: "Salud🏥", subcategory: "Farmacia",
         keywords: ["farmacia", "medicina", "medicamento", "medicinas", "pastillas"],
         timeContext: nil),
     .init(
-        category: "🏥 Salud", subcategory: "Médico", keywords: ["medico", "doctor"], timeContext: nil
+        category: "Salud🏥", subcategory: "Médico", keywords: ["medico", "doctor"], timeContext: nil
     ),
-    .init(category: "🏥 Salud", subcategory: "Dentista", keywords: ["dentista"], timeContext: nil),
-    .init(category: "🏥 Salud", subcategory: "Hospital", keywords: ["hospital"], timeContext: nil),
+    .init(category: "Salud🏥", subcategory: "Dentista", keywords: ["dentista"], timeContext: nil),
+    .init(category: "Salud🏥", subcategory: "Médico", keywords: ["hospital"], timeContext: nil),
     .init(
-        category: "🏥 Salud", subcategory: "Gimnasio", keywords: ["gimnasio", "gym"],
+        category: "Salud🏥", subcategory: "Gimnasio", keywords: ["gimnasio", "gym", "crossfit"],
         timeContext: nil),
 
     // Vivienda
     .init(
-        category: "🏡 Vivienda", subcategory: "Alquiler", keywords: ["alquiler"], timeContext: nil),
+        category: "Vivienda🏡", subcategory: "Alquiler", keywords: ["alquiler"], timeContext: nil),
     .init(
-        category: "🏡 Vivienda", subcategory: "Hipoteca", keywords: ["hipoteca"], timeContext: nil),
+        category: "Vivienda🏡", subcategory: "Hipoteca", keywords: ["hipoteca"], timeContext: nil),
     .init(
-        category: "🏡 Vivienda", subcategory: "Luz",
+        category: "Vivienda🏡", subcategory: "Luz",
         keywords: ["luz", "electricidad", "iberdrola", "endesa", "naturgy"], timeContext: nil),
-    .init(category: "🏡 Vivienda", subcategory: "Agua", keywords: ["agua"], timeContext: nil),
-    .init(category: "🏡 Vivienda", subcategory: "Gas", keywords: ["gas"], timeContext: nil),
+    .init(category: "Vivienda🏡", subcategory: "Agua", keywords: ["agua"], timeContext: nil),
+    .init(category: "Vivienda🏡", subcategory: "Gas", keywords: ["gas"], timeContext: nil),
     .init(
-        category: "🏡 Vivienda", subcategory: "Internet",
-        keywords: ["internet", "wifi", "fibra", "movistar", "vodafone", "orange", "pepephone"],
+        category: "Vivienda🏡", subcategory: "Internet",
+        keywords: [
+            "internet", "wifi", "fibra", "movistar", "vodafone", "orange", "pepephone", "digi",
+            "simyo",
+        ],
         timeContext: nil),
-    .init(
-        category: "🏡 Vivienda", subcategory: "Teléfono", keywords: ["telefono", "movil"],
+    .init(  // Telefono doesn't exist in Default Subcategories, use Internet probably? No, let's keep it empty or "Internet"
+        category: "Vivienda🏡", subcategory: "Internet", keywords: ["telefono", "movil"],
         timeContext: nil),
 
     // Compras
     .init(
-        category: "🛒 Compras", subcategory: "Ropa",
+        category: "Compras 🛒", subcategory: "Ropa",
         keywords: [
             "ropa", "zapatos", "zapatillas", "zara", "hm", "h&m", "primark", "mango", "bershka",
             "pull&bear", "decathlon",
         ], timeContext: nil),
     .init(
-        category: "🛒 Compras", subcategory: "Tecnología",
+        category: "Compras 🛒", subcategory: "Electrónica",
         keywords: ["apple store", "mediamarkt", "pccomponentes", "amazon", "electronica"],
         timeContext: nil),
 
     // Educación
     .init(
-        category: "📖 Educación", subcategory: "Cursos", keywords: ["curso", "udemy"],
+        category: "Educacion📖", subcategory: "Cursos", keywords: ["curso", "udemy"],
         timeContext: nil),
-    .init(category: "📖 Educación", subcategory: "Libros", keywords: ["libro"], timeContext: nil),
+    .init(category: "Educacion📖", subcategory: "Libros", keywords: ["libro"], timeContext: nil),
 
     // Viajes
     .init(
-        category: "🗺️ Viajes", subcategory: nil,
-        keywords: ["viaje", "vuelo", "hotel", "airbnb", "booking"], timeContext: nil),
+        category: "Viajes🗺️", subcategory: "Vuelos",
+        keywords: ["viaje", "vuelo", "hotel", "airbnb", "booking", "renfe", "ave"], timeContext: nil
+    ),
 
     // Otros
     .init(
-        category: "🎲 Otros", subcategory: "Varios", keywords: ["tabaco", "cigarro"],
+        category: "Otros📦", subcategory: "Varios", keywords: ["tabaco", "cigarro"],
         timeContext: nil),
-    .init(category: "🎲 Otros", subcategory: "Regalos", keywords: ["regalo"], timeContext: nil),
+    .init(
+        category: "Otros📦", subcategory: "Varios", keywords: ["regalo", "regalos"], timeContext: nil
+    ),
 ]
 
 // Number words dictionary for Spanish
@@ -506,7 +514,7 @@ final class SmartTransactionParser: TransactionParserProtocol {
         if let entity = extractEntity(from: original) {
             let finalDescription =
                 entity.count > cleanedDescription.count ? entity : cleanedDescription
-            return ("🛒 Compras", nil, finalDescription, .ner)
+            return ("Compras 🛒", nil, finalDescription, .ner)
         }
 
         // 6. Generic Fallback
