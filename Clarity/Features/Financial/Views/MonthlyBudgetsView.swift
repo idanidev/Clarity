@@ -158,34 +158,47 @@ struct CreateBudgetSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: MonthlyBudgetsViewModel
 
-    @State private var selectedDate = Date()
+    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
     @State private var income: String = ""
 
-    private var year: Int {
-        Calendar.current.component(.year, from: selectedDate)
-    }
+    private let monthNames: [String] = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_ES")
+        return formatter.monthSymbols.map { $0.capitalized }
+    }()
 
-    private var month: Int {
-        Calendar.current.component(.month, from: selectedDate)
-    }
+    private let availableYears: [Int] = {
+        let currentYear = Calendar.current.component(.year, from: Date())
+        return Array((currentYear - 3)...currentYear).reversed()
+    }()
 
     private var canSave: Bool {
         guard let income = Double(income), income > 0 else { return false }
-        return !viewModel.budgetExists(for: year, month: month)
+        return !viewModel.budgetExists(for: selectedYear, month: selectedMonth)
     }
 
     var body: some View {
         NavigationView {
             Form {
                 Section("Mes") {
-                    DatePicker(
-                        "Seleccionar mes",
-                        selection: $selectedDate,
-                        displayedComponents: [.date]
-                    )
-                    .datePickerStyle(.graphical)
+                    Picker("Mes", selection: $selectedMonth) {
+                        ForEach(1...12, id: \.self) { month in
+                            Text(monthNames[month - 1]).tag(month)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .frame(height: 120)
+                    .clipped()
 
-                    if viewModel.budgetExists(for: year, month: month) {
+                    Picker("Año", selection: $selectedYear) {
+                        ForEach(availableYears, id: \.self) { year in
+                            Text(String(year)).tag(year)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    if viewModel.budgetExists(for: selectedYear, month: selectedMonth) {
                         Label(
                             "Ya existe nómina para este mes",
                             systemImage: "exclamationmark.triangle.fill"
@@ -235,7 +248,8 @@ struct CreateBudgetSheet: View {
         guard let income = Double(income) else { return }
 
         Task {
-            await viewModel.createBudgetForMonth(year: year, month: month, income: income)
+            await viewModel.createBudgetForMonth(
+                year: selectedYear, month: selectedMonth, income: income)
             dismiss()
         }
     }
