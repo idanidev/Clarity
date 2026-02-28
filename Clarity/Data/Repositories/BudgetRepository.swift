@@ -28,7 +28,7 @@ class BudgetRepository: ObservableObject {
         guard let collection = budgetsCollection else {
             throw RepositoryError.notAuthenticated
         }
-        try collection.document(budget.month).setData(from: budget)
+        try await collection.document(budget.month).setData(from: budget)
     }
     
     func fetchAllBudgets() async throws -> [CategoryBudget] {

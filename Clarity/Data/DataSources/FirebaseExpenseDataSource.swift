@@ -142,16 +142,16 @@ actor FirebaseExpenseDataSource {
         
         let docRef = collection.document()
         let dto = ExpenseDTO(from: expense)
-        try docRef.setData(from: dto)
+        try await docRef.setData(from: dto)
         return docRef.documentID
     }
-    
+
     func updateExpense(_ expense: Expense) async throws {
         guard let collection = expensesCollection, let id = expense.id else {
             throw URLError(.userAuthenticationRequired)
         }
         let dto = ExpenseDTO(from: expense)
-        try collection.document(id).setData(from: dto, merge: true)
+        try await collection.document(id).setData(from: dto, merge: true)
     }
     
     func deleteExpense(id: String) async throws {

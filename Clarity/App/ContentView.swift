@@ -5,18 +5,26 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(AuthViewModel.self) var authViewModel
+    private let userDataManager = UserDataManager.shared
 
     var body: some View {
         Group {
             if authViewModel.isLoading {
                 LoadingView()
             } else if authViewModel.isAuthenticated {
-                MainTabView()
+                if userDataManager.hasCompletedOnboarding {
+                    MainTabView()
+                } else {
+                    OnboardingView {
+                        userDataManager.completeOnboarding()
+                    }
+                }
             } else {
                 LoginView()
             }
         }
         .animation(.bouncy(duration: 0.25), value: authViewModel.isAuthenticated)
+        .animation(.bouncy(duration: 0.25), value: userDataManager.hasCompletedOnboarding)
     }
 }
 

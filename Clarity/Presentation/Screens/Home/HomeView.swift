@@ -99,9 +99,13 @@ struct HomeView: View {
             // Centered Pills (Floating Island)
             HStack(spacing: 0) {
                 viewModeButton(icon: "list.bullet", index: 0)
+                    .accessibilityLabel("Vista lista")
                 viewModeButton(icon: "chart.pie.fill", index: 1)
+                    .accessibilityLabel("Vista gráficos")
                 viewModeButton(icon: "calendar", index: 2)
+                    .accessibilityLabel("Vista calendario")
                 viewModeButton(icon: "arrow.left.arrow.right", index: 3)
+                    .accessibilityLabel("Comparar meses")
             }
             .padding(4)
             .background(.regularMaterial)
@@ -172,6 +176,7 @@ struct HomeView: View {
                                 .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
                         }
                         .transition(.scale.combined(with: .opacity))
+                        .accessibilityLabel("Limpiar filtros")
                     }
 
                     Button {
@@ -194,6 +199,7 @@ struct HomeView: View {
                         .clipShape(Circle())
                         .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
                     }
+                    .accessibilityLabel("Filtros")
                 }
                 .padding(.horizontal, DesignTokens.Spacing.sm)
                 // ActiveFilterPillsView removed as requested

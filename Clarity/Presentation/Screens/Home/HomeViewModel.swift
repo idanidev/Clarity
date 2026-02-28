@@ -117,7 +117,14 @@ final class HomeViewModel {
             if let budget = currentMonthlyBudget {
                 logger.debug("💰 Loaded budget for \(month)/\(year): €\(budget.income)")
             } else {
-                logger.info("⚠️ No budget found for \(month)/\(year), using global income fallback")
+                logger.info("⚠️ No budget found for \(month)/\(year), checking fixed salary...")
+                // Only auto-create for the actual current month (not historical months)
+                let calendar2 = Calendar.current
+                let realYear = calendar2.component(.year, from: Date())
+                let realMonth = calendar2.component(.month, from: Date())
+                if year == realYear && month == realMonth {
+                    await autoCreateBudgetIfFixedSalary(year: year, month: month)
+                }
             }
         } catch {
             print("❌ Error loading budget for \(month)/\(year): \(error.localizedDescription)")
@@ -149,6 +156,35 @@ final class HomeViewModel {
         } catch {
             logger.error("❌ Error loading previous month budget: \(error.localizedDescription)")
             previousMonthlyBudget = nil
+        }
+    }
+
+    /// Auto-creates the monthly budget if the user has a fixed recurring salary configured.
+    /// Uses the cached UserDocument from UserDataManager (no extra auth import needed).
+    /// FinancialService handles auth internally.
+    private func autoCreateBudgetIfFixedSalary(year: Int, month: Int) async {
+        let doc = UserDataManager.shared.userDocument
+        guard let fixedIncome = doc?.income,
+            fixedIncome > 0,
+            doc?.settings?.isSalaryRecurring == true
+        else { return }
+
+        logger.info(
+            "🔄 Nómina fija (€\(fixedIncome)). Creando presupuesto \(month)/\(year) automáticamente..."
+        )
+        // userId is resolved by FinancialService internally from FirebaseAuth
+        let budget = MonthlyBudget(
+            userId: "",  // overridden by saveMonthlyBudget
+            year: year,
+            month: month,
+            income: fixedIncome
+        )
+        do {
+            try await financialService.saveMonthlyBudget(budget)
+            currentMonthlyBudget = budget
+            logger.info("✅ Presupuesto de nómina fija creado: €\(fixedIncome)")
+        } catch {
+            logger.error("❌ Error auto-creating fixed salary budget: \(error.localizedDescription)")
         }
     }
 

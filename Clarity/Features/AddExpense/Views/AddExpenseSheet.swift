@@ -77,7 +77,6 @@ struct AddExpenseSheet: View {
             TextField("¿En qué gastaste?", text: $viewModel.name)
                 .font(.clarityBody)
                 .accessibilityLabel("Descripción del gasto")
-                .accessibilityLabel("Descripción del gasto")
                 .onChange(of: viewModel.name) { _, newValue in
                     viewModel.onNameChange(newValue)
                 }

@@ -48,15 +48,15 @@ class RecurringExpenseRepository: ObservableObject {
         guard let collection = collection else {
             throw RepositoryError.notAuthenticated
         }
-        let docRef = try collection.addDocument(from: expense)
+        let docRef = try await collection.addDocument(from: expense)
         return docRef.documentID
     }
-    
+
     func update(_ expense: RecurringExpense) async throws {
         guard let collection = collection, let id = expense.id else {
             throw RepositoryError.notAuthenticated
         }
-        try collection.document(id).setData(from: expense, merge: true)
+        try await collection.document(id).setData(from: expense, merge: true)
     }
     
     func toggleActive(id: String, active: Bool) async throws {

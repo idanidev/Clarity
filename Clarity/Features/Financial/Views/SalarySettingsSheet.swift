@@ -36,12 +36,12 @@ struct SalarySettingsSheet: View {
                 }
 
                 Section {
-                    Toggle("Ingreso Recurrente", isOn: $internalIsRecurring)
+                    Toggle("Nómina Fija", isOn: $internalIsRecurring)
                         .tint(Color.clarityPrimary)
 
                     if internalIsRecurring {
                         Text(
-                            "Al activar esto, Clarity usará automáticamente este sueldo como base para tus presupuestos mensuales, ahorrándote tiempo."
+                            "Clarity creará el presupuesto mensual automáticamente con este importe. No tendrás que introducirlo cada mes."
                         )
                         .font(.caption)
                         .foregroundStyle(.secondary)

@@ -50,7 +50,13 @@ class MonthlyBudgetsViewModel: ObservableObject {
     func saveBudget(_ budget: MonthlyBudget) async {
         do {
             try await financialService.saveMonthlyBudget(budget)
-            await loadBudgets()  // Refresh list
+            // Update local state directly — no need to re-fetch 24 months from Firestore
+            if let index = budgets.firstIndex(where: { $0.year == budget.year && $0.month == budget.month }) {
+                budgets[index] = budget
+            } else {
+                budgets.append(budget)
+                budgets.sort { $0.year > $1.year || ($0.year == $1.year && $0.month > $1.month) }
+            }
             print("✅ Saved budget for \(budget.month)/\(budget.year)")
         } catch {
             errorMessage = "Error saving budget: \(error.localizedDescription)"

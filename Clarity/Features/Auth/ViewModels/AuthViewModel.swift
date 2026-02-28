@@ -107,7 +107,7 @@ final class AuthViewModel {
             subscription: nil
         )
         
-        try db.collection("users").document(user.uid).setData(from: userDoc)
+        try await db.collection("users").document(user.uid).setData(from: userDoc)
     }
     
     func signOut() {

@@ -35,14 +35,13 @@ struct SimpleVoiceButton: View {
                 handleTap()
             } label: {
                 ZStack {
-                    // Fondo simple sin visualizador canvas horrible
+                    // Fondo: rojo grabando, naranja procesando, violeta idle
                     Circle()
-                        .fill(isRecording ? Color.red : Color.clarityPrimary)
+                        .fill(buttonColor)
                         .frame(width: 56, height: 56)
-                        .shadow(
-                            color: isRecording ? .red.opacity(0.4) : .black.opacity(0.2), radius: 8)
+                        .shadow(color: buttonColor.opacity(0.4), radius: 8)
 
-                    // Animación de pulso sutil
+                    // Animación de pulso al grabar
                     if isRecording {
                         Circle()
                             .stroke(Color.red.opacity(0.3), lineWidth: 2)
@@ -54,13 +53,26 @@ struct SimpleVoiceButton: View {
                                 value: isRecording)
                     }
 
-                    // Icono
-                    Image(systemName: isRecording ? "waveform" : "mic.fill")
-                        .foregroundStyle(.white)
-                        .font(.title3)
-                        .symbolEffect(.variableColor.iterative, isActive: isRecording)
+                    // Icono según estado
+                    if isProcessing {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .scaleEffect(1.1)
+                    } else {
+                        Image(systemName: isRecording ? "waveform" : "mic.fill")
+                            .foregroundStyle(.white)
+                            .font(.title3)
+                            .symbolEffect(.variableColor.iterative, isActive: isRecording)
+                    }
                 }
             }
+            .disabled(isProcessing)
+            .accessibilityLabel(
+                isProcessing ? "Procesando gasto" :
+                isRecording ? "Detener grabación de voz" : "Añadir gasto por voz"
+            )
+            .accessibilityHint(isRecording ? "Pulsa para detener" : "Pulsa para dictar un gasto")
 
             // Transcripción en tiempo real
             if isRecording {
@@ -120,6 +132,12 @@ struct SimpleVoiceButton: View {
         }
     }
 
+    private var buttonColor: Color {
+        if isRecording { return .red }
+        if isProcessing { return .orange }
+        return .clarityPrimary
+    }
+
     private func handleTap() {
         if isRecording {
             stopRecording()
@@ -172,16 +190,17 @@ struct SimpleVoiceButton: View {
         HapticManager.shared.impact(.light)
 
         speechManager.stopRecording()
+
+        // Transition: recording → processing (spinner stays visible)
+        isRecording = false
         isProcessing = true
+        isStopping = false
 
         Task {
-            try? await Task.sleep(nanoseconds: 200_000_000)
+            // Give speech recognition a moment to finalize the transcript
+            try? await Task.sleep(nanoseconds: 150_000_000)
 
             await MainActor.run {
-                isRecording = false
-                isStopping = false
-                isProcessing = false
-
                 let transcript = (speechManager.transcript + " " + speechManager.interimTranscript)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -189,6 +208,7 @@ struct SimpleVoiceButton: View {
                     isSimulator && transcript.isEmpty ? "Añade 50 euros en comida" : transcript
 
                 guard !finalTranscript.isEmpty else {
+                    isProcessing = false
                     HapticManager.shared.error()
                     FeedbackManager.shared.show(
                         .error,
@@ -212,6 +232,8 @@ struct SimpleVoiceButton: View {
             )
 
             await MainActor.run {
+                isProcessing = false
+
                 guard !parsed.isEmpty else {
                     HapticManager.shared.error()
                     FeedbackManager.shared.show(
@@ -226,18 +248,37 @@ struct SimpleVoiceButton: View {
 
                 // Build Expense objects and check for auto-save
                 for tx in parsed {
+                    // Detect category + subcategory exclusively from user's real data
+                    let normalizedParsedSub = (tx.subcategory ?? "").folding(options: .diacriticInsensitive, locale: .current).lowercased()
+                    let normalizedMerchant = tx.merchant.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+                    var category = ""
+                    var subcategory: String?
+
+                    outer: for userCat in categories {
+                        for sub in userCat.subcategories {
+                            let normalizedSub = sub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+                            if (!normalizedParsedSub.isEmpty && normalizedSub == normalizedParsedSub)
+                                || normalizedSub == normalizedMerchant
+                            {
+                                category = userCat.name
+                                subcategory = sub
+                                break outer
+                            }
+                        }
+                    }
+
                     let expense = Expense(
                         id: UUID().uuidString,
                         amount: NSDecimalNumber(decimal: tx.amount).doubleValue,
                         name: tx.merchant,
-                        category: tx.category ?? "",
-                        subcategory: tx.subcategory,
+                        category: category,
+                        subcategory: subcategory,
                         date: Formatters.isoString(from: tx.date),
                         paymentMethod: tx.paymentMethod ?? "Tarjeta"
                     )
 
                     // Auto-save logic: enabled, high confidence, and a category was detected
-                    let isConfident = tx.confidence >= 0.7 && tx.category != nil
+                    let isConfident = tx.confidence >= 0.7 && !category.isEmpty
 
                     if settings.autoConfirm && isConfident {
                         Task { await saveExpense(expense, showFeedback: false) }
@@ -292,6 +333,14 @@ struct SimpleVoiceButton: View {
     private func saveExpense(_ expense: Expense, showFeedback: Bool = true) async {
         do {
             _ = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
+            // Teach learning system
+            if !expense.category.isEmpty {
+                await UserLearningManager.shared.learn(
+                    merchant: expense.name,
+                    category: expense.category,
+                    subcategory: expense.subcategory
+                )
+            }
             await viewModel.refresh()
             if showFeedback {
                 HapticManager.shared.playSuccess()

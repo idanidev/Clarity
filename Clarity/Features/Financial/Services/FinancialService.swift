@@ -82,7 +82,7 @@ class FinancialService {
         let documentId = MonthlyBudget.generateDocumentId(
             userId: userId, year: budget.year, month: budget.month)
 
-        try budgetsCollection(userId).document(documentId).setData(from: budgetToSave, merge: true)
+        try await budgetsCollection(userId).document(documentId).setData(from: budgetToSave, merge: true)
         logger.info("✅ Saved budget for \(budget.year)-\(budget.month)")
     }
 
@@ -134,9 +134,9 @@ class FinancialService {
         goalToSave.updatedAt = Date()
 
         if let documentId = goal.documentId {
-            try goalsCollection(userId).document(documentId).setData(from: goalToSave, merge: true)
+            try await goalsCollection(userId).document(documentId).setData(from: goalToSave, merge: true)
         } else {
-            try goalsCollection(userId).addDocument(from: goalToSave)
+            try await goalsCollection(userId).addDocument(from: goalToSave)
         }
 
         logger.info("✅ Saved goal: \(goal.name)")

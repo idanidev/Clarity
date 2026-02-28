@@ -16,11 +16,34 @@ struct VoiceConfirmationSheet: View {
     @State private var name: String = ""
     @State private var selectedCategory: Category?
     @State private var selectedSubcategory: String = ""
-    @State private var timeRemaining: Double = 2.0
+    @State private var timeRemaining: Double
     @State private var progress: Double = 1.0
     @Environment(\.dismiss) private var dismiss
 
+    private let autoConfirmDuration: Double
+
     let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
+
+    init(
+        expense: Expense,
+        wasFullyDetected: Bool,
+        categories: [Category],
+        speechManager: SpeechRecognitionManager,
+        onConfirm: @escaping (Expense) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.expense = expense
+        self.wasFullyDetected = wasFullyDetected
+        self.categories = categories
+        self.speechManager = speechManager
+        self.onConfirm = onConfirm
+        self.onCancel = onCancel
+
+        let settings = VoiceSettings.load()
+        let duration = settings.autoConfirmDelay
+        self.autoConfirmDuration = duration
+        self._timeRemaining = State(initialValue: duration)
+    }
 
     var body: some View {
         NavigationStack {
@@ -100,15 +123,46 @@ struct VoiceConfirmationSheet: View {
         .onAppear {
             amount = String(format: "%.2f", expense.amount)
             name = expense.name
-            selectedCategory = categories.first { $0.name == expense.category }
-            selectedSubcategory = expense.subcategory ?? ""
+
+            // Detect category + subcategory exclusively from user's real data
+            let parsedSub = expense.subcategory ?? ""
+            let normalizedParsedSub = parsedSub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+            let normalizedName = name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+
+            // Search all user categories: first try parser's subcategory hint, then expense name
+            outer: for category in categories {
+                for sub in category.subcategories {
+                    let normalizedSub = sub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+                    if (!normalizedParsedSub.isEmpty && normalizedSub == normalizedParsedSub)
+                        || normalizedSub == normalizedName
+                    {
+                        selectedCategory = category
+                        selectedSubcategory = sub
+                        break outer
+                    }
+                }
+            }
+
+            // If still nothing, check UserLearning (stores real category/subcategory names the user confirmed)
+            if selectedCategory == nil {
+                Task {
+                    if let learned = await UserLearningManager.shared.getPreference(for: name) {
+                        selectedCategory = categories.first { $0.name == learned.category }
+                        if let learnedSub = learned.subcategory,
+                           let cat = selectedCategory,
+                           cat.subcategories.contains(learnedSub) {
+                            selectedSubcategory = learnedSub
+                        }
+                    }
+                }
+            }
         }
         .onReceive(timer) { _ in
             // Only count down if form is valid
             if timeRemaining > 0 && canConfirm {
                 let previousTime = timeRemaining
                 timeRemaining -= 0.1
-                progress = timeRemaining / 2.0
+                progress = timeRemaining / autoConfirmDuration
 
                 if previousTime > 1.0 && timeRemaining <= 1.0 {
                     HapticManager.shared.notification(.warning)
