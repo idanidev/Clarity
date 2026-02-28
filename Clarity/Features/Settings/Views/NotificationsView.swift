@@ -9,17 +9,18 @@ struct NotificationsView: View {
     @AppStorage("notifications.dailyReminder") private var dailyReminder = false
     @AppStorage("notifications.budgetAlerts") private var budgetAlerts = true
     @AppStorage("notifications.recurringReminders") private var recurringReminders = true
-    
+    @AppStorage("notifications.endOfMonthReminder") private var endOfMonthReminder = false
+
     @AppStorage("notifications.dailyHour") private var dailyHour = 20
     @AppStorage("notifications.dailyMinute") private var dailyMinute = 0
-    
+
     // Hardcoded reminder message
     private let reminderMessage = "💰 ¡Registra tus gastos del día!"
-    
+
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var showTimePicker = false
     @State private var selectedTime = Date()
-    
+
     var body: some View {
         List {
             // Push Notifications Toggle
@@ -33,7 +34,7 @@ struct NotificationsView: View {
                         }
                         HapticManager.shared.selection()
                     }
-                
+
                 if notificationStatus == .denied {
                     Button("Abrir Ajustes del Sistema") {
                         if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -50,7 +51,7 @@ struct NotificationsView: View {
                     Text("Permite que Clarity te envíe recordatorios")
                 }
             }
-            
+
             // Daily Reminder
             Section {
                 Toggle("Recordatorio Diario", isOn: $dailyReminder)
@@ -62,7 +63,7 @@ struct NotificationsView: View {
                             cancelDailyReminder()
                         }
                     }
-                
+
                 if dailyReminder {
                     // Time Picker Button
                     Button {
@@ -84,7 +85,7 @@ struct NotificationsView: View {
                                 .foregroundStyle(.tertiary)
                         }
                     }
-                    
+
                     // Show the hardcoded message (read-only)
                     HStack {
                         Text("Mensaje")
@@ -100,35 +101,64 @@ struct NotificationsView: View {
                 Text("Recordatorio Diario")
             } footer: {
                 if dailyReminder {
-                    Text("Recibirás un recordatorio todos los días a las \(String(format: "%02d:%02d", dailyHour, dailyMinute))")
+                    Text(
+                        "Recibirás un recordatorio todos los días a las \(String(format: "%02d:%02d", dailyHour, dailyMinute))"
+                    )
                 }
             }
-            
+
             // Other Alerts
             Section {
                 Toggle("Alertas de Presupuesto", isOn: $budgetAlerts)
                     .onChange(of: budgetAlerts) { _, _ in HapticManager.shared.selection() }
                 Toggle("Gastos Recurrentes", isOn: $recurringReminders)
                     .onChange(of: recurringReminders) { _, _ in HapticManager.shared.selection() }
+
+                let isSalaryFixed =
+                    UserDataManager.shared.userDocument?.settings?.isSalaryRecurring == true
+                Toggle("Recordatorio Fin de Mes", isOn: $endOfMonthReminder)
+                    .onChange(of: endOfMonthReminder) { _, newValue in
+                        HapticManager.shared.selection()
+                        if newValue && pushEnabled && !isSalaryFixed {
+                            scheduleEndOfMonthReminder()
+                        } else {
+                            cancelEndOfMonthReminder()
+                        }
+                    }
+                    .disabled(isSalaryFixed)
+
+                if isSalaryFixed {
+                    Text(
+                        "Tienes la Nómina Fija activada — Clarity crea el presupuesto automáticamente."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else if endOfMonthReminder {
+                    Text(
+                        "Recibirás un recordatorio el día 28 de cada mes para configurar tus ingresos del mes siguiente."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             } header: {
                 Text("Alertas")
             } footer: {
                 Text("Te avisaremos cuando superes el 80% de tu presupuesto")
             }
-            
+
             // Debug Section (for testing)
             #if DEBUG
-            Section {
-                Button("🔔 Enviar Notificación de Prueba") {
-                    sendTestNotification()
+                Section {
+                    Button("🔔 Enviar Notificación de Prueba") {
+                        sendTestNotification()
+                    }
+
+                    Button("📋 Ver Notificaciones Pendientes") {
+                        listPendingNotifications()
+                    }
+                } header: {
+                    Text("Debug")
                 }
-                
-                Button("📋 Ver Notificaciones Pendientes") {
-                    listPendingNotifications()
-                }
-            } header: {
-                Text("Debug")
-            }
             #endif
         }
         .navigationTitle("Notificaciones")
@@ -153,11 +183,12 @@ struct NotificationsView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Guardar") {
-                            let components = Calendar.current.dateComponents([.hour, .minute], from: selectedTime)
+                            let components = Calendar.current.dateComponents(
+                                [.hour, .minute], from: selectedTime)
                             dailyHour = components.hour ?? 20
                             dailyMinute = components.minute ?? 0
                             showTimePicker = false
-                            
+
                             // Reschedule notification with new time
                             if dailyReminder && pushEnabled {
                                 scheduleDailyReminder()
@@ -174,9 +205,9 @@ struct NotificationsView: View {
             checkNotificationStatus()
         }
     }
-    
+
     // MARK: - Notification Functions
-    
+
     private func checkNotificationStatus() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
@@ -187,9 +218,10 @@ struct NotificationsView: View {
             }
         }
     }
-    
+
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) {
+            granted, error in
             DispatchQueue.main.async {
                 if granted {
                     notificationStatus = .authorized
@@ -204,64 +236,116 @@ struct NotificationsView: View {
             }
         }
     }
-    
+
     private func scheduleDailyReminder() {
         let center = UNUserNotificationCenter.current()
-        
+
         // Remove existing daily reminders first
         center.removePendingNotificationRequests(withIdentifiers: ["clarity.daily.reminder"])
-        
+
         // Create content
         let content = UNMutableNotificationContent()
         content.title = "Clarity"
         content.body = reminderMessage
         content.sound = .default
         content.badge = 1
-        
+
         // Create trigger for daily at specified time
         var dateComponents = DateComponents()
         dateComponents.hour = dailyHour
         dateComponents.minute = dailyMinute
-        
+
         let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        
+
         // Create request
         let request = UNNotificationRequest(
             identifier: "clarity.daily.reminder",
             content: content,
             trigger: trigger
         )
-        
+
         // Schedule
         center.add(request) { error in
             if let error = error {
                 print("❌ Error scheduling notification: \(error)")
             } else {
-                print("✅ Daily reminder scheduled for \(dailyHour):\(String(format: "%02d", dailyMinute))")
+                print(
+                    "✅ Daily reminder scheduled for \(dailyHour):\(String(format: "%02d", dailyMinute))"
+                )
             }
         }
     }
-    
+
     private func cancelDailyReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["clarity.daily.reminder"])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [
+            "clarity.daily.reminder"
+        ])
         print("🗑️ Daily reminder cancelled")
     }
-    
+
     private func cancelAllNotifications() {
         UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
         print("🗑️ All notifications cancelled")
     }
-    
+
+    private func scheduleEndOfMonthReminder() {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["clarity.endofmonth.reminder"])
+
+        let content = UNMutableNotificationContent()
+        content.title = "📅 Prepara el próximo mes"
+        content.body =
+            "Configura tus ingresos de \(nextMonthName()) para que Clarity esté listo desde el día 1."
+        content.sound = .default
+
+        // Fire on day 28 of each month at 9:00am
+        var dateComponents = DateComponents()
+        dateComponents.day = 28
+        dateComponents.hour = 9
+        dateComponents.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        let request = UNNotificationRequest(
+            identifier: "clarity.endofmonth.reminder",
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request) { error in
+            if let error = error {
+                print("❌ Error scheduling end-of-month reminder: \(error)")
+            } else {
+                print("✅ End-of-month reminder scheduled for day 28 at 09:00")
+            }
+        }
+    }
+
+    private func cancelEndOfMonthReminder() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: ["clarity.endofmonth.reminder"])
+        print("🗑️ End-of-month reminder cancelled")
+    }
+
+    /// Returns the name of the next calendar month in Spanish
+    private func nextMonthName() -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "es_ES")
+        let nextMonth = Calendar.current.date(byAdding: .month, value: 1, to: Date()) ?? Date()
+        return formatter.monthSymbols[Calendar.current.component(.month, from: nextMonth) - 1]
+            .capitalized
+    }
+
     private func sendTestNotification() {
         let content = UNMutableNotificationContent()
         content.title = "Clarity - Test"
         content.body = reminderMessage
         content.sound = .default
-        
+
         // Trigger in 3 seconds
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3, repeats: false)
-        let request = UNNotificationRequest(identifier: "clarity.test", content: content, trigger: trigger)
-        
+        let request = UNNotificationRequest(
+            identifier: "clarity.test", content: content, trigger: trigger)
+
         UNUserNotificationCenter.current().add(request) { error in
             if error == nil {
                 print("✅ Test notification scheduled (3 seconds)")
@@ -271,7 +355,7 @@ struct NotificationsView: View {
             }
         }
     }
-    
+
     private func listPendingNotifications() {
         UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
             print("📋 Pending notifications: \(requests.count)")
