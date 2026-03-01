@@ -47,6 +47,10 @@ struct SettingsView: View {
                         MonthlyBudgetsView()
                     }
 
+                    NavigationLink("Ajustes de Sueldo") {
+                        SalarySettingsStandaloneView()
+                    }
+
                     NavigationLink("Gastos Recurrentes") {
                         RecurringExpensesView()
                     }

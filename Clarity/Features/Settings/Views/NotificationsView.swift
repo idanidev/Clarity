@@ -128,11 +128,14 @@ struct NotificationsView: View {
                     .disabled(isSalaryFixed)
 
                 if isSalaryFixed {
-                    Text(
-                        "Tienes la Nómina Fija activada — Clarity crea el presupuesto automáticamente."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    NavigationLink(destination: SalarySettingsStandaloneView()) {
+                        Label(
+                            "Nómina Fija activada — toca para cambiarla",
+                            systemImage: "arrow.right.circle"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(Color.clarityPrimary)
+                    }
                 } else if endOfMonthReminder {
                     Text(
                         "Recibirás un recordatorio el día 28 de cada mes para configurar tus ingresos del mes siguiente."
