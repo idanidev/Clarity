@@ -30,10 +30,8 @@ struct FinancialDashboardView: View {
             .navigationTitle("Balance y Metas")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        viewModel.showSalarySettings = true
-                    } label: {
-                        Image(systemName: "gearshape.fill")
+                    NavigationLink(destination: MonthlyBudgetsView()) {
+                        Image(systemName: "calendar.badge.clock")
                             .foregroundStyle(.gray)
                     }
                 }
@@ -41,23 +39,6 @@ struct FinancialDashboardView: View {
             .task {
                 await viewModel.load()
             }
-            .sheet(isPresented: $viewModel.showSalarySettings) {
-                SalarySettingsSheet(
-                    income: Binding(
-                        get: { viewModel.income },
-                        set: { _ in }  // Updated via Save action
-                    ),
-                    isRecurring: $viewModel.isSalaryRecurring,
-                    onSave: {
-                        // The sheet manages its own state, but on save we call VM
-                        // We need a way to pass the new values back.
-                        // Actually, SalarySettingsSheet binds to 'income' and 'isRecurring'
-                        // We should adapt it to call VM.
-                    }
-                )
-            }
-            // Fix: SalarySettingsSheet logic needs to be cleaner.
-            // Let's create a wrapper or binding.
             .sheet(isPresented: $viewModel.showSalarySettings) {
                 SalarySettingsSheetWrapper(viewModel: viewModel)
             }
@@ -93,12 +74,8 @@ struct FinancialDashboardView: View {
             VStack(spacing: 24) {
                 // 1. Energy Tank (Income)
                 IncomeInputView(
-                    income: Binding(
-                        get: { viewModel.income },
-                        set: { newValue in
-                            Task { await viewModel.updateIncome(newValue) }
-                        }
-                    )
+                    income: viewModel.income,
+                    onTapToEdit: { viewModel.showSalarySettings = true }
                 )
 
                 // 2. Free Cash Indicator
