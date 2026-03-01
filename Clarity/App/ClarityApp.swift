@@ -3,6 +3,7 @@
 
 import AppIntents
 import FirebaseCore
+import FirebaseFirestore
 import SwiftUI
 import TipKit
 
@@ -59,6 +60,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         FirebaseApp.configure()
+
+        // Layer 1: Enable Firestore offline persistence (disk cache for all reads)
+        let firestoreSettings = FirestoreSettings()
+        firestoreSettings.cacheSettings = PersistentCacheSettings(
+            sizeBytes: FirestoreCacheSizeUnlimited as NSNumber
+        )
+        Firestore.firestore().settings = firestoreSettings
+
         return true
     }
 }

@@ -35,14 +35,24 @@ class FinancialService {
 
     // MARK: - Monthly Budget CRUD
 
-    /// Fetch the budget for a specific month
+    /// Fetch the budget for a specific month — cache first, server fallback
     func fetchMonthlyBudget(year: Int, month: Int) async throws -> MonthlyBudget? {
         guard let userId = userId else {
             throw FinancialServiceError.notAuthenticated
         }
 
         let documentId = MonthlyBudget.generateDocumentId(userId: userId, year: year, month: month)
-        let document = try await budgetsCollection(userId).document(documentId).getDocument()
+        let docRef = budgetsCollection(userId).document(documentId)
+
+        // Try cache first for instant load
+        let document: DocumentSnapshot
+        do {
+            document = try await docRef.getDocument(source: .cache)
+            logger.debug("📦 Budget \(year)-\(month) from cache")
+        } catch {
+            document = try await docRef.getDocument(source: .server)
+            logger.debug("⬇️ Budget \(year)-\(month) from server")
+        }
 
         guard document.exists else {
             logger.info("📅 No budget found for \(year)-\(month)")
@@ -82,7 +92,8 @@ class FinancialService {
         let documentId = MonthlyBudget.generateDocumentId(
             userId: userId, year: budget.year, month: budget.month)
 
-        try await budgetsCollection(userId).document(documentId).setData(from: budgetToSave, merge: true)
+        try await budgetsCollection(userId).document(documentId).setData(
+            from: budgetToSave, merge: true)
         logger.info("✅ Saved budget for \(budget.year)-\(budget.month)")
     }
 
@@ -104,16 +115,22 @@ class FinancialService {
 
     // MARK: - Goals CRUD
 
-    /// Fetch all active goals for the current user
+    /// Fetch all active goals for the current user — cache first
     func fetchGoals() async throws -> [Goal] {
         guard let userId = userId else {
             throw FinancialServiceError.notAuthenticated
         }
 
-        let snapshot = try await goalsCollection(userId)
+        let query = goalsCollection(userId)
             .whereField("userId", isEqualTo: userId)
             .whereField("isArchived", isEqualTo: false)
-            .getDocuments()
+
+        let snapshot: QuerySnapshot
+        do {
+            snapshot = try await query.getDocuments(source: .cache)
+        } catch {
+            snapshot = try await query.getDocuments(source: .server)
+        }
 
         let goals = snapshot.documents.compactMap { doc -> Goal? in
             try? doc.data(as: Goal.self)
@@ -134,7 +151,8 @@ class FinancialService {
         goalToSave.updatedAt = Date()
 
         if let documentId = goal.documentId {
-            try await goalsCollection(userId).document(documentId).setData(from: goalToSave, merge: true)
+            try await goalsCollection(userId).document(documentId).setData(
+                from: goalToSave, merge: true)
         } else {
             try await goalsCollection(userId).addDocument(from: goalToSave)
         }

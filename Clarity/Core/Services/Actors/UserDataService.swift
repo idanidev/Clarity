@@ -28,20 +28,18 @@ actor UserDataService {
     // MARK: - Public API
 
     /// Carga las categorías del usuario desde Firestore
+    /// Patrón cache-first: sirve inmediatamente desde disco, actualiza en background si hay red.
     func loadCategories(userId: String) async throws -> (categories: [Category], version: String?) {
         let docRef = db.collection("users").document(userId)
-        let doc = try await docRef.getDocument()
 
-        // Cache Check Logic
-        if let data = doc.data(),
-            data["categoriesVersion"] as? String != nil,
-            (data["categoriesUpdatedAt"] as? Timestamp)?.dateValue() != nil
-        {
-
-            // Check if we have a valid in-memory cache status (although actual data storage is in Manager for UI)
-            // The manager might decide not to call this if it has valid data, but here we fetch fresh.
-            // For strict correctness, the service just fetches. The Manager handles the "should I call service?" logic or we do it here.
-            // Let's return the data and let Manager decide update.
+        // Try cache first for instant load, fallback to server
+        let doc: DocumentSnapshot
+        do {
+            doc = try await docRef.getDocument(source: .cache)
+            logger.debug("📦 Categories loaded from Firestore cache")
+        } catch {
+            logger.debug("⬇️ Cache miss for categories, fetching from server...")
+            doc = try await docRef.getDocument(source: .server)
         }
 
         guard let data = doc.data(),
@@ -55,14 +53,13 @@ actor UserDataService {
         var order = 0
 
         for (key, categoryData) in categoriesMap {
-            // El nombre real está dentro de categoryData, o si no existe, usar la clave
             let name = categoryData["name"] as? String ?? key
             let color = categoryData["color"] as? String ?? "#6366F1"
             let subcategories = categoryData["subcategories"] as? [String] ?? []
 
             let category = Category(
-                id: key,  // Usar la clave como ID
-                name: name,  // Nombre real
+                id: key,
+                name: name,
                 color: color,
                 subcategories: subcategories,
                 order: order,
@@ -79,14 +76,13 @@ actor UserDataService {
 
     /// Carga métodos de pago únicos basados en el historial de gastos
     func loadPaymentMethods(userId: String) async throws -> Set<String> {
-        let snapshot =
-            try await db
-            .collection("users")
-            .document(userId)
-            .collection("expenses")
-            .limit(to: 100)
-            .getDocuments()
-
+        let ref = db.collection("users").document(userId).collection("expenses").limit(to: 100)
+        let snapshot: QuerySnapshot
+        do {
+            snapshot = try await ref.getDocuments(source: .cache)
+        } catch {
+            snapshot = try await ref.getDocuments(source: .server)
+        }
         var methods = Set<String>()
         for doc in snapshot.documents {
             if let method = doc.data()["paymentMethod"] as? String {
