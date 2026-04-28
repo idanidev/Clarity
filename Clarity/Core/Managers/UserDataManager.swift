@@ -3,7 +3,7 @@
 // Gestiona el estado observable para las vistas y delega la lógica a UserDataService
 
 import Foundation
-import Combine
+
 import OSLog
 import SwiftUI
 import FirebaseAuth
@@ -48,18 +48,33 @@ final class UserDataManager {
     // MARK: - Public API
     
     func loadUserData() async {
+        // Esperar a Auth con listener (antes polling 5×300ms = hasta 1.5s síncrono en cold launch)
+        if userId == nil {
+            await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+                var resumed = false
+                let resume = { if !resumed { resumed = true; cont.resume() } }
+                let token = Auth.auth().addStateDidChangeListener { _, user in
+                    if user != nil { resume() }
+                }
+                // Safety net 2s para no colgar indefinido si nadie se loguea
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    resume()
+                }
+                _ = token  // listener queda activo; el wakeup de safety lo libera ya que solo necesitamos primera señal
+            }
+        }
         guard let userId = userId else {
             logger.warning("No authenticated user, using defaults")
             return
         }
-        
+
         guard !isLoading else { return }
-        
+
         isLoading = true
         error = nil
-        
+
         do {
-            print("📥 UserDataManager: Loading data for \(userId)...") 
             async let fetchedCategories = service.loadCategories(userId: userId)
             async let fetchedMethods = service.loadPaymentMethods(userId: userId)
             await self.loadExpenses() // Load expenses for cache
@@ -93,7 +108,6 @@ final class UserDataManager {
             var allMethods = Set(PaymentMethod.allCases.map { $0.rawValue })
             allMethods.formUnion(customMethods)
             self.paymentMethods = allMethods.sorted()
-            print("✅ UserDataManager: Loaded \(categories.count) categories, \(savedFilters.count) filters, Default: \(defaultFilter?.name ?? "None")")
 
             // 🔄 Ejecutar migración de categorías (solo una vez)
             Task {
@@ -124,7 +138,15 @@ final class UserDataManager {
     }
     
     func refreshCategories() async {
-        await loadUserData()
+        // Antes: loadUserData() recargaba TODO (categorías + gastos + payment methods + budgets).
+        // Ahora: solo categorías (lo único que cambió). 10× más rápido.
+        guard let userId = userId else { return }
+        do {
+            let (cats, _) = try await service.loadCategories(userId: userId)
+            self.categories = cats
+        } catch {
+            logger.error("refreshCategories failed: \(error.localizedDescription)")
+        }
     }
     
     // MARK: - Expenses Cache
@@ -133,8 +155,11 @@ final class UserDataManager {
         do {
             let descriptor = FetchDescriptor<ExpenseModel>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let models = try SwiftDataService.shared.context.fetch(descriptor)
-            self.expenses = models.map { $0.toDomain() }
-            print("📦 UserDataManager: Cached \(self.expenses.count) expenses for voice intelligence")
+            let all = models.map { $0.toDomain() }
+            // Fetch recurring rules (cache-first) so ExpenseSanitizer can deduplicate
+            // anomalies and misplaced annual expenses in addition to ID dedup.
+            let rules = (try? await DependencyContainer.shared.recurringExpenseRepository.fetchAll()) ?? []
+            self.expenses = ExpenseSanitizer.sanitize(expenses: all, rules: rules)
         } catch {
             logger.error("❌ Failed to cache expenses: \(error.localizedDescription)")
         }
@@ -146,7 +171,7 @@ final class UserDataManager {
         guard let userId = userId else { return }
         do {
             try await service.saveCategory(category, userId: userId)
-            await loadUserData() // Refresh state
+            await refreshCategories() // Light refresh (solo categorías)
         } catch {
             self.error = "Error al guardar categoría: \(error.localizedDescription)"
         }
@@ -157,10 +182,17 @@ final class UserDataManager {
 
         // Buscar el nombre antiguo de la categoría para actualizar gastos si cambió
         let oldName = categories.first(where: { $0.id == category.id })?.name
+        let renamed = oldName != nil && oldName != category.name
 
         do {
             try await service.saveCategory(category, userId: userId, oldName: oldName)
-            await loadUserData()
+            // Si renombró, gastos cambiaron de category string → recarga gastos también.
+            // Si solo color/orden, refresh ligero de categorías es suficiente.
+            if renamed {
+                await loadUserData()
+            } else {
+                await refreshCategories()
+            }
         } catch {
             self.error = "Error al actualizar: \(error.localizedDescription)"
         }
@@ -170,7 +202,7 @@ final class UserDataManager {
         guard let userId = userId else { return }
         do {
             try await service.addSubcategory(subcategoryName, toCategoryId: categoryId, userId: userId)
-            await loadUserData() // Refresh state
+            await refreshCategories() // Light refresh (solo categorías)
         } catch {
             self.error = "Error al añadir subcategoría: \(error.localizedDescription)"
         }
@@ -180,7 +212,8 @@ final class UserDataManager {
         guard let userId = userId else { return }
         do {
             try await service.deleteCategory(id: id, userId: userId)
-            await loadUserData()
+            // Gastos mantienen el string de categoría; solo recargamos lista de categorías.
+            await refreshCategories()
         } catch {
             self.error = "Error al eliminar: \(error.localizedDescription)"
         }
@@ -225,7 +258,7 @@ final class UserDataManager {
     }
     
     func color(for categoryName: String) -> Color {
-        Color(hex: colorHex(for: categoryName)) ?? .gray
+        Color(hex: colorHex(for: categoryName))
     }
     
     // MARK: - User Document Management
@@ -301,21 +334,36 @@ final class UserDataManager {
     
     func completeOnboarding() {
         guard !hasCompletedOnboarding else { return }
-        guard var document = userDocument, let userId = userId else { return }
-        
-        // 1. Update Local
-        var newSettings = document.settings ?? .default
-        newSettings.hasCompletedOnboarding = true
-        document.settings = newSettings
-        self.userDocument = document
-        
-        // 2. Update Remote
+        guard let userId = userId else { return }
+
+        // 1. Update Local — crear documento mínimo si no existe (race con fetchUserDocument)
+        if var document = userDocument {
+            var newSettings = document.settings ?? .default
+            newSettings.hasCompletedOnboarding = true
+            document.settings = newSettings
+            self.userDocument = document
+        } else {
+            var stubSettings = UserSettings.default
+            stubSettings.hasCompletedOnboarding = true
+            self.userDocument = UserDocument(
+                email: Auth.auth().currentUser?.email ?? "",
+                displayName: Auth.auth().currentUser?.displayName ?? "",
+                role: "user",
+                createdAt: Date(),
+                updatedAt: Date(),
+                settings: stubSettings,
+                aiQuotas: .free,
+                subscription: nil
+            )
+        }
+
+        // 2. Update Remote — setData con merge para tolerar doc inexistente
         Task {
             do {
                 try await Firestore.firestore()
                     .collection("users")
                     .document(userId)
-                    .updateData(["settings.hasCompletedOnboarding": true])
+                    .setData(["settings": ["hasCompletedOnboarding": true]], merge: true)
                 logger.info("✅ Onboarding marked as completed")
             } catch {
                 logger.error("❌ Error saving onboarding status: \(error.localizedDescription)")
@@ -323,6 +371,19 @@ final class UserDataManager {
         }
     }
     
+    func resetOnboarding() {
+        guard var document = userDocument, let userId = userId else { return }
+        var newSettings = document.settings ?? .default
+        newSettings.hasCompletedOnboarding = false
+        document.settings = newSettings
+        self.userDocument = document
+        Task {
+            try? await Firestore.firestore()
+                .collection("users").document(userId)
+                .updateData(["settings.hasCompletedOnboarding": false])
+        }
+    }
+
     // MARK: - Smart Filters (Filtering 2.0)
     
     var savedFilters: [ExpenseFilter] {
@@ -343,13 +404,14 @@ final class UserDataManager {
         document.savedFilters = currentFilters
         self.userDocument = document
         
-        // 2. Update Remote
+        // 2. Update Remote — Firestore.Encoder NO admite array top-level;
+        // hay que serializar cada filtro a [String: Any] y pasar el array de dicts.
         do {
-            let data = try Firestore.Encoder().encode(currentFilters)
+            let dicts = try currentFilters.map { try Firestore.Encoder().encode($0) }
             try await Firestore.firestore()
                 .collection("users")
                 .document(userId)
-                .updateData(["savedFilters": data])
+                .updateData(["savedFilters": dicts])
             logger.info("✅ Filter saved: \(name)")
             
             // Backup to UserDefaults
@@ -384,13 +446,13 @@ final class UserDataManager {
         document.savedFilters = currentFilters
         self.userDocument = document
         
-        // 2. Update Remote
+        // 2. Update Remote — array de dicts (Firestore.Encoder no admite top-level array)
         do {
-            let data = try Firestore.Encoder().encode(currentFilters)
+            let dicts = try currentFilters.map { try Firestore.Encoder().encode($0) }
             try await Firestore.firestore()
                 .collection("users")
                 .document(userId)
-                .updateData(["savedFilters": data])
+                .updateData(["savedFilters": dicts])
         } catch {
             self.error = "Error al eliminar filtro: \(error.localizedDescription)"
         }
@@ -422,13 +484,13 @@ final class UserDataManager {
             return
         }
         
-        // 2. Update Remote
+        // 2. Update Remote — array de dicts
         do {
-            let data = try Firestore.Encoder().encode(currentFilters)
+            let dicts = try currentFilters.map { try Firestore.Encoder().encode($0) }
             try await Firestore.firestore()
                 .collection("users")
                 .document(userId)
-                .updateData(["savedFilters": data])
+                .updateData(["savedFilters": dicts])
             logger.info("✅ Filter updated in Firestore")
         } catch {
             logger.error("❌ Error updating filter in Firestore: \(error.localizedDescription)")

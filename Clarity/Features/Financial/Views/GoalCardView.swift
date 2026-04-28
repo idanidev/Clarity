@@ -9,31 +9,51 @@ import SwiftUI
 
 struct GoalCardView: View {
     let goal: Goal
-    var onFeed: ((Double) -> Void)?  // Only for Piggy Banks - now with amount
-    var onArchive: (() -> Void)?  // Archive action
+    /// Closure that returns the spent amount for a given category name.
+    /// Provided by FinancialDashboardView via FinancialHubViewModel.getSpentAmount(for:).
+    var spentAmountProvider: ((String) -> Double)? = nil
+    var onFeed: ((Double) -> Void)?  // Only for Piggy Banks
+    var onEdit: (() -> Void)?       // Edit action
+    var onDelete: (() -> Void)?    // Delete action
 
-    // Animation State
-    @State private var coinOffset: CGFloat = 0
-    @State private var coinOpacity: Double = 0
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         VStack(spacing: 12) {
             // Header
             HStack {
-                Text(goal.icon ?? (goal.type == .savingsTarget ? "🐖" : "🛡️"))
-                    .font(.title2)
-                    .padding(8)
-                    .background(.fill.tertiary)
-                    .clipShape(Circle())
+                Group {
+                    if let sysImage = goal.systemImage, !sysImage.isEmpty {
+                        Image(systemName: sysImage)
+                    } else if let icon = goal.icon, !icon.isEmpty {
+                        if icon.contains(".") || icon.count > 2 {
+                            Image(systemName: icon)
+                        } else {
+                            Text(icon)
+                        }
+                    } else {
+                        Text(goal.type == .savingsTarget ? "🐖" : "🛡️")
+                    }
+                }
+                .font(.title2)
+                .padding(8)
+                .background(.fill.tertiary)
+                .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(goal.name)
                         .font(.headline)
                         .foregroundStyle(.primary)
 
-                    Text(goal.type == .savingsTarget ? "Meta de Ahorro" : "Límite Mensual")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    if goal.type == .spendingLimit, let cat = goal.linkedCategoryId, !cat.isEmpty {
+                        Text(cat)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text(goal.type == .savingsTarget ? "Meta de Ahorro" : "Límite Mensual")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Spacer()
@@ -44,10 +64,10 @@ struct GoalCardView: View {
 
             // Progress Bar
             ProgressBar(
-                value: goal.currentAmount,
+                value: displayedCurrentAmount,
                 total: goal.targetAmount,
                 color: progressColor,
-                isWarning: goal.isOverLimit
+                isWarning: goal.type == .spendingLimit && displayedCurrentAmount > goal.targetAmount
             )
             .frame(height: 12)
 
@@ -75,44 +95,35 @@ struct GoalCardView: View {
         .background(.background.secondary)
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: .primary.opacity(0.05), radius: 10, y: 4)
-        .overlay(coinAnimationOverlay)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            // Archive action (swipe left)
-            Button(role: .destructive) {
-                HapticManager.shared.notification(.warning)
-                onArchive?()
-            } label: {
-                Label("Archivar", systemImage: "archivebox.fill")
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            // Quick Feed (only for piggy banks, swipe right)
-            if goal.type == .savingsTarget, let onFeed = onFeed {
-                Button {
-                    HapticManager.shared.impact(.medium)
-                    showFeedSheet = true
-                } label: {
-                    Label("Alimentar", systemImage: "plus.circle.fill")
-                }
-                .tint(.green)
-            }
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(goal.name), \(mainStatText) de \(Formatters.currency(goal.targetAmount))")
+        .accessibilityHint(goal.type == .savingsTarget ? "Meta de ahorro" : "Límite de gasto")
         .contextMenu {
-            // Edit (future feature)
             Button {
-                // TODO: Implement edit functionality
+                onEdit?()
             } label: {
                 Label("Editar", systemImage: "pencil")
             }
 
             Divider()
 
-            // Archive
+            // Eliminar
             Button(role: .destructive) {
-                onArchive?()
+                showDeleteConfirm = true
             } label: {
-                Label("Archivar", systemImage: "archivebox.fill")
+                Label("Eliminar", systemImage: "trash.fill")
             }
+        }
+        .confirmationDialog(
+            "¿Eliminar \"\(goal.name)\"?",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Eliminar", role: .destructive) {
+                onDelete?()
+            }
+        } message: {
+            Text("Esta acción no se puede deshacer. Los gastos vinculados se mantendrán.")
         }
     }
 
@@ -121,7 +132,7 @@ struct GoalCardView: View {
     private var statusBadge: some View {
         Group {
             if goal.type == .spendingLimit {
-                if goal.isOverLimit {
+                if displayedCurrentAmount > goal.targetAmount {
                     Text("¡Roto! 💔")
                         .font(.caption.bold())
                         .foregroundStyle(.white)
@@ -137,7 +148,9 @@ struct GoalCardView: View {
                         .background(Capsule().fill(Color.green.opacity(0.1)))
                 }
             } else {
-                Text("\(Int(goal.progress * 100))%")
+                let pct =
+                    goal.targetAmount > 0 ? min(goal.currentAmount / goal.targetAmount, 1.0) : 0
+                Text("\(Int(pct * 100))%")
                     .font(.caption.bold())
                     .foregroundStyle(Color.clarityPrimary)
                     .padding(.horizontal, 8)
@@ -166,61 +179,36 @@ struct GoalCardView: View {
         }
         .sheet(isPresented: $showFeedSheet) {
             if let onFeed = onFeed {
-                FeedGoalSheet(goal: goal, onFeed: { _ in onFeed(0) })
-            }
-        }
-    }
-
-    // MARK: - Animation
-
-    private var coinAnimationOverlay: some View {
-        ZStack {
-            if coinOpacity > 0 {
-                Image(systemName: "centsign.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(.yellow)
-                    .offset(y: coinOffset)
-                    .opacity(coinOpacity)
-            }
-        }
-    }
-
-    private func animateCoin() {
-        // Reset
-        coinOffset = -50
-        coinOpacity = 0
-
-        // Sequence
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            coinOpacity = 1.0
-            coinOffset = 0  // Fly down to button
-        }
-
-        HapticManager.shared.playCustomPattern(.expenseAdded)
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            withAnimation(.easeOut(duration: 0.2)) {
-                coinOpacity = 0
-                coinOffset = 20
+                FeedGoalSheet(goal: goal, onFeed: onFeed)
             }
         }
     }
 
     // MARK: - Helpers
 
+    /// Real spending for spendingLimit goals — delegated to FinancialHubViewModel via spentAmountProvider.
+    /// For savingsTarget goals, returns goal.currentAmount.
+    private var displayedCurrentAmount: Double {
+        if goal.type == .spendingLimit, let categoryId = goal.linkedCategoryId, !categoryId.isEmpty {
+            return spentAmountProvider?(categoryId) ?? 0
+        }
+        return goal.currentAmount
+    }
+
     private var progressColor: Color {
         if goal.type == .spendingLimit {
-            return goal.progress > 0.9 ? .red : (goal.progress > 0.7 ? .orange : .green)
+            let ratio = goal.targetAmount > 0 ? displayedCurrentAmount / goal.targetAmount : 0
+            return ratio > 0.9 ? .red : (ratio > 0.7 ? .orange : .green)
         } else {
-            return Color.clarityPrimary  // Standard purple for savings
+            return Color.clarityPrimary
         }
     }
 
     private var mainStatText: String {
         if goal.type == .spendingLimit {
-            return Formatters.currency(goal.targetAmount - goal.currentAmount) + " restan"
+            return Formatters.currency(goal.targetAmount - displayedCurrentAmount) + " restan"
         } else {
-            return Formatters.currency(goal.currentAmount) + " ahorrado"
+            return Formatters.currency(displayedCurrentAmount) + " ahorrado"
         }
     }
 }
@@ -231,6 +219,10 @@ struct ProgressBar: View {
     var total: Double
     var color: Color
     var isWarning: Bool
+
+    private var percentage: Int {
+        total > 0 ? Int(min(value / total, 1.0) * 100) : 0
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -243,5 +235,8 @@ struct ProgressBar: View {
                     .frame(width: min(CGFloat(value / total) * geo.size.width, geo.size.width))
             }
         }
+        .accessibilityElement()
+        .accessibilityLabel("Progreso \(percentage) por ciento")
+        .accessibilityValue("\(percentage)%")
     }
 }

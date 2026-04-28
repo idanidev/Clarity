@@ -11,11 +11,11 @@ struct SuccessToast: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 20))
                 .foregroundColor(.green)
-            
+
             Text(message)
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
-            
+                .foregroundStyle(.primary)
+
             Spacer()
         }
         .padding()
@@ -23,5 +23,6 @@ struct SuccessToast: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.2), radius: 10)
         .padding(.horizontal)
+        .safeAreaPadding(.top)  // avoid Dynamic Island / notch
     }
 }

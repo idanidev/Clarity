@@ -1,8 +1,8 @@
 app_identifier("com.idanidev.clarity")
 team_id("AXK73U74AC")
+apple_id("idanideveloper@gmail.com")
 
-# Apple ID / App Store Connect
-# apple_id("tu@email.com")  # ← Descomenta y pon tu Apple ID
-
-# App Store Connect API Key (recomendado en vez de contraseña)
+# App Store Connect API Key — preferido (no 2FA interactivo).
+# Crear en https://appstoreconnect.apple.com/access/integrations/api → rol Admin o App Manager.
+# Descargar .p8, crear fastlane/api_key.json con {key_id, issuer_id, key_filepath} y descomentar:
 # app_store_connect_api_key_path("fastlane/api_key.json")

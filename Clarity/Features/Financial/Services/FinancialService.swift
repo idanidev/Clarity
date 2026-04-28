@@ -44,24 +44,18 @@ class FinancialService {
         let documentId = MonthlyBudget.generateDocumentId(userId: userId, year: year, month: month)
         let docRef = budgetsCollection(userId).document(documentId)
 
-        // Try cache first for instant load
+        // Try cache first for instant load; fallback to server if cache is empty/missing.
         let document: DocumentSnapshot
         do {
-            document = try await docRef.getDocument(source: .cache)
-            logger.debug("📦 Budget \(year)-\(month) from cache")
+            let cached = try await docRef.getDocument(source: .cache)
+            document = cached.exists ? cached : try await docRef.getDocument(source: .server)
         } catch {
             document = try await docRef.getDocument(source: .server)
-            logger.debug("⬇️ Budget \(year)-\(month) from server")
         }
 
-        guard document.exists else {
-            logger.info("📅 No budget found for \(year)-\(month)")
-            return nil
-        }
+        guard document.exists else { return nil }
 
-        let budget = try document.data(as: MonthlyBudget.self)
-        logger.info("✅ Fetched budget for \(year)-\(month): €\(budget.income)")
-        return budget
+        return try document.data(as: MonthlyBudget.self)
     }
 
     /// Fetch the previous month's budget (for "Use same as last month" feature)
@@ -107,10 +101,10 @@ class FinancialService {
 
         try await budgetsCollection(userId).document(documentId).updateData([
             "savingsAllocated": FieldValue.increment(amount),
-            "updatedAt": Timestamp(date: Date()),
+            "updatedAt": FieldValue.serverTimestamp(),
         ])
 
-        logger.info("💰 Updated savingsAllocated by €\(amount)")
+        logger.info("💰 Updated savingsAllocated")
     }
 
     // MARK: - Goals CRUD
@@ -127,7 +121,8 @@ class FinancialService {
 
         let snapshot: QuerySnapshot
         do {
-            snapshot = try await query.getDocuments(source: .cache)
+            let cached = try await query.getDocuments(source: .cache)
+            snapshot = cached.isEmpty ? try await query.getDocuments(source: .server) : cached
         } catch {
             snapshot = try await query.getDocuments(source: .server)
         }
@@ -171,10 +166,24 @@ class FinancialService {
         try await goalsCollection(userId).document(goalId).updateData([
             "currentAmount": FieldValue.increment(amount),
             "savedHistory": FieldValue.arrayUnion([try Firestore.Encoder().encode(entry)]),
-            "updatedAt": Timestamp(date: Date()),
+            "updatedAt": FieldValue.serverTimestamp(),
         ])
 
-        logger.info("🐖 Fed piggy bank \(goalId) with €\(amount)")
+        logger.info("🐖 Fed piggy bank \(goalId, privacy: .private)")
+    }
+
+    /// Refund from a piggy bank (decrement currentAmount). Used when the linked expense is deleted.
+    func refundPiggyBank(goalId: String, amount: Double) async throws {
+        guard let userId = userId else {
+            throw FinancialServiceError.notAuthenticated
+        }
+
+        try await goalsCollection(userId).document(goalId).updateData([
+            "currentAmount": FieldValue.increment(-amount),
+            "updatedAt": FieldValue.serverTimestamp(),
+        ])
+
+        logger.info("↩️ Refunded piggy bank \(goalId, privacy: .private)")
     }
 
     func archiveGoal(_ goalId: String) async throws {
@@ -183,7 +192,7 @@ class FinancialService {
         }
         try await goalsCollection(userId).document(goalId).updateData([
             "isArchived": true,
-            "updatedAt": Timestamp(date: Date()),
+            "updatedAt": FieldValue.serverTimestamp(),
         ])
 
         logger.info("📦 Archived goal \(goalId)")

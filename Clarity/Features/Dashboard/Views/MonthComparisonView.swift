@@ -6,54 +6,126 @@ import Charts
 
 struct MonthComparisonView: View {
     let expenses: [Expense]
-    
-    @State private var selectedMonthOffset: Int = 1
+
+    @State private var selectedYear: Int
+    @State private var selectedMonth: Int
+    @State private var pickerYear: Int
     @State private var animateChart = false
-    
-    private let availableMonths = [1, 2, 3, 6, 12]
-    
+    @State private var selectedChartCategory: String?
+    /// Expenses loaded directly from Firebase (user-scoped) for accurate comparisons.
+    @State private var fetchedExpenses: [Expense] = []
+    @State private var isLoadingExpenses = false
+
+    private static let monthFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_ES")
+        f.dateFormat = "MMMM"
+        return f
+    }()
+
+    private static let shortMonthSymbols: [String] = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "es_ES")
+        return f.shortStandaloneMonthSymbols ?? ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+    }()
+
+    /// Uses Firebase-sourced data if loaded, otherwise falls back to the passed-in list.
+    private var displayExpenses: [Expense] {
+        fetchedExpenses.isEmpty ? expenses : fetchedExpenses
+    }
+
     init(expenses: [Expense]) {
         self.expenses = expenses
+        let cal = Calendar.current
+        let now = Date()
+        let y = cal.component(.year, from: now)
+        let m = cal.component(.month, from: now)
+        let prev = cal.date(byAdding: .month, value: -1, to: now) ?? now
+        _selectedYear = State(initialValue: cal.component(.year, from: prev))
+        _selectedMonth = State(initialValue: cal.component(.month, from: prev))
+        _pickerYear = State(initialValue: y)
+        _ = m
     }
-    
+
     // Legacy init for compatibility
-    init(viewModel: HomeViewModel) { // Updated
-        self.expenses = viewModel.allExpenses // Updated
+    init(viewModel: HomeViewModel) {
+        self.init(expenses: viewModel.allHistoricalExpenses)
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 // Header con gradiente
                 headerSection
-                
+
                 // Month Selector Pills
                 monthSelector
                     .padding(.horizontal)
-                
+
                 // Big comparison card
                 mainComparisonCard
                     .padding(.horizontal)
-                
+
                 // Trend indicator
                 trendCard
                     .padding(.horizontal)
-                
+
                 // Category breakdown
                 categoryBreakdown
                     .padding(.horizontal)
-                
+
                 // Top differences
                 topDifferencesCard
                     .padding(.horizontal)
-                
+
                 Spacer(minLength: 100)
             }
         }
         .background(Color.bgPrimary)
+        .overlay {
+            if isLoadingExpenses && fetchedExpenses.isEmpty {
+                ProgressView("Cargando datos...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.bgPrimary)
+            }
+        }
         .onAppear {
             withAnimation(.easeOut(duration: 0.8)) {
                 animateChart = true
+            }
+        }
+        .onChange(of: selectedYear) { _, _ in
+            animateChart = false
+            withAnimation(.easeOut(duration: 0.6)) { animateChart = true }
+        }
+        .onChange(of: selectedMonth) { _, _ in
+            animateChart = false
+            withAnimation(.easeOut(duration: 0.6)) { animateChart = true }
+        }
+        .task {
+            await loadAllExpenses()
+        }
+    }
+
+    // MARK: - Load ALL expenses (network → cache fallback)
+    @MainActor
+    private func loadAllExpenses() async {
+        guard !isLoadingExpenses else { return }
+        isLoadingExpenses = true
+        defer { isLoadingExpenses = false }
+        let rules = (try? await DependencyContainer.shared.recurringExpenseRepository.fetchAll()) ?? []
+        do {
+            let useCase = DependencyContainer.shared.makeGetExpensesUseCase()
+            let all = try await useCase.execute(policy: .cacheFirst())
+            var seen = Set<String>()
+            let deduped = all.filter { seen.insert($0.stableId).inserted }
+            fetchedExpenses = ExpenseSanitizer.sanitize(expenses: deduped, rules: rules)
+        } catch {
+            if let cached = try? await DependencyContainer.shared.makeGetExpensesUseCase()
+                .execute(policy: .cacheOnly) {
+                var seen = Set<String>()
+                let deduped = cached.filter { seen.insert($0.stableId).inserted }
+                fetchedExpenses = ExpenseSanitizer.sanitize(expenses: deduped, rules: rules)
             }
         }
     }
@@ -62,7 +134,7 @@ struct MonthComparisonView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Comparativa")
-                .font(.system(size: 28, weight: .bold))
+                .scaledFont(size: 28, weight: .bold)
                 .foregroundStyle(.primary)
             
             Text("Analiza tus gastos entre meses")
@@ -74,42 +146,112 @@ struct MonthComparisonView: View {
         .padding(.top, 8)
     }
     
-    // MARK: - Month Selector
+    // MARK: - Month Selector (Year Grid)
     private var monthSelector: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(availableMonths, id: \.self) { offset in
+        let cal = Calendar.current
+        let currentYear = cal.component(.year, from: Date())
+        let currentMonth = cal.component(.month, from: Date())
+        let cols = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
+
+        return VStack(spacing: 12) {
+            // Year header
+            HStack {
+                Button {
+                    withAnimation(.spring(response: 0.3)) { pickerYear -= 1 }
+                    HapticManager.shared.selection()
+                } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.callout.bold())
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                Text(String(pickerYear))
+                    .scaledFont(size: 18, weight: .bold, design: .rounded)
+                    .contentTransition(.numericText(value: Double(pickerYear)))
+
+                Spacer()
+
+                Button {
+                    guard pickerYear < currentYear else { return }
+                    withAnimation(.spring(response: 0.3)) { pickerYear += 1 }
+                    HapticManager.shared.selection()
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.callout.bold())
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color(.secondarySystemGroupedBackground)))
+                        .opacity(pickerYear < currentYear ? 1 : 0.3)
+                }
+                .buttonStyle(.plain)
+                .disabled(pickerYear >= currentYear)
+            }
+
+            // Months grid
+            LazyVGrid(columns: cols, spacing: 8) {
+                ForEach(1...12, id: \.self) { month in
+                    let isFuture = pickerYear > currentYear || (pickerYear == currentYear && month > currentMonth)
+                    let isCurrent = pickerYear == currentYear && month == currentMonth
+                    let isSelected = pickerYear == selectedYear && month == selectedMonth
+                    let hasData = monthHasData(year: pickerYear, month: month)
+                    let enabled = !isFuture && !isCurrent && hasData
+
                     Button {
+                        guard enabled else { return }
                         withAnimation(.spring(response: 0.3)) {
-                            selectedMonthOffset = offset
+                            selectedYear = pickerYear
+                            selectedMonth = month
                         }
                         HapticManager.shared.selection()
                     } label: {
-                        VStack(spacing: 2) {
-                            Text(shortMonthLabel(offset: offset))
-                                .font(.system(size: 13, weight: .semibold))
-                            Text(monthName(offset: offset))
-                                .font(.system(size: 10))
-                                .opacity(0.7)
-                        }
-                        .foregroundStyle(selectedMonthOffset == offset ? .white : .secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(
-                            Capsule()
-                                .fill(selectedMonthOffset == offset 
-                                      ? Color.clarityPrimary.gradient 
-                                      : Color(.secondarySystemGroupedBackground).gradient)
-                        )
-                        .overlay(
-                            Capsule()
-                                .strokeBorder(selectedMonthOffset == offset ? Color.clear : Color.gray.opacity(0.2), lineWidth: 1)
-                        )
+                        Text(Self.shortMonthSymbols[month - 1].capitalized)
+                            .scaledFont(size: 13, weight: .semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .foregroundStyle(
+                                isSelected ? Color.white
+                                : (isCurrent ? Color.clarityAccent : (enabled ? .primary : .secondary))
+                            )
+                            .background {
+                                if isSelected {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.clarityPrimary.gradient)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.secondarySystemGroupedBackground))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .strokeBorder(isCurrent ? Color.clarityAccent : Color.clear, lineWidth: 1.5)
+                                        )
+                                }
+                            }
+                            .opacity(enabled ? 1 : 0.35)
                     }
+                    .buttonStyle(.plain)
+                    .disabled(!enabled)
                 }
             }
-            .padding(.horizontal, 4)
         }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.tertiarySystemGroupedBackground))
+        )
+    }
+
+    private func monthHasData(year: Int, month: Int) -> Bool {
+        let cal = Calendar.current
+        for e in displayExpenses {
+            guard let d = Formatters.date(from: e.date) else { continue }
+            if cal.component(.year, from: d) == year && cal.component(.month, from: d) == month {
+                return true
+            }
+        }
+        return false
     }
     
     // MARK: - Main Comparison Card
@@ -124,12 +266,12 @@ struct MonthComparisonView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("ESTE MES")
-                        .font(.system(size: 11, weight: .semibold))
+                        .scaledFont(size: 11, weight: .semibold)
                         .foregroundStyle(.secondary)
                         .tracking(1)
-                    
+
                     Text(current.formattedCurrency)
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .scaledFont(size: 36, weight: .bold, design: .rounded)
                         .foregroundStyle(.primary)
                 }
                 
@@ -141,7 +283,7 @@ struct MonthComparisonView: View {
                         .stroke(Color.gray.opacity(0.2), lineWidth: 8)
                     
                     Circle()
-                        .trim(from: 0, to: animateChart ? min(current / max(compared, 1), 2) / 2 : 0)
+                        .trim(from: 0, to: animateChart ? min(current / max(compared, 1), 1.0) : 0)
                         .stroke(
                             current > compared ? Color.red.gradient : Color.green.gradient,
                             style: StrokeStyle(lineWidth: 8, lineCap: .round)
@@ -149,7 +291,7 @@ struct MonthComparisonView: View {
                         .rotationEffect(.degrees(-90))
                     
                     Image(systemName: difference > 0 ? "arrow.up" : "arrow.down")
-                        .font(.system(size: 20, weight: .bold))
+                        .scaledFont(size: 20, weight: .bold)
                         .foregroundStyle(difference > 0 ? .red : .green)
                 }
                 .frame(width: 56, height: 56)
@@ -164,7 +306,7 @@ struct MonthComparisonView: View {
                     .frame(height: 1)
                 
                 Text("VS")
-                    .font(.system(size: 12, weight: .black))
+                    .scaledFont(size: 12, weight: .black)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 12)
                 
@@ -178,13 +320,13 @@ struct MonthComparisonView: View {
             // Bottom section - Compared month
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(monthName(offset: selectedMonthOffset).uppercased())
-                        .font(.system(size: 11, weight: .semibold))
+                    Text(selectedMonthDisplayName().uppercased())
+                        .scaledFont(size: 11, weight: .semibold)
                         .foregroundStyle(.secondary)
                         .tracking(1)
-                    
+
                     Text(compared.formattedCurrency)
-                        .font(.system(size: 28, weight: .semibold, design: .rounded))
+                        .scaledFont(size: 28, weight: .semibold, design: .rounded)
                         .foregroundStyle(.secondary)
                 }
                 
@@ -193,10 +335,10 @@ struct MonthComparisonView: View {
                 // Difference badge
                 HStack(spacing: 4) {
                     Image(systemName: difference > 0 ? "arrow.up.right" : "arrow.down.right")
-                        .font(.system(size: 12, weight: .bold))
-                    
+                        .scaledFont(size: 12, weight: .bold)
+
                     Text("\(String(format: "%.0f", abs(percentChange)))%")
-                        .font(.system(size: 14, weight: .bold))
+                        .scaledFont(size: 14, weight: .bold)
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
@@ -224,26 +366,26 @@ struct MonthComparisonView: View {
         let color: Color
         
         if difference > 0 {
-            message = "Estás gastando \(difference.formattedCurrency) más que en \(monthName(offset: selectedMonthOffset))"
+            message = "Estás gastando \(difference.formattedCurrency) más que en \(selectedMonthDisplayName())"
             icon = "exclamationmark.triangle.fill"
             color = .red
         } else if difference < 0 {
-            message = "¡Genial! Has ahorrado \(abs(difference).formattedCurrency) comparado con \(monthName(offset: selectedMonthOffset))"
+            message = "¡Genial! Has ahorrado \(abs(difference).formattedCurrency) comparado con \(selectedMonthDisplayName())"
             icon = "checkmark.seal.fill"
             color = .green
         } else {
-            message = "Tus gastos son iguales a los de \(monthName(offset: selectedMonthOffset))"
+            message = "Tus gastos son iguales a los de \(selectedMonthDisplayName())"
             icon = "equal.circle.fill"
             color = .blue
         }
         
         return HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 24))
+                .scaledFont(size: 24)
                 .foregroundStyle(color)
-            
+
             Text(message)
-                .font(.system(size: 14, weight: .medium))
+                .scaledFont(size: 14, weight: .medium)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
             
@@ -310,20 +452,46 @@ struct MonthComparisonView: View {
                         AxisValueLabel {
                             if let cat = value.as(String.self) {
                                 Text(cat)
-                                    .font(.system(size: 10))
+                                    .scaledFont(size: 10)
                                     .lineLimit(1)
                             }
                         }
                     }
                 }
+                .chartXSelection(value: $selectedChartCategory)
                 .frame(height: 220)
+
+                // Detail popover for selected category
+                if let cat = selectedChartCategory,
+                   let item = comparisonByCategory.first(where: { $0.category == cat }) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(item.category).font(.subheadline.bold())
+                            HStack(spacing: 12) {
+                                Label("\(Formatters.currency(item.currentAmount))", systemImage: "circle.fill")
+                                    .font(.caption).foregroundStyle(Color.clarityPrimary)
+                                Label("\(Formatters.currency(item.comparedAmount))", systemImage: "circle.fill")
+                                    .font(.caption).foregroundStyle(.gray)
+                            }
+                        }
+                        Spacer()
+                        let diff = item.currentAmount - item.comparedAmount
+                        Text("\(diff >= 0 ? "+" : "")\(Formatters.currency(diff))")
+                            .font(.subheadline.bold())
+                            .foregroundStyle(diff > 0 ? .red : .green)
+                    }
+                    .padding(12)
+                    .background(Color(.tertiarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .transition(.opacity)
+                }
             }
         }
         .padding()
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
     }
-    
+
     // MARK: - Top Differences
     private var topDifferencesCard: some View {
         let differences = comparisonByCategory
@@ -344,17 +512,17 @@ struct MonthComparisonView: View {
                 ForEach(Array(differences), id: \.cat) { item in
                     HStack {
                         Text(item.cat)
-                            .font(.system(size: 14, weight: .medium))
+                            .scaledFont(size: 14, weight: .medium)
                             .foregroundStyle(.primary)
                         
                         Spacer()
                         
                         HStack(spacing: 4) {
                             Image(systemName: item.diff > 0 ? "arrow.up" : "arrow.down")
-                                .font(.system(size: 10, weight: .bold))
-                            
+                                .scaledFont(size: 10, weight: .bold)
+
                             Text(item.diff > 0 ? "+\(item.diff.formattedCurrency)" : item.diff.formattedCurrency)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .scaledFont(size: 13, weight: .semibold, design: .rounded)
                         }
                         .foregroundStyle(item.diff > 0 ? .red : .green)
                     }
@@ -383,66 +551,76 @@ struct MonthComparisonView: View {
     }
     
     // MARK: - Data Calculations
-    
+
+    /// Pre-computed split of expenses into current and compared month — filters once for both.
+    /// Uses explicit year/month components to avoid timezone edge-case issues.
+    private var monthlyData: (current: [Expense], compared: [Expense]) {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentYear = calendar.component(.year, from: now)
+        let currentMonth = calendar.component(.month, from: now)
+
+        let targetYear = selectedYear
+        let targetMonth = selectedMonth
+
+        var current: [Expense] = []
+        var compared: [Expense] = []
+        for expense in displayExpenses {
+            guard let date = Formatters.date(from: expense.date) else { continue }
+            let y = calendar.component(.year, from: date)
+            let m = calendar.component(.month, from: date)
+            if y == currentYear && m == currentMonth {
+                current.append(expense)
+            } else if y == targetYear && m == targetMonth {
+                compared.append(expense)
+            }
+        }
+        return (current, compared)
+    }
+
     private var totalForCurrentMonth: Double {
-        let calendar = Calendar.current
-        let now = Date()
-        return expenses.filter { expense in
-            guard let date = parseDate(expense.date) else { return false }
-            return calendar.isDate(date, equalTo: now, toGranularity: .month)
-        }.reduce(0) { $0 + $1.amount }
+        monthlyData.current.reduce(0) { $0 + $1.amount }
     }
-    
+
     private var totalForComparedMonth: Double {
-        let calendar = Calendar.current
-        guard let targetMonth = calendar.date(byAdding: .month, value: -selectedMonthOffset, to: Date()) else { return 0 }
-        return expenses.filter { expense in
-            guard let date = parseDate(expense.date) else { return false }
-            return calendar.isDate(date, equalTo: targetMonth, toGranularity: .month)
-        }.reduce(0) { $0 + $1.amount }
+        monthlyData.compared.reduce(0) { $0 + $1.amount }
     }
-    
+
     private var comparisonByCategory: [CategoryComparison] {
-        let calendar = Calendar.current
-        let now = Date()
-        guard let targetMonth = calendar.date(byAdding: .month, value: -selectedMonthOffset, to: Date()) else { return [] }
-        
+        let data = monthlyData
         var categories = Set<String>()
-        expenses.forEach { categories.insert(shortCategory($0.category)) }
-        
+        (data.current + data.compared).forEach { categories.insert(displayCategory($0.category)) }
+
         return categories.compactMap { cat in
-            let current = expenses.filter { expense in
-                guard let date = parseDate(expense.date) else { return false }
-                return calendar.isDate(date, equalTo: now, toGranularity: .month) && shortCategory(expense.category) == cat
-            }.reduce(0) { $0 + $1.amount }
-            
-            let compared = expenses.filter { expense in
-                guard let date = parseDate(expense.date) else { return false }
-                return calendar.isDate(date, equalTo: targetMonth, toGranularity: .month) && shortCategory(expense.category) == cat
-            }.reduce(0) { $0 + $1.amount }
-            
+            let current = data.current
+                .filter { displayCategory($0.category) == cat }
+                .reduce(0) { $0 + $1.amount }
+            let compared = data.compared
+                .filter { displayCategory($0.category) == cat }
+                .reduce(0) { $0 + $1.amount }
             if current == 0 && compared == 0 { return nil }
             return CategoryComparison(category: cat, currentAmount: current, comparedAmount: compared)
         }.sorted { $0.currentAmount > $1.currentAmount }
     }
-    
+
     // MARK: - Helpers
     
-    private func parseDate(_ dateString: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: dateString)
+    private func selectedMonthDisplayName() -> String {
+        var comps = DateComponents()
+        comps.year = selectedYear
+        comps.month = selectedMonth
+        guard let date = Calendar.current.date(from: comps) else { return "" }
+        let cal = Calendar.current
+        let nowY = cal.component(.year, from: Date())
+        if selectedYear != nowY {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "es_ES")
+            f.dateFormat = "MMMM yyyy"
+            return f.string(from: date).capitalized
+        }
+        return Self.monthFormatter.string(from: date).capitalized
     }
-    
-    private func monthName(offset: Int) -> String {
-        let calendar = Calendar.current
-        guard let date = calendar.date(byAdding: .month, value: -offset, to: Date()) else { return "" }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_ES")
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: date).capitalized
-    }
-    
+
     private func shortMonthLabel(offset: Int) -> String {
         switch offset {
         case 1: return "1 mes"
@@ -454,18 +632,14 @@ struct MonthComparisonView: View {
         }
     }
     
-    private func shortCategory(_ category: String) -> String {
-        let parts = category.components(separatedBy: " ")
-        if parts.count > 1 {
-            return parts.dropFirst().joined(separator: " ")
-        }
-        return String(category.prefix(10))
+    private func displayCategory(_ category: String) -> String {
+        return category
     }
 }
 
 // MARK: - Category Comparison Model
 struct CategoryComparison: Identifiable {
-    let id = UUID()
+    var id: String { category }
     let category: String
     let currentAmount: Double
     let comparedAmount: Double

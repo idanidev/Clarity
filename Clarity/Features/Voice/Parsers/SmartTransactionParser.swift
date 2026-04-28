@@ -240,7 +240,7 @@ final class SmartTransactionParser: TransactionParserProtocol {
     // Static Regex for performance
     private enum Patterns {
         static let compositeAmount = try! NSRegularExpression(
-            pattern: #"(\d+)\s+(?:con|coma|punto)\s+(\d+)"#, options: .caseInsensitive)
+            pattern: #"(\d+)\s+(?:con|coma|punto)\s+(\d{1,2})"#, options: .caseInsensitive)
         static let simpleAmount = try! NSRegularExpression(
             pattern: #"(\d+(?:[.,]\d{1,2})?)\s*(?:euros?|€)?\b"#, options: .caseInsensitive)
         static let compoundNumbers = try! NSRegularExpression(
@@ -249,6 +249,12 @@ final class SmartTransactionParser: TransactionParserProtocol {
             pattern:
                 #"^(añademe|añade|añadir|anademe|anade|anadir|gasta|gastado|he gastado|compra|comprado|he comprado|paga|pagado|he pagado|apunta|pon|registra)\s+"#,
             options: .caseInsensitive)
+        /// Non-anchored command word removal — catches commands that survive the anchored pass
+        /// (e.g. when a filler word appeared before the command in the original transcript).
+        static let commandWordsAny = try! NSRegularExpression(
+            pattern: #"\b(añademe|añade|añadir|anademe|anade|anadir|gasta|gastado|apuntame|apunta|registra)\b"#,
+            options: .caseInsensitive
+        )
         // Static patterns for cleanDescription (built once, reused on every call)
         static let numberWords: NSRegularExpression = {
             let pattern = NumberWords.keys
@@ -390,14 +396,18 @@ final class SmartTransactionParser: TransactionParserProtocol {
     private func extractAmount(from text: String) -> Decimal? {
         let range = NSRange(text.startIndex..., in: text)
 
-        // Composite: "20 con 50"
+        // Composite: "7 con 20", "7 coma 5"
+        // Left-justify fraction to 2 decimal places: "5"→"50" (÷100=0.50), "20"→"20" (÷100=0.20)
         if let match = Patterns.compositeAmount.firstMatch(in: text, options: [], range: range),
             let r1 = Range(match.range(at: 1), in: text),
             let r2 = Range(match.range(at: 2), in: text),
-            let whole = Decimal(string: String(text[r1])),
-            let fraction = Decimal(string: String(text[r2]))
+            let whole = Decimal(string: String(text[r1]))
         {
-            return whole + (fraction / 100)
+            let fractionStr = String(text[r2])
+            let paddedFraction = String((fractionStr + "0").prefix(2))
+            if let cents = Decimal(string: paddedFraction) {
+                return whole + cents / 100
+            }
         }
 
         // Simple: "20.50"
@@ -477,7 +487,43 @@ final class SmartTransactionParser: TransactionParserProtocol {
             }
         }
 
-        // 3. Context-Aware Keywords (Time-based priority)
+        // Word list used by user-category and keyword matching (computed once)
+        let words = normalizedDescription.components(separatedBy: " ").filter { $0.count > 2 }
+
+        // 3. User Category/Subcategory Matching (before global keywords so custom
+        //    categories like "Regalos" take priority over generic GlobalKeywords)
+        let userCategories = await MainActor.run { UserDataManager.shared.categories }
+        for category in userCategories {
+            // Check subcategories first (more specific)
+            for sub in category.subcategories {
+                let normalizedSub = normalize(sub)
+                guard normalizedSub.count > 2 else { continue }
+                if normalizedDescription.contains(normalizedSub) {
+                    return (category.name, sub, cleanedDescription, .keyword)
+                }
+                for word in words where word.count > 2 {
+                    let threshold = normalizedSub.count > 5 ? 2 : 1
+                    if levenshteinDistance(word, normalizedSub) <= threshold {
+                        return (category.name, sub, cleanedDescription, .keyword)
+                    }
+                }
+            }
+            // Then check category name (exact + fuzzy so "regalo" matches "Regalos")
+            let normalizedCat = normalize(category.name)
+            if normalizedDescription.contains(normalizedCat)
+                || normalizedCat.contains(normalizedDescription)
+            {
+                return (category.name, nil, cleanedDescription, .keyword)
+            }
+            for word in words where word.count > 2 {
+                let threshold = max(1, normalizedCat.count / 6)
+                if levenshteinDistance(word, normalizedCat) <= threshold {
+                    return (category.name, nil, cleanedDescription, .keyword)
+                }
+            }
+        }
+
+        // 4. Context-Aware Keywords (Time-based priority)
         for def in GlobalKeywords {
             if let timeRange = def.timeContext, timeRange.contains(currentHour) {
                 for keyword in def.keywords {
@@ -488,8 +534,7 @@ final class SmartTransactionParser: TransactionParserProtocol {
             }
         }
 
-        // 4. Fuzzy Keyword Matching (Static Dictionary)
-        let words = normalized.components(separatedBy: " ").filter { $0.count > 2 }
+        // 5. Fuzzy Keyword Matching (Static Dictionary)
         for def in GlobalKeywords where def.timeContext == nil {
             for keyword in def.keywords {
                 // Exact keyword contains
@@ -510,14 +555,14 @@ final class SmartTransactionParser: TransactionParserProtocol {
             }
         }
 
-        // 5. NER Fallback
+        // 6. NER Fallback
         if let entity = extractEntity(from: original) {
             let finalDescription =
                 entity.count > cleanedDescription.count ? entity : cleanedDescription
             return ("Compras 🛒", nil, finalDescription, .ner)
         }
 
-        // 6. Generic Fallback
+        // 7. Generic Fallback
         return (nil, nil, cleanedDescription, .fallback)
     }
 
@@ -581,22 +626,29 @@ final class SmartTransactionParser: TransactionParserProtocol {
         // Work on the ORIGINAL text (preserve user's capitalization and exact words)
         var clean = original
 
-        // 1. Remove meta-commands (Prefixes)
+        // 1. Remove fillers FIRST so the command word may move to position 0
+        let words = clean.components(separatedBy: .whitespaces)
+        let filteredWords = words.filter { !Self.fillers.contains($0.lowercased()) }
+        clean = filteredWords.joined(separator: " ")
+
+        // 2. Remove meta-commands (anchored prefix match)
         for command in Self.metaCommands {
             if let range = clean.range(of: command, options: [.caseInsensitive, .anchored]) {
                 clean.removeSubrange(range)
             }
         }
 
-        // 2. Remove commands via Regex (legacy robust)
+        // 3. Remove commands via anchored Regex (handles the common "añade X" prefix)
         clean = Patterns.commands.stringByReplacingMatches(
             in: clean, options: [], range: NSRange(clean.startIndex..., in: clean), withTemplate: ""
         )
 
-        // 3. Remove fillers (STOP WORDS)
-        let words = clean.components(separatedBy: .whitespaces)
-        let filteredWords = words.filter { !Self.fillers.contains($0.lowercased()) }
-        clean = filteredWords.joined(separator: " ")
+        // 3b. Non-anchored fallback — removes command words that survived because they appeared
+        //     after other words (e.g. "Bueno pues añade gasolina 20€" → after filler removal
+        //     becomes "añade gasolina 20€" but if any unknown filler precedes it, catch it here)
+        clean = Patterns.commandWordsAny.stringByReplacingMatches(
+            in: clean, options: [], range: NSRange(clean.startIndex..., in: clean), withTemplate: ""
+        )
 
         // 4. Remove Spanish number words — use static regex (built once at startup)
         clean = Patterns.numberWords.stringByReplacingMatches(
@@ -649,6 +701,19 @@ final class SmartTransactionParser: TransactionParserProtocol {
         // 9. Clean up multiple spaces
         clean = clean.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         clean = clean.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // 9.5 Strip leading prepositions/articles (e.g. "en herramientas" → "herramientas")
+        let leadingStopWords = [
+            "en", "de", "para", "por", "con", "el", "la", "los", "las", "un", "una", "unos",
+            "unas",
+        ]
+        for word in leadingStopWords {
+            if clean.lowercased().hasPrefix(word + " ") {
+                clean = String(clean.dropFirst(word.count + 1)).trimmingCharacters(
+                    in: .whitespacesAndNewlines)
+                break
+            }
+        }
 
         // 10. Capitalize first letter
         if !clean.isEmpty {

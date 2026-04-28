@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MonthlyBudgetsView: View {
-    @StateObject private var viewModel = MonthlyBudgetsViewModel()
+    @State private var viewModel = MonthlyBudgetsViewModel()
     @State private var showingCreateSheet = false
     @State private var editingBudget: MonthlyBudget?
 
@@ -22,14 +22,14 @@ struct MonthlyBudgetsView: View {
     var body: some View {
         ZStack {
             if viewModel.isLoading {
-                ProgressView("Cargando historial...")
+                ProgressView(String(localized: "budgets.loading", defaultValue: "Cargando historial..."))
             } else if viewModel.budgets.isEmpty {
                 emptyState
             } else {
                 budgetsList
             }
         }
-        .navigationTitle("Historial de Nóminas")
+        .navigationTitle(String(localized: "budgets.history.title", defaultValue: "Historial de Nóminas"))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -59,12 +59,33 @@ struct MonthlyBudgetsView: View {
 
     private var budgetsList: some View {
         List {
-            ForEach(viewModel.budgets) { budget in
-                BudgetMonthRow(budget: budget)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        editingBudget = budget
+            ForEach(viewModel.groupedByYear) { group in
+                Section {
+                    DisclosureGroup(
+                        isExpanded: Binding(
+                            get: { viewModel.expandedYears.contains(group.year) },
+                            set: { isExpanded in
+                                withAnimation(.easeInOut(duration: AnimationDuration.normal)) {
+                                    if isExpanded {
+                                        viewModel.expandedYears.insert(group.year)
+                                    } else {
+                                        viewModel.expandedYears.remove(group.year)
+                                    }
+                                }
+                            }
+                        )
+                    ) {
+                        ForEach(group.budgets) { budget in
+                            BudgetMonthRow(budget: budget)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    editingBudget = budget
+                                }
+                        }
+                    } label: {
+                        YearHeaderView(group: group)
                     }
+                }
             }
         }
         .listStyle(.insetGrouped)
@@ -76,10 +97,10 @@ struct MonthlyBudgetsView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.secondary)
 
-            Text("No hay nóminas registradas")
+            Text(String(localized: "budgets.empty.title", defaultValue: "No hay nóminas registradas"))
                 .font(.title3.bold())
 
-            Text("Registra tus ingresos mensuales para\nun seguimiento preciso de ahorros")
+            Text(String(localized: "budgets.empty.subtitle", defaultValue: "Registra tus ingresos mensuales para\nun seguimiento preciso de ahorros"))
                 .font(.callout)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -87,13 +108,57 @@ struct MonthlyBudgetsView: View {
             Button {
                 showingCreateSheet = true
             } label: {
-                Label("Crear Primera Nómina", systemImage: "plus.circle.fill")
+                Label(String(localized: "budgets.empty.createFirst", defaultValue: "Crear Primera Nómina"), systemImage: "plus.circle.fill")
                     .font(.headline)
             }
             .buttonStyle(.borderedProminent)
             .padding(.top)
         }
         .padding()
+    }
+}
+
+// MARK: - Year Header
+
+struct YearHeaderView: View {
+    let group: YearBudgetGroup
+
+    private var formattedTotal: String {
+        let value = Int(group.totalIncome)
+        return "\(value.formatted(.number.grouping(.automatic)))€"
+    }
+
+    private var formattedAverage: String {
+        let value = Int(group.averageIncome)
+        return "\(value.formatted(.number.grouping(.automatic)))€"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(String(group.year))
+                .font(.title3.weight(.bold))
+
+            HStack(spacing: CornerRadius.small) {
+                Label(formattedTotal, systemImage: "eurosign.circle.fill")
+                    .font(.caption)
+                    .foregroundColor(.green)
+
+                Text("·")
+                    .foregroundColor(.secondary)
+
+                Text("Media: \(formattedAverage)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Text("·")
+                    .foregroundColor(.secondary)
+
+                Text("\(group.budgets.count) meses")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 
@@ -156,7 +221,7 @@ struct BudgetMonthRow: View {
 
 struct CreateBudgetSheet: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var viewModel: MonthlyBudgetsViewModel
+    var viewModel: MonthlyBudgetsViewModel
 
     @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
@@ -181,8 +246,8 @@ struct CreateBudgetSheet: View {
     var body: some View {
         NavigationView {
             Form {
-                Section("Mes") {
-                    Picker("Mes", selection: $selectedMonth) {
+                Section(String(localized: "budgets.create.month", defaultValue: "Mes")) {
+                    Picker(String(localized: "budgets.create.month", defaultValue: "Mes"), selection: $selectedMonth) {
                         ForEach(1...12, id: \.self) { month in
                             Text(monthNames[month - 1]).tag(month)
                         }
@@ -191,7 +256,7 @@ struct CreateBudgetSheet: View {
                     .frame(height: 120)
                     .clipped()
 
-                    Picker("Año", selection: $selectedYear) {
+                    Picker(String(localized: "budgets.create.year", defaultValue: "Año"), selection: $selectedYear) {
                         ForEach(availableYears, id: \.self) { year in
                             Text(String(year)).tag(year)
                         }
@@ -200,7 +265,7 @@ struct CreateBudgetSheet: View {
 
                     if viewModel.budgetExists(for: selectedYear, month: selectedMonth) {
                         Label(
-                            "Ya existe nómina para este mes",
+                            String(localized: "budgets.create.alreadyExists", defaultValue: "Ya existe nómina para este mes"),
                             systemImage: "exclamationmark.triangle.fill"
                         )
                         .foregroundColor(.orange)
@@ -208,7 +273,7 @@ struct CreateBudgetSheet: View {
                     }
                 }
 
-                Section("Ingresos Estimados") {
+                Section(String(localized: "budgets.create.estimatedIncome", defaultValue: "Ingresos Estimados")) {
                     HStack {
                         Text("€")
                             .foregroundColor(.secondary)
@@ -224,7 +289,7 @@ struct CreateBudgetSheet: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Text("Crear Nómina")
+                            Text(String(localized: "budgets.create.button", defaultValue: "Crear Nómina"))
                                 .font(.headline)
                             Spacer()
                         }
@@ -232,11 +297,11 @@ struct CreateBudgetSheet: View {
                     .disabled(!canSave)
                 }
             }
-            .navigationTitle("Nueva Nómina")
+            .navigationTitle(String(localized: "budgets.create.title", defaultValue: "Nueva Nómina"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") {
+                    Button(String(localized: "common.cancel", defaultValue: "Cancelar")) {
                         dismiss()
                     }
                 }
@@ -260,7 +325,7 @@ struct CreateBudgetSheet: View {
 struct EditBudgetSheet: View {
     @Environment(\.dismiss) private var dismiss
     let budget: MonthlyBudget
-    @ObservedObject var viewModel: MonthlyBudgetsViewModel
+    var viewModel: MonthlyBudgetsViewModel
 
     @State private var income: String = ""
 
@@ -288,7 +353,7 @@ struct EditBudgetSheet: View {
                     }
                 }
 
-                Section("Ingresos") {
+                Section(String(localized: "budgets.edit.income", defaultValue: "Ingresos")) {
                     HStack {
                         Text("€")
                             .foregroundColor(.secondary)
@@ -304,18 +369,18 @@ struct EditBudgetSheet: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Text("Guardar Cambios")
+                            Text(String(localized: "common.saveChanges", defaultValue: "Guardar Cambios"))
                                 .font(.headline)
                             Spacer()
                         }
                     }
                 }
             }
-            .navigationTitle("Editar Nómina")
+            .navigationTitle(String(localized: "budgets.edit.title", defaultValue: "Editar Nómina"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") {
+                    Button(String(localized: "common.cancel", defaultValue: "Cancelar")) {
                         dismiss()
                     }
                 }

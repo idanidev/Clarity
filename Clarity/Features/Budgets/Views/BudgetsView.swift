@@ -70,7 +70,7 @@ struct BudgetsView: View {
                 // Center content
                 VStack(spacing: 4) {
                     Text("\(Int(progress * 100))%")
-                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .scaledFont(size: 36, weight: .bold, design: .rounded)
                         .foregroundStyle(viewModel.currentSavings >= viewModel.monthlySavingsGoal ? .green : .primary)
                     
                     Text("completado")
@@ -86,7 +86,7 @@ struct BudgetsView: View {
                 
                 HStack(spacing: 4) {
                     Text(Formatters.currency(viewModel.currentSavings))
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .scaledFont(size: 28, weight: .bold, design: .rounded)
                         .foregroundStyle(.primary)
                     
                     Text("de \(Formatters.currency(viewModel.monthlySavingsGoal))")
@@ -151,7 +151,7 @@ struct BudgetsView: View {
     private var emptyState: some View {
         VStack(spacing: 16) {
             Image(systemName: "target")
-                .font(.system(size: 50))
+                .scaledFont(size: 50)
                 .foregroundStyle(Color.clarityPrimary.gradient)
             
             Text("Sin Presupuestos")
@@ -206,7 +206,7 @@ struct BudgetProgressCard: View {
                     .rotationEffect(.degrees(-90))
                 
                 Text(emoji)
-                    .font(.system(size: 16))
+                    .scaledFont(size: 16)
             }
             
             // Info

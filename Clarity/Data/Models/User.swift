@@ -4,7 +4,7 @@
 import FirebaseFirestore
 import Foundation
 
-struct UserDocument: Codable {
+struct UserDocument: Codable, Sendable {
     // Core fields
     var email: String?
     var displayName: String?
@@ -72,7 +72,21 @@ struct UserDocument: Codable {
         aiQuotas = try container.decodeIfPresent(AIQuotas.self, forKey: .aiQuotas)
         subscription = try container.decodeIfPresent(Subscription.self, forKey: .subscription)
         goals = try container.decodeIfPresent(Goals.self, forKey: .goals)
-        savedFilters = try container.decodeIfPresent([ExpenseFilter].self, forKey: .savedFilters)
+        // Decode tolerante: si una entrada está malformada, salta esa pero conserva el resto.
+        // Sin esto un solo filtro inválido tira el array entero a nil ("se borraron").
+        if var nested = try? container.nestedUnkeyedContainer(forKey: .savedFilters) {
+            var collected: [ExpenseFilter] = []
+            while !nested.isAtEnd {
+                if let f = try? nested.decode(ExpenseFilter.self) {
+                    collected.append(f)
+                } else {
+                    _ = try? nested.decode(EmptyDecodable.self)  // skip
+                }
+            }
+            savedFilters = collected
+        } else {
+            savedFilters = nil
+        }
 
         // Robust Date Decoding
         if let date = try? container.decodeIfPresent(Date.self, forKey: .createdAt) {
@@ -108,13 +122,13 @@ struct UserDocument: Codable {
 }
 
 // MARK: - Goals (from your Firebase)
-struct Goals: Codable {
+struct Goals: Codable, Sendable {
     var monthlySavingsGoal: Double?
     var totalSavingsGoal: Double?
     var categoryGoals: [String: Double]?
 }
 
-struct UserSettings: Codable {
+struct UserSettings: Codable, Sendable {
     var language: String?  // "es" | "en"
     var theme: String?  // "dark" | "light" | "system"
     var currency: String?  // "EUR" | "USD"
@@ -130,7 +144,7 @@ struct UserSettings: Codable {
         isSalaryRecurring: false)
 }
 
-struct AIQuotas: Codable {
+struct AIQuotas: Codable, Sendable {
     var monthly: Int  // 3 (free), 50 (pro), 999999 (premium/admin)
     var used: Int
     var remaining: Int
@@ -140,7 +154,7 @@ struct AIQuotas: Codable {
     static let free = AIQuotas(monthly: 3, used: 0, remaining: 3, unlimited: false, resetDate: "")
 }
 
-struct Subscription: Codable {
+struct Subscription: Codable, Sendable {
     let plan: String  // "free" | "pro" | "premium"
     let status: String  // "active" | "canceled" | "past_due"
     let stripeCustomerId: String?
@@ -189,4 +203,9 @@ enum SubscriptionPlan: String, CaseIterable {
             ]
         }
     }
+}
+
+// Helper para skip-decode en arrays tolerantes (decode-or-discard).
+private struct EmptyDecodable: Decodable {
+    init(from decoder: Decoder) throws {}
 }

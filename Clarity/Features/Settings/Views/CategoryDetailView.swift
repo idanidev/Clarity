@@ -1,5 +1,5 @@
 // CategoryDetailView.swift
-// Complete category editing view with inline subcategory editing
+// Edición de categoría: nombre + subcategorías inline. El color se gestiona en la lista.
 
 import SwiftUI
 
@@ -7,274 +7,216 @@ struct CategoryDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let originalCategory: Category
     let onUpdate: () -> Void
-    
+
     @State private var name: String
-    @State private var selectedColor: String
     @State private var subcategories: [String]
-    @State private var showAddSubcategory = false
     @State private var newSubcategoryName = ""
-    @State private var editingSubcategoryIndex: Int?
+    @FocusState private var addFieldFocused: Bool
     @State private var showDeleteConfirm = false
     @State private var hasChanges = false
     @State private var isSaving = false
     @State private var showNameChangeWarning = false
-    @State private var showAddSubcategorySheet = false
-    
-    // Validación de caracteres prohibidos
+
+    // Caracteres prohibidos por Firestore en el path del documento
     private let forbiddenChars: [Character] = ["/", "~", "*", "[", "]"]
-    
+
     private var nameContainsForbiddenChars: Bool {
         name.contains(where: { forbiddenChars.contains($0) })
     }
-    
+
     private var forbiddenCharsInName: [Character] {
         name.filter { forbiddenChars.contains($0) }
     }
-    
+
     private var isValidName: Bool {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !nameContainsForbiddenChars
     }
-    
+
     private var nameHasChanged: Bool {
         name != originalCategory.name
     }
-    
+
+    private var color: Color { Color(hex: originalCategory.color) }
+
     init(category: Category, onUpdate: @escaping () -> Void) {
         self.originalCategory = category
         self.onUpdate = onUpdate
         _name = State(initialValue: category.name)
-        _selectedColor = State(initialValue: category.color)
         _subcategories = State(initialValue: category.subcategories)
     }
-    
+
     var body: some View {
         Form {
-            // Name with inline preview
+            // ── Nombre ──
             Section {
                 HStack(spacing: 12) {
-                    Circle()
-                        .fill(Color(hex: selectedColor) ?? .gray)
-                        .frame(width: 44, height: 44)
-                    
-                    TextField("Nombre de la categoría", text: $name)
-                        .font(.body)
-                        .autocorrectionDisabled()
-                        .onChange(of: name) { _, _ in hasChanges = true }
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(color.opacity(0.18))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .strokeBorder(color.opacity(0.4), lineWidth: 1)
+                        )
+                        .frame(width: 36, height: 36)
+
+                    TextField(
+                        String(localized: "categoryDetail.namePlaceholder", defaultValue: "Nombre"),
+                        text: $name
+                    )
+                    .font(.body)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onChange(of: name) { _, newValue in
+                        let filtered = newValue.filter { !forbiddenChars.contains($0) }
+                        if filtered != newValue { name = filtered }
+                        hasChanges = true
+                    }
                 }
-            } header: {
-                Text("Nombre")
             } footer: {
                 if nameContainsForbiddenChars {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundStyle(.orange)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("No puedes usar estos caracteres:")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.orange)
-                            
-                            Text(forbiddenCharsInName.map { String($0) }.joined(separator: " "))
-                                .font(.caption.monospaced().weight(.bold))
-                                .foregroundStyle(.red)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.red.opacity(0.1))
-                                .cornerRadius(6)
-                            
-                            Text("Caracteres prohibidos: / ~ * [ ]")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
+                        Text("Caracteres no permitidos: \(forbiddenCharsInName.map { String($0) }.joined(separator: " "))")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
                     }
-                    .padding(.vertical, 4)
                 } else if nameHasChanged {
-                    HStack(alignment: .top, spacing: 6) {
-                        Image(systemName: "info.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.blue)
-                        
-                        Text("Los gastos existentes mantendrán esta categoría con su nuevo nombre.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text(String(localized: "categoryDetail.nameChanged.info", defaultValue: "Los gastos existentes se actualizarán al nuevo nombre."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
-            
-            // Color Picker - more compact iOS style
-            Section("Color") {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 6), spacing: 8) {
-                    ForEach(CategoryColors.allCases, id: \.self) { colorHex in
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedColor = colorHex
-                                hasChanges = true
-                            }
-                            HapticManager.shared.selection()
-                        } label: {
-                            Circle()
-                                .fill(Color(hex: colorHex) ?? .gray)
-                                .frame(width: 36, height: 36)
-                                .overlay {
-                                    if selectedColor == colorHex {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundStyle(.white)
-                                    }
-                                }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-            
-            // Subcategories
+
+            // ── Subcategorías ──
             Section {
-                ForEach(subcategories.indices, id: \.self) { index in
-                    if editingSubcategoryIndex == index {
-                        HStack {
+                if subcategories.isEmpty {
+                    Text("Sin subcategorías. Añade la primera abajo ↓")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 8)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(subcategories.indices, id: \.self) { index in
+                        HStack(spacing: 12) {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 7, height: 7)
+
                             TextField("Nombre", text: $subcategories[index])
                                 .font(.body)
-                            
-                            Button {
-                                withAnimation(.bouncy) {
-                                    editingSubcategoryIndex = nil
+                                .submitLabel(.done)
+                                .onChange(of: subcategories[index]) { _, _ in
                                     hasChanges = true
                                 }
-                            } label: {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                                    .font(.title3)
-                            }
-                        }
-                    } else {
-                        Button {
-                            editingSubcategoryIndex = index
-                        } label: {
-                            HStack {
-                                Text(subcategories[index])
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: "pencil")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
                         }
                     }
-                }
-                .onDelete { indexSet in
-                    withAnimation(.bouncy) {
-                        subcategories.remove(atOffsets: indexSet)
-                        hasChanges = true
-                        HapticManager.shared.notification(.warning)
-                    }
-                }
-                .onMove { from, to in
-                    withAnimation(.bouncy) {
-                        subcategories.move(fromOffsets: from, toOffset: to)
-                        hasChanges = true
-                    }
-                }
-                
-                // Add subcategory
-                if showAddSubcategory {
-                    HStack {
-                        TextField("Nueva subcategoría", text: $newSubcategoryName)
-                            .font(.body)
-                        
-                        Button {
-                            guard !newSubcategoryName.isEmpty else { return }
-                            withAnimation(.bouncy) {
-                                subcategories.append(newSubcategoryName)
-                                newSubcategoryName = ""
-                                showAddSubcategory = false
-                                hasChanges = true
-                                HapticManager.shared.impact(.light)
-                            }
-                        } label: {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.green)
-                                .font(.title3)
-                        }
-                        .disabled(newSubcategoryName.isEmpty)
-                        
-                        Button {
-                            withAnimation(.bouncy) {
-                                showAddSubcategory = false
-                                newSubcategoryName = ""
-                            }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                                .font(.title3)
-                        }
-                    }
-                } else {
-                    Button {
+                    .onDelete { indexSet in
                         withAnimation(.bouncy) {
-                            showAddSubcategory = true
+                            subcategories.remove(atOffsets: indexSet)
+                            hasChanges = true
+                            HapticManager.shared.notification(.warning)
                         }
-                    } label: {
-                        Label("Añadir Subcategoría", systemImage: "plus.circle.fill")
-                            .foregroundStyle(Color.clarityPrimary)
+                    }
+                    .onMove { from, to in
+                        withAnimation(.bouncy) {
+                            subcategories.move(fromOffsets: from, toOffset: to)
+                            hasChanges = true
+                        }
                     }
                 }
+
+                // Inline add: TextField siempre visible, submit Return añade y mantiene foco.
+                HStack(spacing: 12) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(Color.clarityPrimary)
+                        .font(.title3)
+
+                    TextField(
+                        String(localized: "categoryDetail.addSubcategory", defaultValue: "Añadir subcategoría"),
+                        text: $newSubcategoryName
+                    )
+                    .font(.body)
+                    .submitLabel(.done)
+                    .focused($addFieldFocused)
+                    .onSubmit { addSubcategory() }
+
+                    if !newSubcategoryName.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Button {
+                            addSubcategory()
+                        } label: {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .foregroundStyle(Color.clarityPrimary)
+                                .font(.title3)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+                }
+                .animation(.bouncy, value: newSubcategoryName.isEmpty)
             } header: {
                 HStack {
-                    Text("Subcategorías")
+                    Text(String(localized: "categoryDetail.subcategories.header", defaultValue: "Subcategorías"))
                     Spacer()
-                    Button {
-                        showAddSubcategorySheet = true
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.body)
-                            .foregroundStyle(Color.clarityPrimary)
-                    }
+                    Text("\(subcategories.count)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
                 }
-                .textCase(nil)
             } footer: {
                 if !subcategories.isEmpty {
-                    Text("Toca para editar • Desliza para eliminar • Arrastra para reordenar")
+                    Text("Desliza para eliminar. Pulsa Editar para reordenar.")
                         .font(.caption2)
                 }
             }
-            
-            // Delete
+
+            // ── Eliminar ──
             Section {
                 Button(role: .destructive) {
                     showDeleteConfirm = true
                 } label: {
-                    Label("Eliminar Categoría", systemImage: "trash")
-                        .frame(maxWidth: .infinity)
+                    Label(
+                        String(localized: "categoryDetail.deleteCategory", defaultValue: "Eliminar Categoría"),
+                        systemImage: "trash"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
             } footer: {
-                Text("Los gastos existentes mantendrán esta categoría.")
+                Text(String(localized: "categoryDetail.deleteCategory.footer", defaultValue: "Los gastos existentes mantendrán esta categoría."))
                     .font(.caption2)
             }
         }
-        .navigationTitle("Editar Categoría")
+        .navigationTitle(String(localized: "categoryDetail.navigationTitle", defaultValue: "Editar Categoría"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancelar") {
+                Button(String(localized: "common.cancel", defaultValue: "Cancelar")) {
                     dismiss()
                 }
             }
-            
             ToolbarItem(placement: .confirmationAction) {
-                Button("Guardar") {
-                    // Si el nombre cambió, mostrar advertencia primero
+                Button(String(localized: "common.save", defaultValue: "Guardar")) {
                     if nameHasChanged {
                         showNameChangeWarning = true
                     } else {
-                        Task {
-                            await saveChanges()
-                        }
+                        Task { await saveChanges() }
                     }
                 }
                 .disabled(!hasChanges || !isValidName || isSaving)
+                .fontWeight(.semibold)
+            }
+            // Reordenar subcategorías
+            ToolbarItem(placement: .topBarTrailing) {
+                if !subcategories.isEmpty {
+                    EditButton()
+                }
+            }
+            // Toolbar teclado: cerrar
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Listo") {
+                    addFieldFocused = false
+                }
                 .fontWeight(.semibold)
             }
         }
@@ -283,59 +225,58 @@ struct CategoryDetailView: View {
             isPresented: $showDeleteConfirm,
             titleVisibility: .visible
         ) {
-            Button("Eliminar", role: .destructive) {
-                Task {
-                    await deleteCategory()
-                }
+            Button(String(localized: "common.delete", defaultValue: "Eliminar"), role: .destructive) {
+                Task { await deleteCategory() }
             }
         } message: {
-            Text("Esta acción no se puede deshacer.")
+            Text(String(localized: "categoryDetail.deleteConfirm.message", defaultValue: "Esta acción no se puede deshacer."))
         }
-        .sheet(isPresented: $showAddSubcategorySheet) {
-            AddSubcategorySheet(category: originalCategory) {
-                // Recargar las subcategorías cuando se añade una nueva
-                Task {
-                    await UserDataManager.shared.loadUserData()
-                    // Actualizar las subcategorías locales
-                    if let updatedCategory = UserDataManager.shared.categories.first(where: { $0.id == originalCategory.id }) {
-                        subcategories = updatedCategory.subcategories
-                        hasChanges = true
-                    }
-                    onUpdate()
-                }
-            }
-        }
-        .alert("Cambio de nombre", isPresented: $showNameChangeWarning) {
-            Button("Cancelar", role: .cancel) { }
-            Button("Guardar cambios") {
-                Task {
-                    await saveChanges()
-                }
+        .alert(
+            String(localized: "categoryDetail.nameChange.title", defaultValue: "Cambio de nombre"),
+            isPresented: $showNameChangeWarning
+        ) {
+            Button(String(localized: "common.cancel", defaultValue: "Cancelar"), role: .cancel) {}
+            Button(String(localized: "categoryDetail.nameChange.save", defaultValue: "Guardar cambios")) {
+                Task { await saveChanges() }
             }
         } message: {
-            Text("Al cambiar el nombre de '\(originalCategory.name)' a '\(name)', los gastos existentes se actualizarán automáticamente para reflejar el nuevo nombre.")
+            Text("Al cambiar '\(originalCategory.name)' a '\(name)', los gastos existentes adoptarán el nuevo nombre.")
         }
     }
-    
+
+    // MARK: - Actions
+
+    private func addSubcategory() {
+        let trimmed = newSubcategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !subcategories.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            HapticManager.shared.notification(.warning)
+            return
+        }
+        withAnimation(.bouncy) {
+            subcategories.append(trimmed)
+            newSubcategoryName = ""
+            hasChanges = true
+        }
+        HapticManager.shared.impact(.light)
+        addFieldFocused = true
+    }
+
     private func saveChanges() async {
         isSaving = true
-        
         var updated = originalCategory
-        updated.name = name
-        updated.color = selectedColor
-        updated.subcategories = subcategories
+        updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.subcategories = subcategories.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         updated.updatedAt = Date()
-        
         await UserDataManager.shared.updateCategory(updated)
         HapticManager.shared.notification(.success)
         onUpdate()
         dismiss()
         isSaving = false
     }
-    
+
     private func deleteCategory() async {
         guard let id = originalCategory.id else { return }
-        
         await UserDataManager.shared.deleteCategory(id: id)
         HapticManager.shared.notification(.success)
         onUpdate()

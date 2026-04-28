@@ -108,7 +108,7 @@ class VoiceExpenseCoordinator {
                 }
             } catch {
                 await MainActor.run {
-                    state = .error("Error al iniciar: \(error.localizedDescription)")  // Will revert UI
+                    state = .error("Error al iniciar: \(error.safeUserMessage)")  // Will revert UI
                     SoundManager.shared.play(.error)
                 }
             }
@@ -195,7 +195,7 @@ class VoiceExpenseCoordinator {
                 SoundManager.shared.play(.error)
                 if settings.vibration { VoiceHapticsEngine.shared.playError() }
 
-                state = .error(error.localizedDescription)
+                state = .error(error.safeUserMessage)
                 stats.recordFailure()
             }
         }
@@ -206,10 +206,20 @@ class VoiceExpenseCoordinator {
 
         do {
             let repository = DependencyContainer.shared.expenseRepository
-            _ = try await repository.addExpense(expense)
+            let id = try await repository.addExpense(expense)
 
             stats.recordSuccess()
             successMessage = "\(Formatters.currency(expense.amount)) - \(expense.name)"
+
+            // Prepend directly — no blocking reload, expense is already persisted
+            var saved = expense
+            saved.id = id
+            viewModel.prependExpense(saved)
+
+            // Silent background sync (fire-and-forget)
+            Task { await viewModel.refresh() }
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            NotificationsView.cancelInactivityReminder()
 
             await MainActor.run {
                 state = .success
@@ -223,8 +233,6 @@ class VoiceExpenseCoordinator {
                 }
             }
 
-            await viewModel.loadExpenses(silent: true)
-
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             await MainActor.run {
                 withAnimation(.bouncy) {
@@ -235,12 +243,31 @@ class VoiceExpenseCoordinator {
 
         } catch {
             stats.recordFailure()
-            state = .error("Error al guardar: \(error.localizedDescription)")
+            state = .error("Error al guardar: \(error.safeUserMessage)")
 
             if settings.vibration {
                 HapticManager.shared.notification(.error)
             }
         }
+    }
+
+    /// Rellena un gasto directamente desde datos estructurados (ej: Apple Pay via deep link).
+    /// No usa el SmartTransactionParser — el comercio y el importe vienen ya parseados.
+    func populateFromApplePay(merchant: String, amount: Double) {
+        let suggestion = SmartTransactionParser.shared.suggestCategory(for: merchant)
+        let categoryName = suggestion?.category ?? UserDataManager.shared.categories.first?.name ?? "Otros"
+
+        pendingExpense = Expense(
+            amount: amount,
+            name: merchant,
+            category: categoryName,
+            subcategory: suggestion?.subcategory,
+            date: Formatters.isoString(from: Date()),
+            paymentMethod: "Tarjeta"
+        )
+
+        wasFullyDetected = suggestion != nil
+        state = .confirming
     }
 
     func reset() {

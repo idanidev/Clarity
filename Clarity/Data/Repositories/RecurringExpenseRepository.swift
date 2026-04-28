@@ -1,10 +1,12 @@
-import Combine
+
 import FirebaseAuth
 import FirebaseFirestore
 // RecurringExpenseRepository.swift
 import Foundation
+import OSLog
 
-class RecurringExpenseRepository: ObservableObject {
+class RecurringExpenseRepository {
+    private let logger = Logger(subsystem: "com.idanidev.clarity", category: "RecurringExpenseRepository")
     private let db = Firestore.firestore()
 
     private var userId: String? {
@@ -20,12 +22,14 @@ class RecurringExpenseRepository: ObservableObject {
         guard let collection = collection else {
             throw RepositoryError.notAuthenticated
         }
-        // Cache-first: serve from disk instantly, fallback to server
+        // Cache-first: serve from disk instantly, fallback to server (también si cache vacío)
+        let query = collection.order(by: "dayOfMonth")
         let snapshot: QuerySnapshot
         do {
-            snapshot = try await collection.order(by: "dayOfMonth").getDocuments(source: .cache)
+            let cached = try await query.getDocuments(source: .cache)
+            snapshot = cached.isEmpty ? try await query.getDocuments(source: .server) : cached
         } catch {
-            snapshot = try await collection.order(by: "dayOfMonth").getDocuments(source: .server)
+            snapshot = try await query.getDocuments(source: .server)
         }
         var results: [RecurringExpense] = []
         for doc in snapshot.documents {
@@ -33,12 +37,10 @@ class RecurringExpenseRepository: ObservableObject {
                 let expense = try doc.data(as: RecurringExpense.self)
                 results.append(expense)
             } catch {
-                print("⚠️ Failed to decode document \(doc.documentID): \(error)")
+                logger.warning("⚠️ Failed to decode document \(doc.documentID): \(error)")
             }
         }
-        print(
-            "📋 Loaded \(results.count) recurring expenses (\(results.filter { $0.active }.count) active, \(results.filter { !$0.active }.count) paused)"
-        )
+        logger.debug("📋 Loaded \(results.count) recurring expenses (\(results.filter { $0.active }.count) active, \(results.filter { !$0.active }.count) paused)")
         return results
     }
 
@@ -49,7 +51,8 @@ class RecurringExpenseRepository: ObservableObject {
         let query = collection.whereField("active", isEqualTo: true)
         let snapshot: QuerySnapshot
         do {
-            snapshot = try await query.getDocuments(source: .cache)
+            let cached = try await query.getDocuments(source: .cache)
+            snapshot = cached.isEmpty ? try await query.getDocuments(source: .server) : cached
         } catch {
             snapshot = try await query.getDocuments(source: .server)
         }
@@ -77,7 +80,7 @@ class RecurringExpenseRepository: ObservableObject {
         }
         try await collection.document(id).updateData([
             "active": active,
-            "updatedAt": Timestamp(date: Date()),
+            "updatedAt": FieldValue.serverTimestamp(),
         ])
     }
 

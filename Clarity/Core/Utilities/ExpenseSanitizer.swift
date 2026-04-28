@@ -18,11 +18,12 @@ struct ExpenseSanitizer {
                 // We assume auto-generated ones generally stick to the schedule. 
                 // If an annual expense appears in a different month, it's likely a generator glitch.
                 if rule.frequency == .yearly && rule.billingMonth > 0 {
-                    let expenseDate = expense.dateAsDate
-                    let expenseMonth = Calendar.current.component(.month, from: expenseDate)
-                    
+                    // Extraer mes del string ISO directamente (TZ-safe).
+                    // Calendar.current usa TZ del dispositivo, expense.date está en UTC → daba mes erróneo
+                    // y borraba gastos anuales válidos del día 1 para usuarios fuera UTC.
+                    let monthStr = String(expense.date.dropFirst(5).prefix(2))
+                    let expenseMonth = Int(monthStr) ?? 0
                     if expenseMonth != rule.billingMonth {
-                        // print("⚠️ Sanitizer: Removing misplaced annual expense...)
                         return false
                     }
                 }
@@ -40,9 +41,9 @@ struct ExpenseSanitizer {
             guard let recurringId = expense.recurringId, let rule = rulesMap[recurringId] else { continue }
             
             let periodKey: String
-            let date = expense.dateAsDate
-            let year = Calendar.current.component(.year, from: date)
-            let month = Calendar.current.component(.month, from: date)
+            // TZ-safe: extraer year/month del string ISO ("YYYY-MM-DD") evitando deriva por timezone.
+            let year = Int(expense.date.prefix(4)) ?? 0
+            let month = Int(expense.date.dropFirst(5).prefix(2)) ?? 0
             
             // Define what constitutes a "Period" for this rule
             switch rule.frequency {
@@ -67,7 +68,6 @@ struct ExpenseSanitizer {
                 // Or if they are truly identical, it doesn't matter.
                 // But if they are duplicates in the SAME day, we discard subsequent ones.
                 
-                // print("⚠️ Sanitizer: Removing duplicate recurring expense...)
                 expensesToRemoveIndices.insert(index)
             } else {
                 seenRecurringPeriods[recurringId, default: []].insert(periodKey)

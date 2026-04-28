@@ -39,7 +39,7 @@ struct RecurringExpenseDetailView: View {
                             .shadow(color: categoryColor.opacity(0.3), radius: 20)
                         
                         Text(emoji)
-                            .font(.system(size: 50))
+                            .scaledFont(size: 50)
                     }
                     
                     // Name and amount
@@ -204,7 +204,7 @@ struct RecurringExpenseDetailView: View {
         isProcessing = true
         
         do {
-            try await RecurringExpenseRepository().toggleActive(id: id, active: !expense.active)
+            try await DependencyContainer.shared.recurringExpenseRepository.toggleActive(id: id, active: !expense.active)
             HapticManager.shared.notification(.success)
             onUpdate()
             dismiss()
@@ -241,7 +241,7 @@ struct RecurringExpenseDetailView: View {
         guard let id = expense.id else { return }
         
         do {
-            try await RecurringExpenseRepository().delete(id: id)
+            try await DependencyContainer.shared.recurringExpenseRepository.delete(id: id)
             HapticManager.shared.notification(.success)
             onUpdate()
             dismiss()
@@ -302,7 +302,7 @@ struct EditRecurringExpenseSheet: View {
                             showEmojiPicker = true
                         } label: {
                             Text(selectedIcon)
-                                .font(.system(size: 40))
+                                .scaledFont(size: 40)
                                 .padding(8)
                                 .background(Color.clarityPrimary.opacity(0.15))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -314,7 +314,7 @@ struct EditRecurringExpenseSheet: View {
                 Section {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
-                        .font(.system(size: 32, weight: .bold))
+                        .scaledFont(size: 32, weight: .bold)
                     
                     TextField("Nombre", text: $name)
                 }
@@ -393,15 +393,12 @@ struct EditRecurringExpenseSheet: View {
     
     private func saveExpense() {
         guard let amount = Double(amountString.replacingOccurrences(of: ",", with: ".")) else {
-            print("❌ Invalid amount: \(amountString)")
             return
         }
         guard let id = expense.id else {
-            print("❌ No expense ID")
             return
         }
-        
-        print("💾 Saving expense: id=\(id), amount=\(amount), name=\(name)")
+
         isSaving = true
         
         let updated = RecurringExpense(
@@ -425,15 +422,13 @@ struct EditRecurringExpenseSheet: View {
         
         Task {
             do {
-                try await RecurringExpenseRepository().update(updated)
-                print("✅ Saved successfully")
+                try await DependencyContainer.shared.recurringExpenseRepository.update(updated)
                 await MainActor.run {
                     HapticManager.shared.notification(.success)
                     onSuccess()
                     dismiss()
                 }
             } catch {
-                print("❌ Error saving: \(error)")
                 await MainActor.run {
                     isSaving = false
                 }

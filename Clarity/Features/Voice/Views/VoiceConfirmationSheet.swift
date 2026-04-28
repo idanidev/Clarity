@@ -1,7 +1,6 @@
 // VoiceConfirmationSheet.swift
 // Expense confirmation with auto-save timer
 
-import Combine
 import SwiftUI
 
 struct VoiceConfirmationSheet: View {
@@ -18,11 +17,14 @@ struct VoiceConfirmationSheet: View {
     @State private var selectedSubcategory: String = ""
     @State private var timeRemaining: Double
     @State private var progress: Double = 1.0
+    @State private var countdownCancelled = false
+    @State private var isInitialized = false  // guards against onAppear-triggered onChange
+    @State private var showNewCategory = false
+    @State private var showAddSubcategory = false
+    @State private var newSubcategoryName = ""
     @Environment(\.dismiss) private var dismiss
 
     private let autoConfirmDuration: Double
-
-    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
 
     init(
         expense: Expense,
@@ -56,12 +58,12 @@ struct VoiceConfirmationSheet: View {
                             .font(.title)
                         TextField("0.00", text: $amount)
                             .keyboardType(.decimalPad)
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .onChange(of: amount) { _, _ in stopTimer() }
+                            .scaledFont(size: 34, weight: .bold, design: .rounded)
+                            .onChange(of: amount) { _, _ in cancelCountdown() }
                     }
 
                     TextField("Descripción del gasto", text: $name)
-                        .onChange(of: name) { _, _ in stopTimer() }
+                        .onChange(of: name) { _, _ in cancelCountdown() }
                 }
 
                 // Category
@@ -73,7 +75,7 @@ struct VoiceConfirmationSheet: View {
                         }
                     }
                     .onChange(of: selectedCategory) { old, new in
-                        stopTimer()
+                        cancelCountdown()
                         if old?.id != new?.id,
                             let newCategory = new,
                             !newCategory.subcategories.contains(selectedSubcategory)
@@ -89,9 +91,60 @@ struct VoiceConfirmationSheet: View {
                                 Text(sub).tag(sub)
                             }
                         }
-                        .onChange(of: selectedSubcategory) { _, _ in stopTimer() }
+                        .onChange(of: selectedSubcategory) { _, _ in cancelCountdown() }
+
+                        // Inline add subcategory
+                        if showAddSubcategory {
+                            HStack {
+                                TextField("Nueva subcategoría", text: $newSubcategoryName)
+                                    .submitLabel(.done)
+                                    .onSubmit { addSubcategory(to: category) }
+                                Button {
+                                    addSubcategory(to: category)
+                                } label: {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                }
+                                .disabled(newSubcategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
+                                Button {
+                                    showAddSubcategory = false
+                                    newSubcategoryName = ""
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        } else {
+                            Button {
+                                cancelCountdown()
+                                showAddSubcategory = true
+                            } label: {
+                                Label("Nueva subcategoría", systemImage: "plus.circle")
+                                    .foregroundStyle(Color.clarityPrimary)
+                            }
+                        }
+                    }
+
+                    Button {
+                        cancelCountdown()
+                        showNewCategory = true
+                        HapticManager.shared.impact(.light)
+                    } label: {
+                        Label("Nueva categoría", systemImage: "plus.circle.fill")
+                            .foregroundStyle(Color.clarityPrimary)
                     }
                 }
+            }
+            .simultaneousGesture(
+                TapGesture().onEnded { cancelCountdown() }
+            )
+            .sheet(isPresented: $showNewCategory) {
+                NewCategorySheet()
+            }
+            // Cancel countdown on Tab key (external keyboard — moves focus to next field)
+            .onKeyPress(.tab) {
+                cancelCountdown()
+                return .ignored  // still let SwiftUI move focus normally
             }
             .navigationTitle("Confirmar Gasto")
             .navigationBarTitleDisplayMode(.inline)
@@ -107,29 +160,45 @@ struct VoiceConfirmationSheet: View {
                     Button {
                         confirmExpense()
                     } label: {
-                        HStack(spacing: 6) {
-                            if timeRemaining > 0 && canConfirm {
-                                CircularProgressView(
-                                    progress: progress, timeRemaining: timeRemaining)
-                            }
+                        if !countdownCancelled && timeRemaining > 0 && canSave {
+                            SaveCountdownButton(
+                                timeRemaining: timeRemaining,
+                                progress: progress
+                            )
+                        } else {
                             Text("Guardar")
                                 .fontWeight(.bold)
                         }
                     }
-                    .disabled(!canConfirm)
+                    .disabled(!canSave)
                 }
             }
+            // Native iOS bottom bar — replaces the form section banner
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !countdownCancelled && timeRemaining > 0 && canSave {
+                    AutoSaveBar(
+                        timeRemaining: timeRemaining,
+                        progress: progress,
+                        onCancel: cancelCountdown
+                    )
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: countdownCancelled)
         }
-        .onAppear {
+        .task {
+            // — PHASE 1: All initialization while isInitialized = false —
+            // onChange handlers are no-ops until isInitialized = true, so setting state
+            // here (including async UserLearningManager) never cancels the countdown.
+
             amount = String(format: "%.2f", expense.amount)
             name = expense.name
 
-            // Detect category + subcategory exclusively from user's real data
+            // Subcategory / category matching (sync)
             let parsedSub = expense.subcategory ?? ""
             let normalizedParsedSub = parsedSub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
-            let normalizedName = name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+            let normalizedName = expense.name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
 
-            // Search all user categories: first try parser's subcategory hint, then expense name
             outer: for category in categories {
                 for sub in category.subcategories {
                     let normalizedSub = sub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
@@ -143,78 +212,143 @@ struct VoiceConfirmationSheet: View {
                 }
             }
 
-            // If still nothing, check UserLearning (stores real category/subcategory names the user confirmed)
-            if selectedCategory == nil {
-                Task {
-                    if let learned = await UserLearningManager.shared.getPreference(for: name) {
-                        selectedCategory = categories.first { $0.name == learned.category }
-                        if let learnedSub = learned.subcategory,
-                           let cat = selectedCategory,
-                           cat.subcategories.contains(learnedSub) {
-                            selectedSubcategory = learnedSub
-                        }
+            // Fallback: match expense.category field directly
+            if selectedCategory == nil, !expense.category.isEmpty {
+                let targetCat = expense.category
+                    .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                    .unicodeScalars
+                    .filter { CharacterSet.letters.union(.whitespaces).contains($0) }
+                    .reduce("") { $0 + String($1) }
+                    .trimmingCharacters(in: .whitespaces)
+                selectedCategory = categories.first { cat in
+                    let catName = cat.name
+                        .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        .unicodeScalars
+                        .filter { CharacterSet.letters.union(.whitespaces).contains($0) }
+                        .reduce("") { $0 + String($1) }
+                        .trimmingCharacters(in: .whitespaces)
+                    return catName == targetCat
+                }
+            }
+
+            // Fallback: UserLearningManager (async — still before isInitialized = true)
+            if selectedCategory == nil,
+               let learned = await UserLearningManager.shared.getPreference(for: expense.name)
+            {
+                selectedCategory = categories.first { $0.name == learned.category }
+                if let learnedSub = learned.subcategory,
+                   let cat = selectedCategory,
+                   cat.subcategories.contains(learnedSub)
+                {
+                    selectedSubcategory = learnedSub
+                }
+            }
+
+            // — PHASE 2: Unlock onChange cancellation, start countdown —
+            // IMPORTANT: sleep one runloop tick BEFORE setting isInitialized = true.
+            // After the async UserLearningManager call, SwiftUI queues onChange
+            // for selectedCategory/selectedSubcategory on the next run loop.
+            // If we set isInitialized = true immediately, those fire with isInitialized = true
+            // and call cancelCountdown() — killing the timer before it starts.
+            // The 50ms sleep lets them fire safely while isInitialized is still false.
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            isInitialized = true
+
+            guard autoConfirmDuration > 0, !countdownCancelled, canSave else { return }
+
+            let tickNs: UInt64 = 250_000_000 // 0.25s per tick
+            let totalTicks = Int(autoConfirmDuration / 0.25)
+            var lastHapticSecond = Int(ceil(autoConfirmDuration)) + 1
+
+            for tick in 1...totalTicks {
+                guard !countdownCancelled else { return }
+                try? await Task.sleep(nanoseconds: tickNs)
+                guard !countdownCancelled else { return }
+
+                let remaining = autoConfirmDuration - Double(tick) * 0.25
+                timeRemaining = max(0, remaining)
+                progress = max(0, timeRemaining / autoConfirmDuration)
+
+                // Haptic en cada segundo de la cuenta atrás
+                let currentSecond = Int(ceil(remaining))
+                if currentSecond < lastHapticSecond && currentSecond >= 0 {
+                    lastHapticSecond = currentSecond
+                    if currentSecond <= 3 && currentSecond > 0 {
+                        HapticManager.shared.impact(.medium)
+                    } else if currentSecond > 0 {
+                        HapticManager.shared.selection()
                     }
                 }
             }
-        }
-        .onReceive(timer) { _ in
-            // Only count down if form is valid
-            if timeRemaining > 0 && canConfirm {
-                let previousTime = timeRemaining
-                timeRemaining -= 0.1
-                progress = timeRemaining / autoConfirmDuration
 
-                if previousTime > 1.0 && timeRemaining <= 1.0 {
-                    HapticManager.shared.notification(.warning)
-                }
-            } else if timeRemaining > 0 && !canConfirm {
-                // Form is invalid, stop timer
-                stopTimer()
-            } else if timeRemaining > -1 && timeRemaining <= 0 {
-                // Timer reached 0 and form is valid
-                confirmExpense()
+            // Countdown complete — auto-save
+            guard !countdownCancelled, canSave else { return }
+            confirmExpense()
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func addSubcategory(to category: Category) {
+        let trimmed = newSubcategoryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard !category.subcategories.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else {
+            HapticManager.shared.notification(.warning)
+            return
+        }
+        let categoryId = category.id ?? category.name
+        let subToAdd = trimmed
+        cancelCountdown()
+        Task {
+            await UserDataManager.shared.addSubcategory(subToAdd, toCategoryId: categoryId)
+            await MainActor.run {
+                selectedSubcategory = subToAdd
+                newSubcategoryName = ""
+                showAddSubcategory = false
+                HapticManager.shared.notification(.success)
             }
         }
     }
 
-    private func stopTimer() {
-        timeRemaining = -1  // Disable timer
+    private func cancelCountdown() {
+        guard isInitialized, !countdownCancelled else { return }
+        countdownCancelled = true
+        timeRemaining = -1
         HapticManager.shared.selection()
     }
 
-    private var canConfirm: Bool {
-        guard let amountValue = Double(amount.replacingOccurrences(of: ",", with: ".")),
-            amountValue > 0,
-            selectedCategory != nil
-        else {
+    private var canSave: Bool {
+        guard let v = Double(amount.replacingOccurrences(of: ",", with: ".")),
+              v > 0, v <= 10_000 else {
             return false
         }
-        return true
+        return selectedCategory != nil
     }
 
     private func confirmExpense() {
         guard let amountValue = Double(amount.replacingOccurrences(of: ",", with: ".")),
+            amountValue > 0,
             let category = selectedCategory
-        else {
-            return
-        }
+        else { return }
 
+        let categoryName = category.name
         let confirmed = Expense(
             amount: amountValue,
             name: name.isEmpty ? "Gasto por voz" : name,
-            category: category.name,
+            category: categoryName,
             subcategory: selectedSubcategory.isEmpty ? nil : selectedSubcategory,
             date: Formatters.isoString(from: Date()),
             paymentMethod: "Tarjeta"
         )
 
-        // 🧠 Reinforcement learning: remember this merchant → category mapping
-        Task {
-            await UserLearningManager.shared.learn(
-                merchant: confirmed.name,
-                category: category.name,
-                subcategory: selectedSubcategory.isEmpty ? nil : selectedSubcategory
-            )
+        if !categoryName.isEmpty {
+            Task {
+                await UserLearningManager.shared.learn(
+                    merchant: confirmed.name,
+                    category: categoryName,
+                    subcategory: selectedSubcategory.isEmpty ? nil : selectedSubcategory
+                )
+            }
         }
 
         HapticManager.shared.impact(.medium)
@@ -223,15 +357,89 @@ struct VoiceConfirmationSheet: View {
     }
 }
 
-// Circular progress indicator
-struct CircularProgressView: View {
-    let progress: Double
-    let timeRemaining: Double
+// MARK: - Auto-Save Bottom Bar (native iOS style)
 
-    private var timeColor: Color {
-        switch timeRemaining {
-        case 1.5...: return .green
-        case 0.75..<1.5: return .yellow
+private struct AutoSaveBar: View {
+    let timeRemaining: Double
+    let progress: Double
+    let onCancel: () -> Void
+
+    private var secondsLeft: Int { max(0, Int(ceil(timeRemaining))) }
+
+    private var accentColor: Color {
+        switch secondsLeft {
+        case 4...: return .green
+        case 2...3: return .orange
+        default: return .red
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Thin progress line at top edge
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(.systemGray5))
+                    Rectangle()
+                        .fill(accentColor)
+                        .frame(width: geo.size.width * progress)
+                        .animation(.linear(duration: 0.25), value: progress)
+                }
+            }
+            .frame(height: 2)
+
+            // Content row
+            HStack(spacing: 12) {
+                // Animated checkmark icon
+                Image(systemName: "checkmark.circle.fill")
+                    .scaledFont(size: 18, weight: .semibold)
+                    .foregroundStyle(accentColor)
+                    .symbolEffect(.pulse, isActive: secondsLeft <= 3)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Guardando automáticamente")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("en \(secondsLeft) segundo\(secondsLeft == 1 ? "" : "s")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .contentTransition(.numericText(countsDown: true))
+                        .animation(.easeInOut(duration: 0.2), value: secondsLeft)
+                }
+
+                Spacer()
+
+                Button(action: onCancel) {
+                    Text("Cancelar")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(accentColor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 7)
+                        .background(accentColor.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+            .background(.bar)  // system-standard material (adapts to dark mode)
+        }
+        .onTapGesture { onCancel() }  // tap anywhere on the bar also cancels
+    }
+}
+
+// MARK: - Toolbar Countdown Ring
+
+struct SaveCountdownButton: View {
+    let timeRemaining: Double
+    let progress: Double
+
+    private var secondsLeft: Int { Int(ceil(timeRemaining)) }
+
+    private var ringColor: Color {
+        switch secondsLeft {
+        case 4...: return .green
+        case 2...3: return .orange
         default: return .red
         }
     }
@@ -239,19 +447,22 @@ struct CircularProgressView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.gray.opacity(0.3), lineWidth: 4)
+                .stroke(ringColor.opacity(0.2), lineWidth: 2.5)
+
             Circle()
                 .trim(from: 0, to: progress)
-                .stroke(timeColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                .stroke(ringColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
                 .rotationEffect(.degrees(-90))
-                .animation(.linear(duration: 0.1), value: progress)
+                .animation(.linear(duration: 0.25), value: progress)
 
-            Text("\(Int(ceil(timeRemaining)))")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(timeColor)
+            Text("\(secondsLeft)")
+                .scaledFont(size: 13, weight: .bold, design: .rounded)
+                .foregroundStyle(ringColor)
+                .contentTransition(.numericText(countsDown: true))
+                .animation(.easeInOut(duration: 0.2), value: secondsLeft)
         }
-        .scaleEffect(timeRemaining <= 1 ? 1.15 : 1.0)
-        .animation(.spring(response: 0.3), value: timeRemaining <= 1)
-        .frame(width: 40, height: 40)
+        .frame(width: 30, height: 30)
+        .scaleEffect(secondsLeft <= 3 ? 1.1 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.6), value: secondsLeft <= 3)
     }
 }

@@ -12,62 +12,112 @@ struct AddCategoryView: View {
     @State private var subcategories: [String] = []
     @State private var showAddSubcategory = false
     @State private var newSubcategoryName = ""
-    @State private var showColorPicker = false
+    @State private var editingSubcategoryIndex: Int?
 
-    var isValid: Bool {
-        !name.isEmpty && !subcategories.isEmpty
+    private let forbiddenChars: [Character] = ["/", "~", "*", "[", "]"]
+
+    private var nameContainsForbiddenChars: Bool {
+        name.contains(where: { forbiddenChars.contains($0) })
+    }
+
+    private var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !nameContainsForbiddenChars
+            && !subcategories.isEmpty
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                // Name with inline preview
-                Section("Nombre") {
+                // Name with inline color preview
+                Section {
                     HStack(spacing: 12) {
                         Circle()
-                            .fill(Color(hex: selectedColor) ?? .gray)
+                            .fill(Color(hex: selectedColor))
                             .frame(width: 44, height: 44)
 
-                        TextField("Ej: Transporte, Salud, etc.", text: $name)
+                        TextField(String(localized: "addCategory.namePlaceholder", defaultValue: "Ej: Transporte, Salud, etc."), text: $name)
                             .font(.body)
+                            .autocorrectionDisabled()
+                            .onChange(of: name) { _, newValue in
+                                let filtered = newValue.filter { !forbiddenChars.contains($0) }
+                                if filtered != newValue { name = filtered }
+                            }
+                    }
+                } header: {
+                    Text(String(localized: "categoryDetail.name.header", defaultValue: "Nombre"))
+                } footer: {
+                    if nameContainsForbiddenChars {
+                        Label(String(localized: "addCategory.forbiddenChars", defaultValue: "No puedes usar: / ~ * [ ]"), systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.red)
                     }
                 }
 
-                // Color - compact button to open advanced picker
-                Section("Color") {
-                    Button {
-                        showColorPicker = true
-                    } label: {
-                        HStack {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(hex: selectedColor) ?? .gray)
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
-                                )
-
-                            Text(selectedColor.uppercased())
-                                .font(.system(.body, design: .monospaced))
-                                .foregroundColor(.primary)
-
-                            Spacer()
-
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                // Color — horizontal scroll picker
+                Section(String(localized: "categoryDetail.color.header", defaultValue: "Color")) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 12) {
+                            ForEach(CategoryColors.allCases, id: \.self) { colorHex in
+                                Button {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                        selectedColor = colorHex
+                                    }
+                                    HapticManager.shared.selection()
+                                } label: {
+                                    Circle()
+                                        .fill(Color(hex: colorHex))
+                                        .frame(width: 36, height: 36)
+                                        .overlay {
+                                            if selectedColor == colorHex {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 14, weight: .bold))
+                                                    .foregroundStyle(.white)
+                                            }
+                                        }
+                                        .scaleEffect(selectedColor == colorHex ? 1.15 : 1.0)
+                                        .animation(
+                                            .spring(response: 0.3, dampingFraction: 0.7),
+                                            value: selectedColor == colorHex
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .contentShape(Rectangle())
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 2)
                     }
-                    .buttonStyle(.plain)
                 }
 
-                // Subcategories
-                Section {
+                // Subcategories — inline editing, same pattern as CategoryDetailView
+                Section(String(localized: "categoryDetail.subcategories.header", defaultValue: "Subcategorías")) {
                     ForEach(subcategories.indices, id: \.self) { index in
-                        HStack {
-                            Text(subcategories[index])
-                            Spacer()
+                        if editingSubcategoryIndex == index {
+                            HStack {
+                                TextField("Nombre", text: $subcategories[index])
+                                    .font(.body)
+
+                                Button {
+                                    withAnimation(.bouncy) {
+                                        editingSubcategoryIndex = nil
+                                        HapticManager.shared.impact(.light)
+                                    }
+                                } label: {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(.green)
+                                        .font(.title3)
+                                }
+                            }
+                        } else {
+                            Button {
+                                withAnimation(.bouncy) {
+                                    editingSubcategoryIndex = index
+                                }
+                            } label: {
+                                Text(subcategories[index])
+                                    .foregroundStyle(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
                     }
                     .onDelete { subcategories.remove(atOffsets: $0) }
@@ -75,7 +125,7 @@ struct AddCategoryView: View {
 
                     if showAddSubcategory {
                         HStack {
-                            TextField("Nombre de subcategoría", text: $newSubcategoryName)
+                            TextField(String(localized: "categoryDetail.newSubcategory", defaultValue: "Nueva subcategoría"), text: $newSubcategoryName)
 
                             Button {
                                 guard !newSubcategoryName.isEmpty else { return }
@@ -88,14 +138,19 @@ struct AddCategoryView: View {
                             } label: {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(.green)
+                                    .font(.title3)
                             }
+                            .disabled(newSubcategoryName.isEmpty)
 
                             Button {
-                                showAddSubcategory = false
-                                newSubcategoryName = ""
+                                withAnimation(.bouncy) {
+                                    showAddSubcategory = false
+                                    newSubcategoryName = ""
+                                }
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
                                     .foregroundStyle(.secondary)
+                                    .font(.title3)
                             }
                         }
                     } else {
@@ -104,26 +159,21 @@ struct AddCategoryView: View {
                                 showAddSubcategory = true
                             }
                         } label: {
-                            Label("Añadir Subcategoría", systemImage: "plus.circle.fill")
+                            Label(String(localized: "categoryDetail.addSubcategory", defaultValue: "Añadir Subcategoría"), systemImage: "plus.circle.fill")
                                 .foregroundStyle(Color.clarityPrimary)
                         }
                     }
-                } header: {
-                    Text("Subcategorías")
-                } footer: {
-                    Text("Añade al menos una subcategoría")
-                        .font(.caption2)
                 }
             }
-            .navigationTitle("Nueva Categoría")
+            .navigationTitle(String(localized: "addCategory.navigationTitle", defaultValue: "Nueva Categoría"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Cancelar")) { dismiss() }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Crear") {
+                    Button(String(localized: "addCategory.createButton", defaultValue: "Crear")) {
                         let category = Category(
                             name: name,
                             color: selectedColor,
@@ -140,16 +190,9 @@ struct AddCategoryView: View {
                 }
             }
         }
-        .sheet(isPresented: $showColorPicker) {
-            AdvancedColorPickerView(selectedColor: $selectedColor)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-        }
     }
 }
 
 #Preview {
-    AddCategoryView { category in
-        print("Created: \(category.name)")
-    }
+    AddCategoryView { _ in }
 }

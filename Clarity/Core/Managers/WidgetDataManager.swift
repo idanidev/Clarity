@@ -2,15 +2,16 @@
 // Manages data sharing between main app and widget via App Group
 
 import Foundation
+import OSLog
 import WidgetKit
 
+@MainActor
 final class WidgetDataManager {
     static let shared = WidgetDataManager()
 
-    private let appGroupID = "group.com.clarity.app"
-    private let todaySpendingKey = "todaySpending"
-    private let weekSpendingKey = "weekSpending"
-    private let lastUpdateKey = "lastWidgetUpdate"
+    private let appGroupID  = "group.com.idanidev.clarity"
+    private let widgetKey   = "widgetData_v2"
+    private let logger = Logger(subsystem: "com.idanidev.clarity", category: "WidgetDataManager")
 
     private var sharedDefaults: UserDefaults? {
         UserDefaults(suiteName: appGroupID)
@@ -18,67 +19,144 @@ final class WidgetDataManager {
 
     private init() {}
 
-    /// Update widget with current spending data
-    /// - Parameters:
-    ///   - todayTotal: Total spending for today
-    ///   - weekTotal: Total spending for current week
-    func updateWidgetData(todayTotal: Double, weekTotal: Double) {
-        guard let defaults = sharedDefaults else {
-            print("⚠️ Failed to access App Group UserDefaults for widget")
-            return
+    // MARK: - Public API
+
+    /// Full update: call this whenever expenses or budget changes.
+    func updateFromExpenses(_ expenses: [Expense], monthBudget: Double? = nil) {
+        let calendar = Calendar.current
+        let now      = Date()
+
+        let weekStart = calendar.date(
+            from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+        ) ?? now
+        let monthStart = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: now)
+        ) ?? now
+
+        // ── Single-pass accumulation ──
+        var todayTotal: Double = 0
+        var weekTotal: Double = 0
+        var monthTotal: Double = 0
+        var todayCategoryTotals: [String: Double] = [:]
+
+        for expense in expenses {
+            guard let d = Formatters.date(from: expense.date) else { continue }
+            let amount = expense.amount
+
+            if d >= monthStart && d <= now {
+                monthTotal += amount
+            }
+            if d >= weekStart && d <= now {
+                weekTotal += amount
+            }
+            if calendar.isDateInToday(d) {
+                todayTotal += amount
+                todayCategoryTotals[expense.category, default: 0] += amount
+            }
         }
 
-        defaults.set(todayTotal, forKey: todaySpendingKey)
-        defaults.set(weekTotal, forKey: weekSpendingKey)
-        defaults.set(Date(), forKey: lastUpdateKey)
+        let topCategory = todayCategoryTotals.max(by: { $0.value < $1.value })?.key
+        let topEmoji = topCategory.map { categoryEmoji(for: $0) } ?? "💳"
 
-        // Trigger widget refresh
-        WidgetCenter.shared.reloadAllTimelines()
-
-        print("✅ Widget data updated: Today=\(todayTotal), Week=\(weekTotal)")
-    }
-
-    /// Calculate and update widget data from expenses
-    /// - Parameter expenses: Array of expenses to calculate from
-    func updateFromExpenses(_ expenses: [Expense]) {
-        let calendar = Calendar.current
-        let now = Date()
-
-        // Calculate today's total
-        let todayTotal = expenses
-            .filter { expense in
-                guard let date = Formatters.date(from: expense.date) else { return false }
-                return calendar.isDateInToday(date)
+        // ── Recent 5 expenses (partial sort) ──
+        let recentExpenses = expenses
+            .sorted { ($0.date, $0.name) > ($1.date, $1.name) }
+            .prefix(5)
+            .map { e -> WidgetExpense in
+                WidgetExpense(
+                    name:     e.name,
+                    amount:   e.amount,
+                    emoji:    categoryEmoji(for: e.category),
+                    category: e.category,
+                    timeAgo:  formatTimeAgo(e.date, calendar: calendar)
+                )
             }
-            .reduce(0) { $0 + $1.amount }
 
-        // Calculate this week's total
-        let weekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
-        let weekTotal = expenses
-            .filter { expense in
-                guard let date = Formatters.date(from: expense.date) else { return false }
-                return date >= weekStart && date <= now
-            }
-            .reduce(0) { $0 + $1.amount }
+        // ── Month name ──
+        let monthName = Formatters.fullMonthName(from: now)
 
-        updateWidgetData(todayTotal: todayTotal, weekTotal: weekTotal)
+        let data = SharedWidgetData(
+            todayTotal:       todayTotal,
+            weekTotal:        weekTotal,
+            monthTotal:       monthTotal,
+            monthBudget:      nil,   // Sin presupuesto en el widget
+            recentExpenses:   Array(recentExpenses),
+            topCategoryEmoji: topEmoji,
+            currency:         "€",
+            monthName:        monthName,
+            updatedAt:        now
+        )
+
+        save(data)
+        logger.debug("✅ [Widget] Updated — Hoy: \(todayTotal)€, Mes: \(monthTotal)€")
     }
 
-    /// Get current widget data (for debugging)
-    func getCurrentWidgetData() -> (today: Double, week: Double)? {
-        guard let defaults = sharedDefaults else { return nil }
-        let today = defaults.double(forKey: todaySpendingKey)
-        let week = defaults.double(forKey: weekSpendingKey)
-        return (today, week)
+    // MARK: - Read (for debugging)
+
+    func getCurrentWidgetData() -> SharedWidgetData? {
+        guard
+            let defaults = sharedDefaults,
+            let raw      = defaults.data(forKey: widgetKey),
+            let decoded  = try? JSONDecoder().decode(SharedWidgetData.self, from: raw)
+        else { return nil }
+        return decoded
     }
 
-    /// Clear widget data
+    // MARK: - Clear
+
     func clearWidgetData() {
-        guard let defaults = sharedDefaults else { return }
-        defaults.removeObject(forKey: todaySpendingKey)
-        defaults.removeObject(forKey: weekSpendingKey)
-        defaults.removeObject(forKey: lastUpdateKey)
+        sharedDefaults?.removeObject(forKey: widgetKey)
         WidgetCenter.shared.reloadAllTimelines()
-        print("🗑️ Widget data cleared")
+        logger.debug("🗑️ [Widget] Data cleared")
+    }
+
+    // MARK: - Private
+
+    private func save(_ data: SharedWidgetData) {
+        guard let defaults = sharedDefaults else {
+            logger.warning("⚠️ [Widget] Cannot access App Group UserDefaults (\(self.appGroupID))")
+            return
+        }
+        if let encoded = try? JSONEncoder().encode(data) {
+            defaults.set(encoded, forKey: widgetKey)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+
+    // MARK: - Category → Emoji
+    // Las categorías de Clarity ya llevan el emoji dentro (ej: "Ocio 🍻", "Alimentación 🛒")
+    // Lo extraemos directamente en lugar de usar una tabla hardcodeada.
+
+    private func categoryEmoji(for category: String) -> String {
+        // Buscar el primer emoji real (codepoint > 127) en la cadena
+        for scalar in category.unicodeScalars {
+            if scalar.properties.isEmoji && scalar.value > 127 {
+                return String(scalar)
+            }
+        }
+        return "💳"
+    }
+
+    /// Elimina los emojis del nombre de categoría para mostrar solo el texto
+    private func cleanCategory(_ raw: String) -> String {
+        raw.unicodeScalars
+            .filter { !$0.properties.isEmoji || $0.value < 127 }
+            .map { Character($0) }
+            .reduce("") { $0 + String($1) }
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    // MARK: - Time Ago
+
+    private func formatTimeAgo(_ dateString: String, calendar: Calendar) -> String {
+        guard let date = Formatters.date(from: dateString) else { return "" }
+        if calendar.isDateInToday(date) {
+            return Formatters.time(from: date)
+        } else if calendar.isDateInYesterday(date) {
+            return "Ayer"
+        } else {
+            let diff = calendar.dateComponents([.day], from: date, to: Date())
+            return "Hace \(diff.day ?? 0)d"
+        }
     }
 }

@@ -1,10 +1,11 @@
 // RecurringExpensesView.swift
 // List of recurring expenses with active/paused sections
 
+import FirebaseAuth
 import SwiftUI
 
 struct RecurringExpensesView: View {
-    @StateObject private var repository = RecurringExpenseRepository()
+    private let repository = DependencyContainer.shared.recurringExpenseRepository
     @State private var expenses: [RecurringExpense] = []
     @State private var isLoading = true
     @State private var showAddSheet = false
@@ -146,10 +147,17 @@ struct RecurringExpensesView: View {
     
     private func loadExpenses() {
         Task {
+            // Esperar auth en simulador (Keychain tarda más)
+            if Auth.auth().currentUser == nil {
+                for _ in 0..<5 {
+                    try? await Task.sleep(for: .milliseconds(300))
+                    if Auth.auth().currentUser != nil { break }
+                }
+            }
             do {
                 expenses = try await repository.fetchAll()
             } catch {
-                print("Error loading recurring expenses: \(error)")
+                // Load errors surface via empty state in View
             }
             isLoading = false
         }
@@ -247,54 +255,25 @@ struct RecurringExpenseRow: View {
                     }
                 }
                 
-                // Badges row - clean layout
-                HStack(spacing: 8) {
-                    // Frequency badge - MORE VISIBLE with color
-                    HStack(spacing: 3) {
-                        Image(systemName: frequencyIcon)
-                            .font(.system(size: 9))
-                        Text(expense.frequency.displayName)
-                            .font(.caption2.weight(.semibold))
-                    }
-                    .foregroundStyle(frequencyColor)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(frequencyColor.opacity(0.15))
-                    .clipShape(Capsule())
-                    
-                    // Day badge
-                    HStack(spacing: 3) {
-                        Image(systemName: "calendar")
-                            .font(.system(size: 9))
-                        Text("Día \(expense.dayOfMonth)")
-                            .font(.caption2.weight(.medium))
-                    }
-                    .foregroundStyle(expense.dayOfMonth == 0 ? .red : .secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(expense.dayOfMonth == 0 ? Color.red.opacity(0.15) : .secondary.opacity(0.12))
-                    .clipShape(Capsule())
-                    
-                    // Month badge - ONLY for non-monthly with valid month
-                    if expense.frequency.needsMonthSelection && expense.billingMonth > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "calendar.badge.clock")
-                                .font(.system(size: 9))
-                            Text(monthName(expense.billingMonth))
-                                .font(.caption2.weight(.medium))
+                // Badges — single row for monthly, two rows for non-monthly
+                if expense.frequency.needsMonthSelection {
+                    VStack(alignment: .leading, spacing: 4) {
+                        frequencyBadge
+                        HStack(spacing: 6) {
+                            dayBadge
+                            if expense.billingMonth > 0 {
+                                monthBadge(for: expense.billingMonth)
+                            } else {
+                                Image(systemName: "exclamationmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
                         }
-                        .foregroundStyle(Color.clarityPrimary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.clarityPrimary.opacity(0.15))
-                        .clipShape(Capsule())
                     }
-                    
-                    // Warning if non-monthly but missing month
-                    if expense.frequency.needsMonthSelection && expense.billingMonth == 0 {
-                        Image(systemName: "exclamationmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.red)
+                } else {
+                    HStack(spacing: 6) {
+                        frequencyBadge
+                        dayBadge
                     }
                 }
             }
@@ -304,7 +283,8 @@ struct RecurringExpenseRow: View {
             // Amount & Toggle
             VStack(alignment: .trailing, spacing: 6) {
                 Text(Formatters.currency(expense.amount))
-                    .font(.system(size: 16, weight: .semibold).monospacedDigit())
+                    .scaledFont(size: 16, weight: .semibold)
+                    .monospacedDigit()
                     .foregroundStyle(expense.active ? .primary : .secondary)
                 
                 Toggle("", isOn: Binding(
@@ -317,14 +297,55 @@ struct RecurringExpenseRow: View {
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(expense.name), \(Formatters.currency(expense.amount)), día \(expense.dayOfMonth), \(expense.active ? "activo" : "pausado")")
+        .accessibilityHint("Pulsa para ver detalle")
     }
     
-    private func monthName(_ month: Int) -> String {
-        let names = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-        guard month >= 1 && month <= 12 else { return "?" }
-        return names[month - 1]
+    // MARK: - Badge Views
+
+    private var frequencyBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: frequencyIcon)
+                .scaledFont(size: 9)
+            Text(expense.frequency.displayName)
+                .font(.caption2.weight(.semibold))
+        }
+        .foregroundStyle(frequencyColor)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(frequencyColor.opacity(0.15))
+        .clipShape(Capsule())
     }
-    
+
+    private var dayBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "calendar")
+                .scaledFont(size: 9)
+            Text("Día \(expense.dayOfMonth)")
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(expense.dayOfMonth == 0 ? .red : .secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(expense.dayOfMonth == 0 ? Color.red.opacity(0.15) : .secondary.opacity(0.12))
+        .clipShape(Capsule())
+    }
+
+    private func monthBadge(for month: Int) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: "calendar.badge.clock")
+                .scaledFont(size: 9)
+            Text(Formatters.shortMonthName(month))
+                .font(.caption2.weight(.medium))
+        }
+        .foregroundStyle(Color.clarityPrimary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 3)
+        .background(Color.clarityPrimary.opacity(0.15))
+        .clipShape(Capsule())
+    }
+
     // Color based on frequency type
     private var frequencyColor: Color {
         switch expense.frequency {

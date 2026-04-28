@@ -48,4 +48,26 @@ extension View {
     func clarityTitleStyle() -> some View {
         modifier(ClarityTitleStyle())
     }
+
+    /// Applies a system font that scales with Dynamic Type settings.
+    /// Use this instead of `.font(.system(size:))` for user-facing content.
+    func scaledFont(size: CGFloat, weight: Font.Weight = .regular, design: Font.Design = .default) -> some View {
+        modifier(ScaledFontModifier(baseSize: size, weight: weight, design: design))
+    }
+}
+
+/// ViewModifier that creates a system font scaled via UIFontMetrics.
+/// When the user changes their Dynamic Type preference, the font re-renders
+/// at the appropriate scaled size while preserving the original proportions.
+private struct ScaledFontModifier: ViewModifier {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    let baseSize: CGFloat
+    let weight: Font.Weight
+    let design: Font.Design
+
+    func body(content: Content) -> some View {
+        let scaled = UIFontMetrics.default.scaledValue(for: baseSize)
+        content.font(.system(size: scaled, weight: weight, design: design))
+    }
 }

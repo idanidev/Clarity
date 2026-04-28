@@ -1,54 +1,128 @@
 default_platform(:ios)
 
+APP_SCHEME = "Clarity"
+APP_PROJECT = "Clarity.xcodeproj"
+
 platform :ios do
+
+  before_all do
+    # Carga API key si existe (evita pedir 2FA en CI / local).
+    api_key_path = "fastlane/api_key.json"
+    if File.exist?(api_key_path)
+      app_store_connect_api_key(
+        key_filepath: api_key_path,
+        in_house: false
+      )
+    end
+  end
 
   # ─── Beta: TestFlight ───
   desc "Build and upload to TestFlight"
   lane :beta do
-    increment_build_number(
-      xcodeproj: "Clarity.xcodeproj"
-    )
+    increment_build_number(xcodeproj: APP_PROJECT)
 
     build_app(
-      project: "Clarity.xcodeproj",
-      scheme: "Clarity",
+      project: APP_PROJECT,
+      scheme: APP_SCHEME,
       export_method: "app-store",
-      clean: true
+      clean: true,
+      output_directory: "build",
+      destination: "generic/platform=iOS",
+      export_options: {
+        signingStyle: "automatic",
+        teamID: "AXK73U74AC"
+      },
+      xcargs: "-allowProvisioningUpdates"
     )
 
     upload_to_testflight(
-      skip_waiting_for_build_processing: true
+      api_key_path: "fastlane/api_key.json",
+      skip_waiting_for_build_processing: true,
+      changelog: ENV["CHANGELOG"] || "Mejoras y correcciones."
     )
+
   end
 
   # ─── Release: App Store ───
-  desc "Build and upload to the App Store"
+  desc "Build and upload to the App Store (metadata + binary)"
   lane :release do
-    increment_build_number(
-      xcodeproj: "Clarity.xcodeproj"
-    )
+    increment_build_number(xcodeproj: APP_PROJECT)
 
     build_app(
-      project: "Clarity.xcodeproj",
-      scheme: "Clarity",
+      project: APP_PROJECT,
+      scheme: APP_SCHEME,
       export_method: "app-store",
-      clean: true
+      clean: true,
+      output_directory: "build"
     )
 
     upload_to_app_store(
+      api_key_path: "fastlane/api_key.json",
       force: true,
       skip_screenshots: true,
-      skip_metadata: false
+      skip_metadata: false,
+      submit_for_review: false,
+      precheck_include_in_app_purchases: false
     )
   end
 
   # ─── Screenshots ───
   desc "Capture App Store screenshots"
   lane :screenshots do
-    capture_screenshots(
-      project: "Clarity.xcodeproj",
-      scheme: "Clarity"
+    capture_screenshots(project: APP_PROJECT, scheme: APP_SCHEME)
+    frame_screenshots(path: "./fastlane/screenshots")
+  end
+
+  # ─── Auditoría local: solo precheck (metadata + rules) ───
+  desc "Pre-submit audit: precheck sobre metadata del App Store"
+  lane :audit do
+    precheck(
+      default_rule_level: :error,
+      include_in_app_purchases: false
     )
   end
 
+  # ─── Tests unitarios solo ───
+  desc "Unit tests only (sin UI tests)"
+  lane :tests do
+    run_tests(
+      project: APP_PROJECT,
+      scheme: APP_SCHEME,
+      devices: ["iPhone 16"],
+      only_testing: ["ClarityTests"]
+    )
+  end
+
+  # ─── Solo metadata + screenshots (sin binario) ───
+  desc "Upload metadata + screenshots (textos, keywords, capturas)"
+  lane :metadata do
+    upload_to_app_store(
+      api_key_path: "fastlane/api_key.json",
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      skip_metadata: false,
+      force: true,
+      precheck_include_in_app_purchases: false,
+      submit_for_review: false
+    )
+  end
+
+  # ─── Solo screenshots ───
+  desc "Upload screenshots only"
+  lane :shots do
+    upload_to_app_store(
+      api_key_path: "fastlane/api_key.json",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      skip_screenshots: false,
+      overwrite_screenshots: true,
+      force: true,
+      precheck_include_in_app_purchases: false,
+      submit_for_review: false
+    )
+  end
+
+  error do |lane, exception|
+    UI.error("❌ Lane #{lane} falló: #{exception.message}")
+  end
 end

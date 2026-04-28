@@ -16,6 +16,7 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
     let recurring: Bool?
     let isRecurring: Bool?
     let recurringId: String?
+    let goalId: String?
     let createdAt: Date?
     let updatedAt: Date?
     
@@ -26,9 +27,7 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
     
     // Computed property for Date
     var dateAsDate: Date {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: date) ?? Date()
+        Formatters.date(from: date) ?? Date.distantPast
     }
     
     nonisolated init(
@@ -44,6 +43,7 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
         recurring: Bool? = nil,
         isRecurring: Bool? = nil,
         recurringId: String? = nil,
+        goalId: String? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil
     ) {
@@ -59,6 +59,7 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
         self.recurring = recurring
         self.isRecurring = isRecurring
         self.recurringId = recurringId
+        self.goalId = goalId
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

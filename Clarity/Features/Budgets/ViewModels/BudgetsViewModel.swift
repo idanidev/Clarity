@@ -4,6 +4,7 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import OSLog
 import Observation
 
 @MainActor
@@ -19,6 +20,7 @@ class BudgetsViewModel {
     
     private let db = Firestore.firestore()
     private let expenseRepository = DependencyContainer.shared.expenseRepository
+    private let logger = Logger(subsystem: "com.idanidev.clarity", category: "BudgetsViewModel")
     
     private var userId: String? {
         Auth.auth().currentUser?.uid
@@ -31,9 +33,7 @@ class BudgetsViewModel {
     }
     
     init() {
-        Task {
-            await loadData()
-        }
+        // No lanzar Task aquí — la View llama .task { await viewModel.loadData() }
     }
     
     func loadData() async {
@@ -87,7 +87,7 @@ class BudgetsViewModel {
                 budgetLimits = [:]
             }
         } catch {
-            print("Error loading budgets: \(error.localizedDescription)")
+            logger.error("Error loading budgets: \(error.localizedDescription)")
         }
     }
     
@@ -120,7 +120,7 @@ class BudgetsViewModel {
             budgetProgress = progress.sorted { $0.percentage > $1.percentage }
             
         } catch {
-            print("Error calculating progress: \(error)")
+            logger.error("Error calculating progress: \(error)")
         }
     }
     
@@ -138,13 +138,13 @@ class BudgetsViewModel {
                     "income": income,
                     "goals": [
                         "categoryGoals": nonZeroBudgets,
-                        "updatedAt": Timestamp(date: Date())
+                        "updatedAt": FieldValue.serverTimestamp()
                     ]
                 ], merge: true)
             
             await calculateProgress()
         } catch {
-            print("❌ Error saving budgets: \(error)")
+            logger.error("❌ Error saving budgets: \(error)")
         }
     }
 }

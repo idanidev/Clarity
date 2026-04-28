@@ -2,6 +2,7 @@
 // Model and manager for saved filter presets
 
 import Foundation
+import OSLog
 import SwiftUI
 
 // MARK: - Filter Preset Model
@@ -23,7 +24,7 @@ struct FilterPreset: Identifiable, Codable, Equatable {
     }
     
     var colorValue: Color {
-        Color(hex: color) ?? .clarityPrimary
+        Color(hex: color)
     }
 }
 
@@ -32,9 +33,10 @@ struct FilterPreset: Identifiable, Codable, Equatable {
 @Observable
 final class FilterPresetManager {
     static let shared = FilterPresetManager()
-    
+
     private(set) var presets: [FilterPreset] = []
     private let storageKey = "clarity_filter_presets"
+    private let logger = Logger(subsystem: "com.idanidev.clarity", category: "FilterPresetManager")
     
     private init() {
         loadPresets()
@@ -74,7 +76,7 @@ final class FilterPresetManager {
             let decoder = JSONDecoder()
             presets = try decoder.decode([FilterPreset].self, from: data)
         } catch {
-            print("Error loading filter presets: \(error)")
+            logger.error("Error loading filter presets: \(error)")
             createDefaultPresets()
         }
     }
@@ -85,7 +87,7 @@ final class FilterPresetManager {
             let data = try encoder.encode(presets)
             UserDefaults.standard.set(data, forKey: storageKey)
         } catch {
-            print("Error saving filter presets: \(error)")
+            logger.error("Error saving filter presets: \(error)")
         }
     }
     

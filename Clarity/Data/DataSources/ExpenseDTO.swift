@@ -15,6 +15,7 @@ struct ExpenseDTO: Codable, Sendable {
     let recurring: Bool?
     let isRecurring: Bool?
     let recurringId: String?
+    let goalId: String?
     let createdAt: Date?
     let updatedAt: Date?
     
@@ -33,6 +34,7 @@ struct ExpenseDTO: Codable, Sendable {
             recurring: recurring,
             isRecurring: isRecurring,
             recurringId: recurringId,
+            goalId: goalId,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -50,6 +52,7 @@ struct ExpenseDTO: Codable, Sendable {
         self.recurring = domain.recurring
         self.isRecurring = domain.isRecurring
         self.recurringId = domain.recurringId
+        self.goalId = domain.goalId
         self.createdAt = domain.createdAt
         self.updatedAt = domain.updatedAt
     }
@@ -58,7 +61,7 @@ struct ExpenseDTO: Codable, Sendable {
     
     enum CodingKeys: String, CodingKey {
         case amount, name, category, subcategory, date, paymentMethod, notes
-        case isDeductible, recurring, isRecurring, recurringId
+        case isDeductible, recurring, isRecurring, recurringId, goalId
         case createdAt, updatedAt
     }
     
@@ -76,7 +79,8 @@ struct ExpenseDTO: Codable, Sendable {
         recurring = try container.decodeIfPresent(Bool.self, forKey: .recurring)
         isRecurring = try container.decodeIfPresent(Bool.self, forKey: .isRecurring)
         recurringId = try container.decodeIfPresent(String.self, forKey: .recurringId)
-        
+        goalId = try container.decodeIfPresent(String.self, forKey: .goalId)
+
         createdAt = Self.decodeDate(from: container, forKey: .createdAt)
         updatedAt = Self.decodeDate(from: container, forKey: .updatedAt)
     }
@@ -95,6 +99,7 @@ struct ExpenseDTO: Codable, Sendable {
         try container.encodeIfPresent(recurring, forKey: .recurring)
         try container.encodeIfPresent(isRecurring, forKey: .isRecurring)
         try container.encodeIfPresent(recurringId, forKey: .recurringId)
+        try container.encodeIfPresent(goalId, forKey: .goalId)
         try container.encodeIfPresent(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }

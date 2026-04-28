@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // No permite escalada de privilegios: el usuario no puede cambiarse
+    // a sí mismo el rol "admin" ni el plan de subscripción desde el cliente.
+    function safeUserDoc() {
+      let incoming = request.resource.data;
+      let existing = resource == null ? {} : resource.data;
+      let roleOk = !('role' in incoming) || incoming.role == existing.get('role', 'user');
+      let subOk  = !('subscription' in incoming) || incoming.subscription == existing.get('subscription', null);
+      let quotaOk = !('aiQuotas' in incoming)
+                    || (incoming.aiQuotas.get('unlimited', false) == existing.get('aiQuotas', {}).get('unlimited', false));
+      return roleOk && subOk && quotaOk;
+    }
+
+    // ── Documento principal del usuario ─────────────────────────────────
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) && safeUserDoc();
+      allow delete: if isOwner(userId);
+
+      // ── Subcolecciones (cubre TODAS, presentes y futuras) ─────────────
+      // Cualquier subcolección bajo users/{uid} hereda permisos de owner.
+      // Evita olvidar añadir reglas cuando se crea una nueva colección.
+      match /{subcollection}/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Documentos anidados más profundos (p.ej. backups/{id}/items/{x}).
+      match /{subcollection}/{docId}/{rest=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ── Default deny ─────────────────────────────────────────────────────
+    // Cualquier ruta no listada arriba se rechaza.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

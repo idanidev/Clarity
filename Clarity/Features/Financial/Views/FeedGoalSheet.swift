@@ -39,11 +39,24 @@ struct FeedGoalSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            ScrollView {
+              VStack(spacing: 24) {
                 // Goal Header
-                VStack(spacing: 8) {
-                    Text(goal.icon ?? "🐖")
-                        .font(.system(size: 56))
+                VStack(spacing: 6) {
+                    Group {
+                        if let sysImage = goal.systemImage, !sysImage.isEmpty {
+                            Image(systemName: sysImage)
+                        } else if let icon = goal.icon, !icon.isEmpty {
+                            if icon.contains(".") || icon.count > 2 {
+                                Image(systemName: icon)
+                            } else {
+                                Text(icon)
+                            }
+                        } else {
+                            Text("🐖")
+                        }
+                    }
+                    .scaledFont(size: 44)
 
                     Text(goal.name)
                         .font(.title3.bold())
@@ -100,16 +113,15 @@ struct FeedGoalSheet: View {
                         .foregroundStyle(.secondary)
                         .textCase(.uppercase)
 
-                    HStack {
+                    HStack(alignment: .firstTextBaseline) {
                         Text("€")
-                            .font(.title.bold())
+                            .scaledFont(size: 28, weight: .bold, design: .rounded)
                             .foregroundStyle(.secondary)
 
                         TextField("0", text: $customAmount)
                             .keyboardType(.decimalPad)
-                            .font(.system(size: 44, weight: .bold, design: .rounded))
+                            .scaledFont(size: 44, weight: .bold, design: .rounded)
                             .onChange(of: customAmount) { _, _ in
-                                // Clear quick selection when typing
                                 selectedQuickAmount = nil
                             }
                     }
@@ -148,7 +160,7 @@ struct FeedGoalSheet: View {
                                     .frame(
                                         width: min(
                                             CGFloat(
-                                                (goal.currentAmount + amount) / goal.targetAmount)
+                                                goal.targetAmount > 0 ? (goal.currentAmount + amount) / goal.targetAmount : 0)
                                                 * geo.size.width, geo.size.width))
                             }
                         }
@@ -162,8 +174,6 @@ struct FeedGoalSheet: View {
                     )
                     .padding(.horizontal)
                 }
-
-                Spacer()
 
                 // Feed Button
                 Button {
@@ -189,6 +199,7 @@ struct FeedGoalSheet: View {
                 .disabled(!isValid)
                 .padding(.horizontal)
                 .padding(.bottom)
+              }
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Alimentar")
@@ -199,7 +210,7 @@ struct FeedGoalSheet: View {
                 }
             }
         }
-        .presentationDetents([.height(550)])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
     }
 
@@ -254,8 +265,7 @@ struct FeedGoalSheet: View {
             currentAmount: 450,
             icon: "✈️"
         ),
-        onFeed: { amount in
-            print("Fed \(amount)")
+        onFeed: { _ in
         }
     )
 }

@@ -36,10 +36,8 @@ class EditExpenseViewModel {
         self.category = expense.category
         self.subcategory = expense.subcategory
         
-        // Parse Date
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        if let parsedDate = formatter.date(from: expense.date) {
+        // Parse Date — usar parser UTC compartido (consistente con storage)
+        if let parsedDate = Formatters.date(from: expense.date) {
             self.date = parsedDate
         }
         
@@ -65,9 +63,7 @@ class EditExpenseViewModel {
         
         isLoading = true
         
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateString = formatter.string(from: date)
+        let dateString = Formatters.localDayString(from: date)
         
         let updatedExpense = Expense(
             id: expenseId,
@@ -83,12 +79,13 @@ class EditExpenseViewModel {
         
         do {
             try await repository.updateExpense(updatedExpense)
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             HapticManager.shared.expenseEdited()
             FeedbackManager.shared.show(.success, title: "Gasto actualizado", message: "\(name) guardado correctamente")
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.safeUserMessage
             showError = true
-            FeedbackManager.shared.show(.error, title: "Error al actualizar", message: error.localizedDescription)
+            FeedbackManager.shared.show(.error, title: "Error al actualizar", message: error.safeUserMessage)
         }
 
         isLoading = false

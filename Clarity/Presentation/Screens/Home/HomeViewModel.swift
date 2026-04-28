@@ -28,6 +28,7 @@ final class HomeViewModel {
 
     // Output
     private(set) var state: HomeViewState = .idle
+    private(set) var hasLoaded = false  // Prevents redundant reloads on tab switch
 
     // Month selector state
     var selectedMonth: Date = Date() {
@@ -45,7 +46,9 @@ final class HomeViewModel {
             searchTask = Task {
                 try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms
                 if !Task.isCancelled {
-                    applyFilters()
+                    // Reload with allTime filter when searching so results cross all months;
+                    // applyFilters() will skip the date filter while searchText is non-empty.
+                    await loadExpenses(silent: true)
                 }
             }
         }
@@ -69,18 +72,8 @@ final class HomeViewModel {
     }
 
     var calculatedSavings: Double {
-        // Ahorro = Ingreso del mes seleccionado - Gastos REALES del mes seleccionado - Ahorro asignado
-        // NUNCA depende de los filtros del usuario, siempre usa el mes seleccionado completo
         let periodExpenses = currentMonthExpenses.reduce(0) { $0 + $1.amount }
         let savingsAllocated = currentMonthlyBudget?.savingsAllocated ?? 0
-
-        logger.debug("💰 CALCULANDO AHORROS:")
-        logger.debug(
-            "   - Gastos reales del mes: \(self.currentMonthExpenses.count) gastos = €\(periodExpenses)"
-        )
-        logger.debug("   - Ingreso del mes: €\(self.monthlyIncome)")
-        logger.debug("   - Ahorro asignado: €\(savingsAllocated)")
-
         return monthlyIncome - periodExpenses - savingsAllocated
     }
 
@@ -114,10 +107,7 @@ final class HomeViewModel {
                 month: month
             )
 
-            if let budget = currentMonthlyBudget {
-                logger.debug("💰 Loaded budget for \(month)/\(year): €\(budget.income)")
-            } else {
-                logger.info("⚠️ No budget found for \(month)/\(year), checking fixed salary...")
+            if currentMonthlyBudget == nil {
                 // Only auto-create for the actual current month (not historical months)
                 let calendar2 = Calendar.current
                 let realYear = calendar2.component(.year, from: Date())
@@ -127,7 +117,7 @@ final class HomeViewModel {
                 }
             }
         } catch {
-            print("❌ Error loading budget for \(month)/\(year): \(error.localizedDescription)")
+            logger.error("❌ Error loading budget for \(month)/\(year): \(error.localizedDescription)")
             currentMonthlyBudget = nil
         }
 
@@ -145,14 +135,6 @@ final class HomeViewModel {
                 month: previousMonth
             )
 
-            if let prevBudget = previousMonthlyBudget {
-                logger.debug(
-                    "💰 Loaded PREVIOUS month budget (\(previousMonth)/\(previousYear)): €\(prevBudget.income)"
-                )
-            } else {
-                logger.info(
-                    "⚠️ No budget found for previous month (\(previousMonth)/\(previousYear))")
-            }
         } catch {
             logger.error("❌ Error loading previous month budget: \(error.localizedDescription)")
             previousMonthlyBudget = nil
@@ -192,7 +174,7 @@ final class HomeViewModel {
     private let getExpensesUseCase: GetExpensesUseCase
     private let deleteExpenseUseCase: DeleteExpenseUseCase
     private let addExpenseUseCase: AddExpenseUseCase
-    private let recurringRepository = RecurringExpenseRepository()
+    private let recurringRepository = DependencyContainer.shared.recurringExpenseRepository
     private let financialService = FinancialService()
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "HomeViewModel")
@@ -212,6 +194,8 @@ final class HomeViewModel {
 
     // Exposed for View Logic (loading check)
     var allExpenses: [Expense] = []
+    /// All historical expenses (from cache, not paginated). Used by MonthComparison, Charts.
+    private(set) var allHistoricalExpenses: [Expense] = []
     var allRecurringRules: [RecurringExpense] = []  // Keep them for reference
 
     // Pagination
@@ -235,14 +219,7 @@ final class HomeViewModel {
         if let savedDefault = UserDataManager.shared.defaultFilter {
             self.selectedFilter = savedDefault
         } else {
-            // Default to current month to show realistic savings (income - current month expenses)
             self.selectedFilter = ExpenseFilter(dateRange: .thisMonth)
-            print("📅 No saved filter - defaulting to This Month to prevent historical accumulation")
-        }
-
-        // 🆕 Load current month's budget for accurate income
-        Task {
-            await loadMonthlyBudget(for: Date())
         }
     }
 
@@ -252,7 +229,23 @@ final class HomeViewModel {
         guard let id = expense.id else { return }
         do {
             try await deleteExpenseUseCase.execute(id: id)
+
+            // Rollback linked piggy bank if this expense was a savings contribution
+            if let goalId = expense.goalId {
+                let comps = Calendar.current.dateComponents([.year, .month], from: expense.dateAsDate)
+                if let year = comps.year, let month = comps.month {
+                    try? await financialService.refundPiggyBank(goalId: goalId, amount: expense.amount)
+                    try? await financialService.updateSavingsAllocated(year: year, month: month, amount: -expense.amount)
+                }
+            }
+
             await loadExpenses()
+            WidgetDataManager.shared.updateFromExpenses(
+                currentMonthExpenses,
+                monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+            )
+            // Avisar a otras VMs (FinancialHub escudos/metas) para refresh inmediato
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(
                 .success, title: "Gasto eliminado",
                 message: "\(expense.name) se ha borrado correctamente")
@@ -266,8 +259,14 @@ final class HomeViewModel {
     // Flag to track if we've attempted to apply the default filter
     private var hasAppliedDefaultFilter = false
 
+    /// Called from .task — skips if data already loaded to avoid re-fetching on tab switch.
+    /// Use refresh() or loadExpenses() directly for forced reloads.
+    func loadIfNeeded() async {
+        guard !hasLoaded else { return }
+        await loadExpenses()
+    }
+
     func loadExpenses(silent: Bool = false) async {
-        print("🔍 loadExpenses called (silent: \(silent))")
 
         // ✅ ESPERAR a que UserDataManager termine de cargar ANTES de continuar
         if !UserDataManager.shared.hasLoaded {
@@ -299,18 +298,14 @@ final class HomeViewModel {
         hasMorePages = true
 
         do {
-            // Load current month's budget to get savingsAllocated
+            // Load budget for the SELECTED month (not necessarily current month)
             let calendar = Calendar.current
-            let now = Date()
-            let currentYear = calendar.component(.year, from: now)
-            let currentMonth = calendar.component(.month, from: now)
+            let selectedYear = calendar.component(.year, from: selectedMonth)
+            let selectedMonthNum = calendar.component(.month, from: selectedMonth)
 
             do {
                 self.currentMonthlyBudget = try await financialService.fetchMonthlyBudget(
-                    year: currentYear, month: currentMonth)
-                logger.debug(
-                    "💰 Loaded monthly budget with savingsAllocated: €\(self.currentMonthlyBudget?.savingsAllocated ?? 0)"
-                )
+                    year: selectedYear, month: selectedMonthNum)
             } catch {
                 logger.warning("⚠️ Failed to load monthly budget: \(error)")
             }
@@ -329,41 +324,52 @@ final class HomeViewModel {
                 customEndDate: monthEnd
             )
 
-            // Fetch Expenses in parallel:
-            // 1. With user's filter (for display)
-            // 2. With month-only filter (for savings calculation - no category/payment filters)
-            async let expensesTask = getExpensesUseCase.executePaginated(
-                page: 0, filter: selectedFilter)
+            // Launch month-savings and rules fetches in parallel
             async let monthExpensesTask = getExpensesUseCase.executePaginated(
                 page: 0, filter: monthOnlyFilter)
+            async let rulesTask = recurringRepository.fetchAll()
 
-            var rules: [RecurringExpense] = []
-            do {
-                rules = try await recurringRepository.fetchAll()
-            } catch {
-                logger.warning("⚠️ Failed to load recurring rules: \(error)")
+            // For display:
+            // • Searching → use local SwiftData cache (ALL expenses, no Firebase pagination limit)
+            //   so annual/old expenses are always findable regardless of month.
+            // • Browsing → paginated Firebase fetch with the selected date filter.
+            let displayExpenses: [Expense]
+            let morePages: Bool
+            if !searchText.isEmpty {
+                displayExpenses = (try? await getExpensesUseCase.execute()) ?? []
+                morePages = false
+            } else {
+                let result = try await getExpensesUseCase.executePaginated(
+                    page: 0, filter: selectedFilter)
+                displayExpenses = result.expenses
+                morePages = result.hasMore
             }
 
-            let result = try await expensesTask
             let monthResult = try await monthExpensesTask
+            let rules = (try? await rulesTask) ?? []
             self.allRecurringRules = rules
 
-            // Sanitize Result
-            // Logic: Deduplicate by period and remove misplaced annuals
-            let sanitized = ExpenseSanitizer.sanitize(expenses: result.expenses, rules: rules)
+            let sanitized = ExpenseSanitizer.sanitize(expenses: displayExpenses, rules: rules)
             let sanitizedMonth = ExpenseSanitizer.sanitize(
                 expenses: monthResult.expenses, rules: rules)
 
             self.allExpenses = sanitized
-            self.currentMonthExpenses = sanitizedMonth  // ✅ Real month expenses, no user filters
-            self.hasMorePages = result.hasMore
+            self.currentMonthExpenses = sanitizedMonth
+            self.hasMorePages = morePages
 
-            let totalRealExpenses = sanitizedMonth.reduce(0) { $0 + $1.amount }
-            logger.debug(
-                "💰 Gastos REALES del mes (sin filtros): \(sanitizedMonth.count) gastos = €\(totalRealExpenses)"
-            )
+            // Load all historical expenses from cache for components that need full history
+            if let allCached = try? await getExpensesUseCase.execute(policy: .cacheFirst()) {
+                self.allHistoricalExpenses = ExpenseSanitizer.sanitize(expenses: allCached, rules: rules)
+            }
 
             applyFilters()
+            hasLoaded = true
+
+            // ── Widget update ──
+            WidgetDataManager.shared.updateFromExpenses(
+                sanitizedMonth,
+                monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+            )
         } catch {
             logger.error("❌ Error loading expenses: \(error)")
             if !silent {
@@ -382,12 +388,13 @@ final class HomeViewModel {
                 page: currentPage, filter: selectedFilter)
 
             self.allExpenses.append(contentsOf: result.expenses)
+            self.allExpenses = deduplicate(expenses: self.allExpenses)
             self.hasMorePages = result.hasMore
 
             applyFilters()  // Re-apply filters to new full set
         } catch {
             // Silently fail or show toast? For infinite scroll, usually silent or small indicator
-            print("Error loading more: \(error)")
+            logger.error("Error loading more: \(error)")
             currentPage -= 1  // Revert page logic
         }
 
@@ -396,6 +403,61 @@ final class HomeViewModel {
 
     func refresh() async {
         await loadExpenses(silent: true)
+    }
+
+    /// Inserts an expense directly into in-memory state — no network roundtrip.
+    /// Used by the voice flow after a successful save so the UI updates instantly.
+    func prependExpense(_ expense: Expense) {
+        allExpenses.insert(expense, at: 0)
+
+        // Also add to current-month array if the expense belongs to this month
+        let monthPrefix = String(format: "%04d-%02d",
+                                 Calendar.current.component(.year, from: Date()),
+                                 Calendar.current.component(.month, from: Date()))
+        if expense.date.hasPrefix(monthPrefix) {
+            currentMonthExpenses.insert(expense, at: 0)
+        }
+
+        // Keep UserDataManager in sync so GoalCardView / FinancialDashboard see the new expense
+        UserDataManager.shared.expenses.insert(expense, at: 0)
+
+        applyFilters()
+
+        // ── Widget update (inmediato, sin esperar red) ──
+        WidgetDataManager.shared.updateFromExpenses(
+            currentMonthExpenses,
+            monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+        )
+    }
+
+    /// Removes an expense from in-memory state (used by undo).
+    func removeExpense(id: String) {
+        allExpenses.removeAll { $0.id == id }
+        currentMonthExpenses.removeAll { $0.id == id }
+        UserDataManager.shared.expenses.removeAll { $0.id == id }
+        applyFilters()
+        WidgetDataManager.shared.updateFromExpenses(
+            currentMonthExpenses,
+            monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+        )
+    }
+
+    /// Duplicates an expense — saves to repository and refreshes state.
+    func duplicateExpense(_ expense: Expense) async throws {
+        let duplicated = Expense(
+            amount: expense.amount,
+            name: expense.name,
+            category: expense.category,
+            subcategory: expense.subcategory,
+            date: Formatters.isoString(from: Date()),
+            paymentMethod: expense.paymentMethod,
+            notes: expense.notes,
+            isDeductible: expense.isDeductible
+        )
+        let id = try await addExpenseUseCase.execute(duplicated)
+        var saved = duplicated
+        saved.id = id
+        prependExpense(saved)
     }
 
     // MARK: - Helpers
@@ -435,14 +497,19 @@ final class HomeViewModel {
         // NOTE: currentMonthExpenses is populated in loadExpenses() with a month-only fetch.
         // We do NOT recompute it here to avoid overwriting with already-filtered allExpenses.
 
-        // Filter by date range (según filtro del usuario)
-        let (startStr, endStr) = selectedFilter.dateRangeForQuery()
-        dateFilteredExpenses = allExpenses.filter { expense in
-            expense.date >= startStr && expense.date <= endStr
+        // When searching we already fetched allTime data, so skip the date filter here.
+        // Otherwise, filter by the selected date range.
+        var result: [Expense]
+        if !searchText.isEmpty {
+            dateFilteredExpenses = allExpenses
+            result = allExpenses
+        } else {
+            let (startStr, endStr) = selectedFilter.dateRangeForQuery()
+            dateFilteredExpenses = allExpenses.filter { expense in
+                expense.date >= startStr && expense.date <= endStr
+            }
+            result = dateFilteredExpenses
         }
-
-        // 3. Apply other filters (Category, Payment, Search)
-        var result = dateFilteredExpenses  // Use the newly filtered dateFilteredExpenses
 
         // Search
         if !searchText.isEmpty {
@@ -457,24 +524,15 @@ final class HomeViewModel {
         if !selectedFilter.selectedCategories.isEmpty {
             result = result.filter { expense in
                 selectedFilter.selectedCategories.contains { filterCategory in
-                    // Normalizar categorías: reemplazar `/` y `-` por espacios para comparación
-                    let normalizedExpenseCategory = expense.category
-                        .replacingOccurrences(of: " / ", with: " ")
-                        .replacingOccurrences(of: " - ", with: " ")
-                        .lowercased()
-
-                    let normalizedFilterCategory =
-                        filterCategory
-                        .replacingOccurrences(of: " / ", with: " ")
-                        .replacingOccurrences(of: " - ", with: " ")
-                        .lowercased()
-
-                    // Comparar solo la primera palabra (categoría principal)
-                    let expenseFirstWord =
-                        normalizedExpenseCategory.components(separatedBy: " ").first ?? ""
-                    let filterFirstWord =
-                        normalizedFilterCategory.components(separatedBy: " ").first ?? ""
-
+                    let normalize = { (s: String) -> String in
+                        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                            .replacingOccurrences(of: " / ", with: " ")
+                            .replacingOccurrences(of: " - ", with: " ")
+                    }
+                    let expenseCat = normalize(expense.category)
+                    let filterCat = normalize(filterCategory)
+                    let expenseFirstWord = expenseCat.components(separatedBy: " ").first ?? ""
+                    let filterFirstWord = filterCat.components(separatedBy: " ").first ?? ""
                     return expenseFirstWord == filterFirstWord
                 }
             }

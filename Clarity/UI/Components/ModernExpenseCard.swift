@@ -14,84 +14,99 @@ struct ModernExpenseCard: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        mainContent
-            .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small))
-            .shadow(
-                color: colorScheme == .dark ? .clear : .black.opacity(0.05),
-                radius: 2, x: 0, y: 1
-            )
-    }
-
-    private var mainContent: some View {
-
         HStack(spacing: 0) {
-            // Barra de color de categoría (izquierda)
-            Rectangle()
-                .fill(userDataColor)
-                .frame(width: 4)
+            // Barra lateral con gradiente vertical
+            RoundedRectangle(cornerRadius: 2)
+                .fill(
+                    LinearGradient(
+                        colors: [userDataColor, userDataColor.opacity(0.35)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .frame(width: 3)
+                .padding(.vertical, 8)
+                .padding(.leading, 8)
 
             // Contenido principal
-            VStack(alignment: .leading, spacing: 6) {
-                // Fila 1: Nombre + Importe
-                HStack {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(expense.name)
-                        .font(.system(size: 16, weight: .semibold))
+                        .scaledFont(size: 15, weight: .semibold)
                         .foregroundStyle(DesignTokens.Colors.textPrimary)
                         .lineLimit(1)
 
-                    Spacer(minLength: DesignTokens.Spacing.xs)
-
-                    Text(formattedAmount)
-                        .font(.system(size: 17, weight: .bold, design: .rounded))
-                        .foregroundStyle(DesignTokens.Colors.textPrimary)
-                }
-
-                // Fila 2: Fecha + Método de pago + (Recurrente si aplica)
-                HStack(spacing: 6) {
-                    Text(formattedDate)
-                        .font(.system(size: 12))
-                        .foregroundStyle(DesignTokens.Colors.textSecondary)
-
-                    Text("•")
-                        .foregroundStyle(DesignTokens.Colors.textTertiary)
-                        .font(.system(size: 10))
-
-                    // Icono de método de pago
-                    HStack(spacing: 3) {
-                        Image(systemName: paymentIcon)
-                            .font(.system(size: 10))
-                        Text(expense.paymentMethod)
-                            .font(.system(size: 12))
-                    }
-                    .foregroundStyle(DesignTokens.Colors.textSecondary)
-
-                    Spacer()
-
-                    // Indicador de recurrente
-                    if expense.isRecurring == true || expense.recurring == true {
-                        HStack(spacing: 3) {
-                            Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 10))
-                        }
-                        .foregroundStyle(DesignTokens.Colors.accent)
-                    }
-                    
-                    // Subcategoría si existe
-                    if let sub = expense.subcategory, !sub.isEmpty {
-                        Text(sub)
-                            .font(.system(size: 11))
+                    HStack(spacing: 5) {
+                        Text(formattedDate)
+                            .scaledFont(size: 12)
                             .foregroundStyle(DesignTokens.Colors.textSecondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(DesignTokens.Colors.textSecondary.opacity(0.1))
-                            .clipShape(Capsule())
+
+                        Text("·")
+                            .foregroundStyle(DesignTokens.Colors.textTertiary)
+                            .scaledFont(size: 10)
+
+                        Image(systemName: paymentIcon)
+                            .scaledFont(size: 10)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+
+                        Text(expense.paymentMethod)
+                            .scaledFont(size: 12)
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+
+                        if expense.isRecurring == true || expense.recurring == true {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .scaledFont(size: 10)
+                                .foregroundStyle(DesignTokens.Colors.accent)
+                        }
+
+                        if let sub = expense.subcategory, !sub.isEmpty, sub != "General" {
+                            Text(sub)
+                                .scaledFont(size: 10, weight: .medium)
+                                .foregroundStyle(userDataColor)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(userDataColor.opacity(0.12), in: Capsule())
+                        }
                     }
                 }
+
+                Spacer(minLength: 8)
+
+                Text(formattedAmount)
+                    .scaledFont(size: 16, weight: .heavy, design: .rounded)
+                    .foregroundStyle(userDataColor)
+                    .lineLimit(1)
             }
-            .padding(.horizontal, DesignTokens.Spacing.sm)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 11)
         }
-        .background(DesignTokens.Colors.surface)
+        // Fondo base + tintado sutil del color de categoría
+        .background(
+            ZStack {
+                Color(uiColor: .secondarySystemGroupedBackground)
+                userDataColor.opacity(colorScheme == .dark ? 0.07 : 0.055)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: DesignTokens.Radius.small))
+        // Borde visible en modo claro, invisible en oscuro
+        .overlay(
+            RoundedRectangle(cornerRadius: DesignTokens.Radius.small)
+                .strokeBorder(
+                    colorScheme == .dark
+                        ? Color.clear
+                        : userDataColor.opacity(0.15),
+                    lineWidth: 0.75
+                )
+        )
+        .shadow(
+            color: colorScheme == .dark
+                ? .clear
+                : userDataColor.opacity(0.12),
+            radius: 4, x: 0, y: 2
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(expense.name), \(formattedAmount), \(formattedDate), \(expense.paymentMethod)")
+        .accessibilityHint(onEdit != nil ? "Pulsa para editar" : "")
     }
 
     
@@ -120,18 +135,35 @@ struct ModernExpenseCard: View {
         }
     }
     
+    private static let inputDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
+
+    private static let displayDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d MMM"
+        f.locale = Locale(identifier: "es_ES")
+        return f
+    }()
+
     private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: expense.date) else { return expense.date }
-        
-        formatter.dateFormat = "d MMM"
-        formatter.locale = Locale(identifier: "es_ES")
-        return formatter.string(from: date)
+        guard let date = Self.inputDateFormatter.date(from: expense.date) else { return expense.date }
+
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Hoy" }
+        if calendar.isDateInYesterday(date) { return "Ayer" }
+
+        return Self.displayDateFormatter.string(from: date)
     }
-    
+
     private var formattedAmount: String {
-        String(format: "%.2f€", expense.amount)
+        let value = expense.amount
+        if value.truncatingRemainder(dividingBy: 1) == 0 {
+            return String(format: "%.0f€", value)
+        }
+        return String(format: "%.2f€", value)
     }
 }
 

@@ -2,45 +2,39 @@
 //  AIService.swift
 //  Clarity
 //
-//  Created by Clarity AI on 2026-01-23.
-//  Multi-Provider AI Service (Strategy Pattern)
+//  Multi-Provider AI Service — Gemini 2.0 Flash (primary) + Groq (fallback)
 //
 
 import Foundation
 import OSLog
 
-// MARK: - Protocol (Strategy)
+// MARK: - Protocol
 
 protocol AIServiceProvider {
     var name: String { get }
-    func send(prompt: String, context: String, systemInstruction: String?) async throws -> String
-    func categorizeBatch(descriptions: [String], categories: [String]) async throws -> [String:
-        String]
+    var hasKey: Bool { get }
+    /// messages: OpenAI-style array [{role: system/user/assistant, content: "..."}]
+    func send(messages: [[String: String]]) async throws -> String
 }
 
 extension AIServiceProvider {
-    // Default implementation for providers that don't support custom batching (fallback to loop or basic json)
-    func categorizeBatch(descriptions: [String], categories: [String]) async throws -> [String:
-        String]
-    {
-        // Build a JSON prompt
+    func categorizeBatch(descriptions: [String], categories: [String]) async throws -> [String: String] {
         let prompt = """
             Classify these expenses into the following categories: \(categories.joined(separator: ", ")).
             Return strictly JSON format: {"description": "category"}.
             Expenses:
             \(descriptions.joined(separator: "\n"))
             """
-        let response = try await send(
-            prompt: prompt, context: "", systemInstruction: "You are a JSON classifier.")
-
-        // Basic cleanup and parsing (naive)
-        let cleanJson = response.replacingOccurrences(of: "```json", with: "").replacingOccurrences(
-            of: "```", with: "")
-        guard let data = cleanJson.data(using: .utf8),
-            let dict = try? JSONDecoder().decode([String: String].self, from: data)
-        else {
-            return [:]
-        }
+        let response = try await send(messages: [
+            ["role": "system", "content": "You are a JSON classifier."],
+            ["role": "user", "content": prompt]
+        ])
+        let clean = response
+            .replacingOccurrences(of: "```json", with: "")
+            .replacingOccurrences(of: "```", with: "")
+        guard let data = clean.data(using: .utf8),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
         return dict
     }
 }
@@ -54,9 +48,7 @@ struct AIMessage: Identifiable, Equatable {
     let timestamp: Date
 
     enum Role: String {
-        case user
-        case assistant
-        case system
+        case user, assistant, system
     }
 
     init(role: Role, content: String) {
@@ -73,341 +65,287 @@ enum AIServiceError: LocalizedError {
     case networkError(String)
     case invalidResponse
     case rateLimited
-    case providerUnavailable
 
     var errorDescription: String? {
         switch self {
-        case .noAPIKey:
-            return "API Key no configurada"
-        case .networkError(let message):
-            return "Error de red: \(message)"
-        case .invalidResponse:
-            return "Respuesta inválida del servidor"
-        case .rateLimited:
-            return "Demasiadas solicitudes. Espera un momento."
-        case .providerUnavailable:
-            return "Proveedor de IA no disponible"
+        case .noAPIKey:            return "API Key no configurada"
+        case .networkError(let m): return "Error de red: \(m)"
+        case .invalidResponse:     return "Respuesta inválida del servidor"
+        case .rateLimited:         return "Límite de uso alcanzado. Cambiando proveedor..."
         }
     }
 }
 
-// MARK: - Gemini Provider
+// MARK: - Gemini 2.0 Flash Provider
 
 class GeminiProvider: AIServiceProvider {
-    let name = "Gemini"
+    let name = "Gemini 2.0 Flash"
 
-    // TODO: Move to secure storage (Keychain) for production
+    private static let keychainKey = "clarity.api.gemini"
+
     private var apiKey: String? {
-        return Secrets.geminiAPIKey
+        // 1. Keychain (fuente segura, configurada por el usuario desde Settings)
+        if let key = APIKeychain.get(Self.keychainKey), !key.isEmpty { return key }
+        // 2. Secrets.swift (compilado, solo para desarrollo)
+        return Secrets.geminiAPIKey.isEmpty ? nil : Secrets.geminiAPIKey
     }
 
-    func send(prompt: String, context: String, systemInstruction: String? = nil) async throws
-        -> String
-    {
-        guard let apiKey = apiKey, !apiKey.isEmpty else {
-            throw AIServiceError.noAPIKey
+    static func saveKey(_ key: String) { APIKeychain.set(key, forKey: keychainKey) }
+    static func deleteKey() { APIKeychain.delete(keychainKey) }
+
+    var hasKey: Bool { apiKey != nil }
+
+    private let model = "gemini-2.0-flash"
+
+    func send(messages: [[String: String]]) async throws -> String {
+        guard let apiKey else { throw AIServiceError.noAPIKey }
+
+        // Extract system prompt — Gemini uses system_instruction separately
+        let systemText = messages.first(where: { $0["role"] == "system" })?["content"] ?? ""
+        let conversation = messages.filter { $0["role"] != "system" }
+
+        // Build Gemini contents (roles: "user" / "model")
+        let contents: [[String: Any]] = conversation.map { msg in
+            let role = msg["role"] == "assistant" ? "model" : "user"
+            return ["role": role, "parts": [["text": msg["content"] ?? ""]]]
         }
 
-        let finalContext =
-            systemInstruction != nil ? "\(systemInstruction!)\n\n\(context)" : context
+        var body: [String: Any] = [
+            "contents": contents,
+            "generationConfig": ["maxOutputTokens": 4096, "temperature": 0.65]
+        ]
+        if !systemText.isEmpty {
+            body["system_instruction"] = ["parts": [["text": systemText]]]
+        }
 
-        // Using gemini-2.0-flash-lite (faster, cheaper, supports latest features)
-        let url = URL(
-            string:
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=\(apiKey)"
-        )!
-
+        // API key en header (no en URL — evita logs/proxies/network inspectors)
+        let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent"
+        guard let url = URL(string: urlStr) else { throw AIServiceError.invalidResponse }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.timeoutInterval = 30
-
-        // Build request body
-        let body: [String: Any] = [
-            "contents": [
-                ["role": "user", "parts": [["text": "\(finalContext)\n\nUser: \(prompt)"]]]
-            ],
-            "generationConfig": [
-                "temperature": 0.7,
-                "maxOutputTokens": 1024,
-            ],
-        ]
-
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIServiceError.invalidResponse
+        guard let http = response as? HTTPURLResponse else { throw AIServiceError.invalidResponse }
+        if http.statusCode == 429 { throw AIServiceError.rateLimited }
+        guard http.statusCode == 200 else {
+            throw AIServiceError.networkError("Status \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }
 
-        if httpResponse.statusCode == 429 {
-            throw AIServiceError.rateLimited
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIServiceError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
-        }
-
-        // Parse response
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let candidates = json["candidates"] as? [[String: Any]],
-            let firstCandidate = candidates.first,
-            let content = firstCandidate["content"] as? [String: Any],
-            let parts = content["parts"] as? [[String: Any]],
-            let text = parts.first?["text"] as? String
-        else {
-            throw AIServiceError.invalidResponse
-        }
+              let candidates = json["candidates"] as? [[String: Any]],
+              let content = candidates.first?["content"] as? [String: Any],
+              let parts = content["parts"] as? [[String: Any]],
+              let text = parts.first?["text"] as? String
+        else { throw AIServiceError.invalidResponse }
 
         return text
     }
 }
 
-// MARK: - Groq Provider (Free Tier - Very Fast!)
+// MARK: - Groq Provider
 
 class GroqProvider: AIServiceProvider {
-    let name = "Groq"
+    let name = "Groq (llama-3.3-70b)"
 
-    // Get free API key from https://console.groq.com/keys
+    private static let keychainKey = "clarity.api.groq"
+
     private var apiKey: String? {
-        let savedKey = UserDefaults.standard.string(forKey: "groq_api_key")
-        if let key = savedKey, !key.isEmpty {
-            return key
-        }
-        // Fallback for local testing
-        return Secrets.groqAPIKey
+        if let key = APIKeychain.get(Self.keychainKey), !key.isEmpty { return key }
+        return Secrets.groqAPIKey.isEmpty ? nil : Secrets.groqAPIKey
     }
 
-    // Free models on Groq (very fast inference)
-    private let model = "llama-3.1-8b-instant"
+    static func saveKey(_ key: String) { APIKeychain.set(key, forKey: keychainKey) }
+    static func deleteKey() { APIKeychain.delete(keychainKey) }
 
-    func send(prompt: String, context: String, systemInstruction: String? = nil) async throws
-        -> String
-    {
-        guard let apiKey = apiKey, !apiKey.isEmpty else {
-            throw AIServiceError.noAPIKey
+    var hasKey: Bool { apiKey != nil }
+
+    private let model = "llama-3.3-70b-versatile"
+
+    func send(messages: [[String: String]]) async throws -> String {
+        guard let apiKey else { throw AIServiceError.noAPIKey }
+
+        guard let groqURL = URL(string: "https://api.groq.com/openai/v1/chat/completions") else {
+            throw AIServiceError.invalidResponse
         }
-
-        let url = URL(string: "https://api.groq.com/openai/v1/chat/completions")!
-
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: groqURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 30
 
-        // System instruction handling
-        let systemPrompt = systemInstruction ?? context
-
         let body: [String: Any] = [
             "model": model,
-            "messages": [
-                ["role": "system", "content": systemPrompt],
-                ["role": "user", "content": prompt],
-            ],
-            "max_tokens": 1024,
-            "temperature": 0.7,
+            "messages": messages,
+            "max_tokens": 4096,
+            "temperature": 0.65
         ]
-
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw AIServiceError.invalidResponse
+        guard let http = response as? HTTPURLResponse else { throw AIServiceError.invalidResponse }
+        if http.statusCode == 429 { throw AIServiceError.rateLimited }
+        guard http.statusCode == 200 else {
+            throw AIServiceError.networkError("Status \(http.statusCode): \(String(data: data, encoding: .utf8) ?? "")")
         }
 
-        if httpResponse.statusCode == 429 {
-            throw AIServiceError.rateLimited
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIServiceError.networkError("Status \(httpResponse.statusCode): \(errorMessage)")
-        }
-
-        // Parse OpenAI-compatible response
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-            let choices = json["choices"] as? [[String: Any]],
-            let firstChoice = choices.first,
-            let message = firstChoice["message"] as? [String: Any],
-            let content = message["content"] as? String
-        else {
-            throw AIServiceError.invalidResponse
-        }
+              let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let content = message["content"] as? String
+        else { throw AIServiceError.invalidResponse }
 
         return content
     }
 }
 
-// MARK: - AI Service Manager (Singleton)
+// MARK: - AI Service Manager
 
 @MainActor
 class AIServiceManager {
     static let shared = AIServiceManager()
 
-    private let logger = Logger(
-        subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "AIService")
-
-    enum ProviderType: String, CaseIterable {
-        case gemini = "Gemini"
-        case groq = "Groq"
-    }
-
-    // Available providers
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "AIService")
     private let gemini = GeminiProvider()
     private let groq = GroqProvider()
 
-    // Current selection (stored in UserDefaults)
-    var currentProviderType: ProviderType {
-        get {
-            let rawValue =
-                UserDefaults.standard.string(forKey: "ai_provider") ?? ProviderType.groq.rawValue
-            return ProviderType(rawValue: rawValue) ?? .groq
-        }
-        set {
-            UserDefaults.standard.set(newValue.rawValue, forKey: "ai_provider")
-        }
+    /// Preferred provider key stored in UserDefaults ("gemini" | "groq")
+    var preferredProviderKey: String {
+        get { UserDefaults.standard.string(forKey: "ai_preferred_provider") ?? "gemini" }
+        set { UserDefaults.standard.set(newValue, forKey: "ai_preferred_provider") }
     }
 
     var currentProvider: AIServiceProvider {
-        switch currentProviderType {
-        case .gemini: return gemini
-        case .groq: return groq
-        }
+        preferredProviderKey == "groq" ? groq : gemini
     }
+
+    private var fallbackProvider: AIServiceProvider {
+        preferredProviderKey == "groq" ? gemini : groq
+    }
+
+    var currentProviderName: String { currentProvider.name }
 
     private init() {}
 
     // MARK: - Public API
 
-    /// Generate a response with automatic context injection
-    /// - Parameters:
-    ///   - userMessage: The user's query
-    ///   - customSystemPrompt: Optional override for the AI persona (e.g. Auditor Mode)
-    func generateResponse(userMessage: String, customSystemPrompt: String? = nil) async throws
-        -> String
-    {
-        let context = await buildFinancialContext()
+    /// Sends a message with full financial context + conversation history.
+    /// Automatically falls back to the other provider if rate-limited.
+    func generateResponse(
+        userMessage: String,
+        history: [AIMessage] = [],
+        customSystemPrompt: String? = nil
+    ) async throws -> String {
+        let financialContext = await buildFinancialContext()
+        let persona = customSystemPrompt ?? defaultPersona
+        let systemContent = persona + "\n\n" + financialContext
 
-        logger.info("🧠 Sending to \(self.currentProvider.name): \(userMessage.prefix(50))...")
+        // Build message array: system + last 12 history exchanges + new user message
+        var messages: [[String: String]] = [["role": "system", "content": systemContent]]
+        for msg in history.suffix(12) {
+            let role = msg.role == .assistant ? "assistant" : "user"
+            messages.append(["role": role, "content": msg.content])
+        }
+        messages.append(["role": "user", "content": userMessage])
+
+        logger.info("🧠 [\(self.currentProvider.name)] Sending message (\(userMessage.count) chars)")
 
         do {
-            let response = try await currentProvider.send(
-                prompt: userMessage, context: context, systemInstruction: customSystemPrompt)
+            let response = try await currentProvider.send(messages: messages)
             logger.info("✅ Response received (\(response.count) chars)")
             return response
-        } catch {
-            logger.error("❌ AI Error: \(error.localizedDescription)")
-
-            // Fallback to other provider if primary fails
-            if let fallbackResponse = try? await tryFallback(
-                prompt: userMessage, context: context, systemInstruction: customSystemPrompt)
-            {
-                logger.info("✅ Fallback succeeded")
-                return fallbackResponse
-            }
-
-            throw error
+        } catch AIServiceError.rateLimited {
+            logger.warning("⚠️ Rate limited on \(self.currentProvider.name), trying \(self.fallbackProvider.name)")
+            let response = try await fallbackProvider.send(messages: messages)
+            logger.info("✅ Fallback response received (\(response.count) chars)")
+            return response
         }
-    }
-
-    /// Try the other provider as fallback
-    private func tryFallback(prompt: String, context: String, systemInstruction: String?)
-        async throws -> String
-    {
-        let fallbackProvider: AIServiceProvider = currentProviderType == .gemini ? groq : gemini
-        logger.info("🔄 Trying fallback: \(fallbackProvider.name)")
-        return try await fallbackProvider.send(
-            prompt: prompt, context: context, systemInstruction: systemInstruction)
     }
 
     // MARK: - Batch Operations
 
-    func categorizeExpenses(descriptions: [String], categories: [String]) async throws -> [String:
-        String]
-    {
-        let uniqueDescriptions = Array(Set(descriptions))  // Dedup to save tokens
-        logger.info(
-            "🤖 Categorizing \(uniqueDescriptions.count) items with \(self.currentProvider.name)")
-
-        // Chunking (max 50 to avoid token limits)
-        let chunks = uniqueDescriptions.chunked(into: 50)
+    func categorizeExpenses(descriptions: [String], categories: [String]) async throws -> [String: String] {
+        let unique = Array(Set(descriptions))
+        logger.info("🤖 Categorizing \(unique.count) items")
         var results: [String: String] = [:]
-
-        for chunk in chunks {
-            let chunkResult = try await currentProvider.categorizeBatch(
-                descriptions: chunk, categories: categories)
-            results.merge(chunkResult) { (_, new) in new }
+        for chunk in unique.chunked(into: 50) {
+            let r = try await currentProvider.categorizeBatch(descriptions: chunk, categories: categories)
+            results.merge(r) { _, new in new }
         }
-
         return results
     }
 
-    // MARK: - Dynamic Context Builder
+    // MARK: - Financial Context
 
     private func buildFinancialContext() async -> String {
-        // Fetch current month's budget
         let year = Calendar.current.component(.year, from: Date())
         let month = Calendar.current.component(.month, from: Date())
 
-        // Optimistic fetch (non-blocking if possible, but we need it for context)
-        let budget = try? await FinancialService.shared.fetchMonthlyBudget(year: year, month: month)
+        let financialService = DependencyContainer.shared.financialService
+        async let budget = financialService.fetchMonthlyBudget(year: year, month: month)
+        async let goals = financialService.fetchGoals()
+        async let recurring = DependencyContainer.shared.recurringExpenseRepository.fetchAll()
 
-        // Use PromptBuilder for optimized context
         return PromptBuilder.buildFinancialContext(
             user: UserDataManager.shared.userDocument,
             expenses: UserDataManager.shared.expenses,
-            goals: [],  // Goals can be fetched via FinancialService if needed, passing empty for now or need to inject
-            monthBudget: budget
-        ) + "\n\n" + defaultPersona
+            goals: (try? await goals) ?? [],
+            monthBudget: try? await budget,
+            recurringExpenses: (try? await recurring) ?? []
+        )
     }
+
+    // MARK: - Personas
 
     private var defaultPersona: String {
         """
-        Role: Eres Clarity Advisor, un analista financiero experto y riguroso. NO eres un chatbot básico.
+        Eres Clara, asesora financiera personal dentro de Clarity. \
+        Hablas español natural, directo y con opinión propia — como una amiga que sabe de finanzas, \
+        no como un chatbot corporativo.
 
-        Data Context: Tienes los datos del usuario en <financial_context>.
-        Principles: Usa los principios en <financial_principles> para juzgar las decisiones.
+        DATOS: Los datos REALES del usuario están en <financial_context>. Son tu única fuente de verdad. \
+        Nunca inventes cifras. Si no hay datos de un período, dilo.
 
-        Instrucciones de Pensamiento (Internal Monologue):
-        Antes de responder, DEBES analizar la situación paso a paso dentro de un bloque <analysis>.
-        1. Identifica el estado actual (Income vs Expenses).
-        2. Revisa patrones históricos y tendencias.
-        3. Aplica la regla 50/30/20 y otras reglas financieras relevantes.
-        4. Decide la recomendación.
+        PRIMERA FRASE: SIEMPRE abre con un dato concreto del contexto. Ejemplos:
+        - "Llevas **847€** gastados a día 15, eso es el 62% de tus ingresos..."
+        - "Alimentación se lleva **312€**, un 23% del total — es tu categoría más pesada..."
+        - "A este ritmo acabas el mes en **2.100€**, que son **300€** por encima de lo que ingresas..."
+        NUNCA abras con: "Claro", "Buena pregunta", "Entiendo", "Vamos a ver", "Por supuesto", \
+        "Analizando tus datos", "Según tus datos". Ve directo al dato.
 
-        Instrucciones de Respuesta (Output):
-        - Solo después del análisis, genera la respuesta final al usuario.
-        - Sé directo, usa emojis para suavizar, pero sé firme si la salud financiera corre riesgo.
-        - NO muestres el bloque <analysis> en la respuesta final (o hazlo muy breve si es educativo).
+        FORMATO:
+        - Sin encabezados markdown (sin # ## ###).
+        - **Negritas** para cifras clave y porcentajes.
+        - Emojis con criterio: ⚠️ alerta, ✅ bien, 📉📈 tendencia, 💡 consejo, 🎯 meta.
+        - Frases cortas. Un párrafo = una idea. No más de 3 líneas por bloque.
+        - Pregunta simple → respuesta de 2-4 frases. Análisis completo → detallado pero sin relleno.
 
-        Ejemplos (Few-Shot):
+        ESTILO:
+        - Menciona gastos individuales por nombre real ("esa cena de **45€** en Restaurantes") \
+          para demostrar que has leído los datos, no que estás dando consejos genéricos.
+        - Directa y honesta — si algo está mal, lo dices sin endulzar.
+        - Cierra SIEMPRE con una acción concreta o una pregunta que invite a profundizar.
+        - Zero relleno: nada de "espero haberte ayudado", "no dudes en preguntar", "recuerda que".
+        - Si hay buenas noticias, celébralas en una línea y pasa a lo siguiente.
 
-        Input: "¿Me puedo comprar unas zapatillas de 120€?"
-        <analysis>
-        Income: 1500, Savings: 300 (Allocated). Free Cash: 1200.
-        Spent so far: 800. Remaining: 400.
-        Item cost: 120.
-        Rule Check: Is it a 'Want'? Yes. Do we have excess cash? Yes.
-        Trend: User buys lots of clothes (historical data says 150/month).
-        Recommendation: Yes, but warn about impacting savings goals.
-        </analysis>
-        Response: "✅ Puedes permitírtelas, te quedarían 280€ libres. Peeeero... he visto que este mes ya llevas gasto en ropa. ¿Quizás esperar al mes que viene para no apretar el margen?"
+        ANÁLISIS:
+        - Presupuesto: usa "Realmente disponible" de <resumen> (ya descuenta compromisos fijos). \
+          Compara "Proyección fin de mes" con ingresos para alertar déficit.
+        - Categorías: usa <limites_gasto> si existen — alerta EXCEDIDO/ALERTA. \
+          Top 2-3 categorías más pesadas, picos vs meses anteriores.
+        - Ahorro: "Tasa de ahorro" < 10% → sugiere objetivo concreto. \
+          Estado de huchas en <metas>.
+        - Tendencias: <tendencia_3_meses> para contextualizar. "Media diaria" para evaluar ritmo.
+        - Ritmo: usa <insights> para el indicador de ritmo y el gasto más grande. \
+          Si % gastado > % mes → "vas por delante del ritmo saludable".
+        - Patrones: usa el día de mayor gasto de <insights> para dar consejos específicos \
+          (ej: "Los sábados es cuando más gastas — planifica esos días").
 
-        Input: "Analiza mi mes"
-        <analysis>
-        Income: 2000. Spent: 2100.
-        Over Budget: Yes (100€).
-        Top Category: Restaurants (500€).
-        Rule 50/30/20: Wants are at 40%.
-        Recommendation: Cut dining out immediately.
-        </analysis>
-        Response: "🚨 Alerta roja. Has gastado 100€ más de lo que ingresas. El culpable principal son los Restaurantes (500€). Cierra el grifo ya o tirarás de ahorros."
-
-        Formato de Respuesta: Texto plano natural.
+        LÍMITE: Solo finanzas personales. \
+        Otro tema: "Solo puedo ayudarte con tus finanzas en Clarity."
         """
     }
 }

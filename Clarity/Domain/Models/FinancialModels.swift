@@ -94,7 +94,7 @@ struct MonthlyBudget: Codable, Identifiable, Hashable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(_documentId, forKey: .documentId)
+        try container.encodeIfPresent(documentId, forKey: .documentId)
         try container.encode(userId, forKey: .userId)
         try container.encode(year, forKey: .year)
         try container.encode(month, forKey: .month)
@@ -123,7 +123,11 @@ enum GoalType: String, Codable, CaseIterable {
 struct Goal: Identifiable, Codable, Hashable {
     @DocumentID var documentId: String?
 
-    var id: String { documentId ?? UUID().uuidString }
+    /// Estable: si Firestore aún no ha asignado documentId, usamos un UUID local
+    /// fijado en init. Antes se generaba uno nuevo en cada acceso → ForEach/Set
+    /// rotos y duplicados al actualizar.
+    private let localId: String = UUID().uuidString
+    var id: String { documentId ?? localId }
 
     var userId: String
     var name: String
@@ -132,6 +136,8 @@ struct Goal: Identifiable, Codable, Hashable {
     var targetAmount: Double
     var currentAmount: Double
     var linkedCategoryId: String?  // For Shields
+    var savingsExpenseCategory: String?    // Category for expenses created when feeding this piggy bank
+    var savingsExpenseSubcategory: String? // Subcategory for those expenses
     var deadline: Date?
     var icon: String?  // Emoji fallback
     var systemImage: String?  // SF Symbol (preferred)
@@ -150,6 +156,14 @@ struct Goal: Identifiable, Codable, Hashable {
         var note: String?
     }
 
+    // Excluye `localId` del Codable (es solo para identidad estable en SwiftUI).
+    enum CodingKeys: String, CodingKey {
+        case documentId, userId, name, type, recurrence, targetAmount, currentAmount,
+             linkedCategoryId, savingsExpenseCategory, savingsExpenseSubcategory,
+             deadline, icon, systemImage, colorHex, isArchived, createdAt, updatedAt,
+             savedHistory
+    }
+
     init(
         userId: String = "",
         name: String,
@@ -158,6 +172,8 @@ struct Goal: Identifiable, Codable, Hashable {
         targetAmount: Double,
         currentAmount: Double = 0,
         linkedCategoryId: String? = nil,
+        savingsExpenseCategory: String? = nil,
+        savingsExpenseSubcategory: String? = nil,
         deadline: Date? = nil,
         icon: String? = nil,
         colorHex: String? = nil
@@ -169,6 +185,8 @@ struct Goal: Identifiable, Codable, Hashable {
         self.targetAmount = targetAmount
         self.currentAmount = currentAmount
         self.linkedCategoryId = linkedCategoryId
+        self.savingsExpenseCategory = savingsExpenseCategory
+        self.savingsExpenseSubcategory = savingsExpenseSubcategory
         self.deadline = deadline
         self.icon = icon
         self.colorHex = colorHex

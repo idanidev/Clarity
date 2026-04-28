@@ -114,9 +114,9 @@ class AddExpenseViewModel {
 
         isLoading = true
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        let dateString = formatter.string(from: date)
+        // DatePicker devuelve Date a midnight LOCAL. Formateamos en LOCAL para que
+        // "2026-04-25" represente el día que el usuario eligió, no el día UTC equivalente.
+        let dateString = Formatters.localDayString(from: date)
 
         let expense = Expense(
             amount: amount,
@@ -137,11 +137,13 @@ class AddExpenseViewModel {
                 subcategory: subcategory
             )
             HapticManager.shared.expenseAdded()
+            // Notificar para que dashboards/escudos/metas se refresquen.
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(.success, title: "Gasto añadido", message: "\(name) guardado correctamente")
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.safeUserMessage
             showError = true
-            FeedbackManager.shared.show(.error, title: "Error al guardar", message: error.localizedDescription)
+            FeedbackManager.shared.show(.error, title: "Error al guardar", message: error.safeUserMessage)
         }
 
         isLoading = false

@@ -1,6 +1,6 @@
 // SpeechRecognitionManager.swift
 // Native iOS speech recognition with robust audio session handling
-// Optimized for co-existence with System Sounds
+// Optimized for co-existence with System Sounds + AirPods + maximum accuracy
 
 import AVFoundation
 import Foundation
@@ -18,6 +18,9 @@ class SpeechRecognitionManager {
     var hasPermission = false
     var lastError: RecognitionError?
 
+    /// Circular buffer of recent audio levels for waveform visualizer (last 30 samples)
+    var waveformLevels: [Float] = Array(repeating: 0, count: 30)
+
     static let shared = SpeechRecognitionManager()
 
     // Internal
@@ -28,7 +31,7 @@ class SpeechRecognitionManager {
 
     // Safety & Logging
     private var bufferCount: Int = 0
-    private let maxBuffers = 800  // Safety limit (~8 seconds)
+    private let maxBuffers = 1600  // Safety limit (~16 seconds at 100 buffers/s)
     private let logger = Logger(subsystem: "com.clarity.app", category: "Voice")
     private var isConfiguring = false
 
@@ -42,36 +45,81 @@ class SpeechRecognitionManager {
     // Silence Detection
     private var silenceDetectionTimer: Timer?
     private var lastAudioActivity: Date = Date()
-    private let silenceThreshold: Float = 0.05
-    private let silenceTimeout: TimeInterval = 1.5
+    private let silenceThreshold: Float = 0.02   // muy sensible para capturar voz suave
+    private let silenceTimeout: TimeInterval = 2.2 // tolerante para hablar con pausa natural
+    /// Indica si ya se ha detectado audio real. El timer de silencio NO
+    /// empieza hasta que el micrófono reciba audio por primera vez.
+    private var hasDetectedAudioInput = false
+
+    // Auto-retry on recognition failure
+    nonisolated(unsafe) private var retryRecognitionTask: Task<Void, Never>?  // safe: Task.cancel() is thread-safe
+    private var currentSessionUsedOnDevice = false
+
+    // Waveform ring buffer index
+    private var waveformIndex = 0
+
+    // Vocabulary hints for Spanish expense dictation
+    private static let expenseContextualStrings: [String] = [
+        "euros", "céntimos", "euro", "€",
+        "supermercado", "mercadona", "carrefour", "lidl", "aldi", "dia", "eroski",
+        "restaurante", "cafetería", "café", "bar", "almuerzo", "cena", "desayuno",
+        "gasolina", "gasolinera", "repsol", "bp", "cepsa",
+        "farmacia", "médico", "dentista", "clínica",
+        "transporte", "metro", "bus", "taxi", "uber", "cabify", "renfe",
+        "electricidad", "agua", "gas", "internet", "teléfono", "seguro",
+        "amazon", "zara", "el corte inglés", "h&m", "ikea",
+        "gym", "gimnasio", "netflix", "spotify", "apple",
+        "añade", "agrega", "anota", "gasto", "compra", "pagué", "pago",
+        "veinte", "treinta", "cuarenta", "cincuenta", "cien", "doscientos"
+    ]
 
     private init() {
         self.speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "es-ES"))
+        self.speechRecognizer?.defaultTaskHint = .dictation
         setupInterruptionObservers()
     }
 
     deinit {
         interruptionObserverTask?.cancel()
+        retryRecognitionTask?.cancel()
     }
 
     // MARK: - Pre-warming (Crucial for Speed)
 
     func prepare() {
         Task {
-            // Delegate to Pro SoundManager
+            #if targetEnvironment(simulator)
+            logger.info("🔧 Simulador detectado — skip pre-warm de audio engine")
+            return
+            #else
             SoundManager.shared.configureAudioSession()
-            logger.info("🔥 Audio Engine Pre-warmed (Pro)")
+            // Pre-warm speech recognizer by checking availability
+            guard let recognizer = speechRecognizer else { return }
+            if !recognizer.isAvailable {
+                logger.warning("⚠️ Speech recognizer not available during pre-warm")
+                return
+            }
+            // Touch the audio engine to pre-initialize hardware
+            _ = audioEngine.inputNode
+            logger.info("🔥 Speech Engine Pre-warmed — on-device: \(recognizer.supportsOnDeviceRecognition)")
+            #endif
         }
     }
 
     // MARK: - Recording Control
 
     func startRecording() async throws {
+        #if targetEnvironment(simulator)
+        logger.warning("🔧 Simulador detectado — micrófono no disponible")
+        throw RecognitionError.microphoneUnavailable
+        #endif
         guard !isListening, !isConfiguring else { return }
         isConfiguring = true
         defer { isConfiguring = false }
 
         logger.info("🎤 Starting recording...")
+        retryRecognitionTask?.cancel()
+        retryRecognitionTask = nil
 
         // Clean previous state
         cleanupResources()
@@ -79,36 +127,42 @@ class SpeechRecognitionManager {
         interimTranscript = ""
         lastError = nil
         bufferCount = 0
+        hasDetectedAudioInput = false
+        waveformLevels = Array(repeating: 0, count: 30)
+        waveformIndex = 0
 
-        // Configure audio session
-        SoundManager.shared.configureAudioSession()
+        // Configure audio session for recording
+        // (sin .defaultToSpeaker para compatibilidad con AirPods y Bluetooth)
+        SoundManager.shared.configureForRecording()
 
-        // 3. Create Request
+        // Create Request with maximum quality settings
         recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
         guard let recognitionRequest = recognitionRequest else {
             throw RecognitionError.audioEngineFailure
         }
         recognitionRequest.shouldReportPartialResults = true
-        recognitionRequest.requiresOnDeviceRecognition = false  // Allow server-side for better accuracy if needed
+        recognitionRequest.addsPunctuation = true
 
-        // 4. Configure Input Node
+        // Prefer on-device (faster, private, works offline) with server fallback
+        if speechRecognizer?.supportsOnDeviceRecognition == true {
+            recognitionRequest.requiresOnDeviceRecognition = true
+            currentSessionUsedOnDevice = true
+            logger.info("📱 Using on-device recognition (fast + private)")
+        } else {
+            recognitionRequest.requiresOnDeviceRecognition = false
+            currentSessionUsedOnDevice = false
+            logger.info("☁️ Using server-side recognition")
+        }
+
+        // Vocabulary hints to improve accuracy for expense dictation in Spanish
+        recognitionRequest.contextualStrings = Self.expenseContextualStrings
+
+        // Configure Input Node
         let inputNode = audioEngine.inputNode
-
-        // Remove existing tap if any (Extra safety)
         inputNode.removeTap(onBus: 0)
 
-        // Use inputFormat(forBus: 0) which usually reflects the hardware sample rate (e.g. 24000 or 44100 or 48000)
-        // outputFormat(forBus: 0) can sometimes be the canonical format of the bus which might mismatch hardware.
-        // For installing a tap, we should generally use the node's input format OR 0 (nil) if we want standard.
-        // But `installTap` requires a valid format.
         let recordingFormat = inputNode.inputFormat(forBus: 0)
-
-        // Sometimes inputFormat is 0Hz if not initialized? Check against outputs too if valid.
-        // But typically, on iOS, inputFormat(forBus: 0) provides the correct hardware format.
-
-        // Safety check for valid format
         guard recordingFormat.sampleRate > 0 else {
-            // Fallback: Try output format, but this was causing the crash?
             logger.error("❌ Invalid Audio Format (0 Hz) from inputNode.inputFormat")
             throw RecognitionError.microphoneUnavailable
         }
@@ -120,24 +174,32 @@ class SpeechRecognitionManager {
 
             let level = self.extractAudioLevel(from: buffer)
 
-            // Update UI state and silence detection on MainActor (Swift 6 safe)
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.audioLevel = level
+
+                // Update waveform ring buffer
+                self.waveformLevels[self.waveformIndex % self.waveformLevels.count] = level
+                self.waveformIndex += 1
+
                 if level > self.silenceThreshold {
                     self.lastAudioActivity = Date()
+                    if !self.hasDetectedAudioInput {
+                        self.hasDetectedAudioInput = true
+                        self.logger.info("🎙️ Audio input detected — starting silence timer")
+                    }
                     self.resetSilenceTimer()
                 }
             }
 
-            // Memory Safety Limit
             self.bufferCount += 1
             if self.bufferCount > self.maxBuffers {
+                self.logger.warning("⚠️ Max buffer limit reached — stopping recording")
                 self.stopRecording()
             }
         }
 
-        // 5. Start Engine
+        // Start Engine
         audioEngine.prepare()
         do {
             try audioEngine.start()
@@ -146,54 +208,94 @@ class SpeechRecognitionManager {
             throw RecognitionError.audioEngineFailure
         }
 
-        // 6. Start Task
-        recognitionTask = speechRecognizer?.recognitionTask(with: recognitionRequest) {
+        // Start Recognition Task
+        startRecognitionTask(with: recognitionRequest)
+
+        isListening = true
+        lastAudioActivity = Date()
+        logger.info("✅ Recording active (on-device: \(self.currentSessionUsedOnDevice))")
+    }
+
+    /// Starts (or restarts) a recognition task. Separated so retry logic can call it.
+    private func startRecognitionTask(with request: SFSpeechAudioBufferRecognitionRequest) {
+        recognitionTask?.cancel()
+        recognitionTask = speechRecognizer?.recognitionTask(with: request) {
             [weak self] result, error in
             guard let self = self else { return }
 
             if let result = result {
                 let bestString = result.bestTranscription.formattedString
-                // Update properties on Main Actor
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
                     if result.isFinal {
                         self.transcript = bestString
                         self.interimTranscript = ""
                         self.logger.info("✅ Final Transcript: \(bestString)")
                     } else {
                         self.interimTranscript = bestString
-                        self.logger.info("📝 Interim: \(bestString)")
                     }
                 }
             }
 
             if let error = error {
-                // Ignore "Success" or "User Cancelled" type errors usually
-                if (error as NSError).code != 203 {
-                    self.logger.error("❌ Recognition error: \(error.localizedDescription)")
+                let nsError = error as NSError
+                // Code 203 = "Retry" / kLSRErrorDomain recognition cancelled
+                // Code 209 = on-device model not downloaded yet
+                // Code 301 = network error (server recognition failed)
+                let ignoredCodes = [203, 216, 1110]  // Cancelled / no speech / user stopped
+                if !ignoredCodes.contains(nsError.code) {
+                    self.logger.error("❌ Recognition error [\(nsError.code)]: \(error.localizedDescription)")
                 }
 
                 Task { @MainActor [weak self] in
-                    self?.lastError = .unknownError(error)
+                    guard let self else { return }
+
+                    // If on-device failed with "model unavailable" (209) → retry with server
+                    if nsError.code == 209 && self.currentSessionUsedOnDevice {
+                        self.logger.info("🔄 On-device model unavailable — retrying with server recognition")
+                        self.retryWithServerRecognition()
+                        return
+                    }
+
+                    // For network errors during server recognition, surface the error
+                    if nsError.code == 301 {
+                        self.lastError = .networkError
+                        return
+                    }
+
+                    if !ignoredCodes.contains(nsError.code) {
+                        self.lastError = .unknownError(error)
+                    }
                 }
-                // Don't necessarily stop here, let the UI decide, unless it's fatal
             }
         }
+    }
 
-        isListening = true
-        lastAudioActivity = Date()
-        resetSilenceTimer()
-        logger.info("✅ Recording active")
+    /// Retries recognition using server-side when on-device model is unavailable.
+    private func retryWithServerRecognition() {
+        guard isListening, let existingRequest = recognitionRequest else { return }
+        currentSessionUsedOnDevice = false
+        existingRequest.requiresOnDeviceRecognition = false
+        logger.info("☁️ Switched to server-side recognition mid-session")
+        // The existing request is already receiving buffers — just restart the task
+        startRecognitionTask(with: existingRequest)
     }
 
     func stopRecording() {
         silenceDetectionTimer?.invalidate()
         silenceDetectionTimer = nil
+        hasDetectedAudioInput = false
+        retryRecognitionTask?.cancel()
+        retryRecognitionTask = nil
 
         if audioEngine.isRunning {
             audioEngine.stop()
             recognitionRequest?.endAudio()
             isListening = false
+            // Reset waveform to idle
+            waveformLevels = Array(repeating: 0, count: 30)
             logger.info("🛑 Recording stopped")
+            SoundManager.shared.restoreAfterRecording()
         }
     }
 
@@ -371,12 +473,14 @@ class SpeechRecognitionManager {
     enum RecognitionError: Error, LocalizedError {
         case audioEngineFailure
         case microphoneUnavailable
+        case networkError
         case unknownError(Error)
 
         var errorDescription: String? {
             switch self {
             case .audioEngineFailure: return "Error en el motor de audio"
             case .microphoneUnavailable: return "Micrófono no disponible"
+            case .networkError: return "Sin conexión — activa el reconocimiento en el dispositivo en Ajustes"
             case .unknownError(let e): return e.localizedDescription
             }
         }

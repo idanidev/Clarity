@@ -3,14 +3,14 @@ import SwiftUI
 // MARK: - Category UI Extensions
 extension Category {
     var uiColor: Color {
-        Color(hex: color) ?? .gray
+        Color(hex: color)
     }
 }
 
 // MARK: - DefaultCategory UI Extensions
 extension DefaultCategory {
     var color: Color {
-        Color(hex: defaultColor) ?? .gray
+        Color(hex: defaultColor)
     }
 }
 

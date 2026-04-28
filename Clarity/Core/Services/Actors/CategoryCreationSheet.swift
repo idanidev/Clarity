@@ -119,7 +119,7 @@ struct CategoryCreationSheet: View {
             Section {
                 HStack(spacing: 12) {
                     Circle()
-                        .fill(Color(hex: selectedColor) ?? .gray)
+                        .fill(Color(hex: selectedColor))
                         .frame(width: 44, height: 44)
                     
                     TextField("Ej: Deportes, Mascotas, etc.", text: $name)
@@ -168,7 +168,7 @@ struct CategoryCreationSheet: View {
                             HapticManager.shared.selection()
                         } label: {
                             Circle()
-                                .fill(Color(hex: colorHex) ?? .gray)
+                                .fill(Color(hex: colorHex))
                                 .frame(width: 36, height: 36)
                                 .overlay {
                                     if selectedColor == colorHex {
@@ -349,7 +349,7 @@ struct CategoryCreationSheet: View {
     
     private var currentColor: Color {
         if mode == .newCategory {
-            return Color(hex: selectedColor) ?? .gray
+            return Color(hex: selectedColor)
         } else {
             return selectedExistingCategory?.uiColor ?? .gray
         }

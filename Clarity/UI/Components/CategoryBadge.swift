@@ -84,9 +84,7 @@ struct CategoryBadge: View {
     // MARK: - Computed Properties
     
     private var categoryName: String {
-        // Extraer solo el nombre sin emoji si viene incluido
-        category.split(separator: " ").dropFirst().joined(separator: " ")
-            .isEmpty ? category : String(category.split(separator: " ").dropFirst().joined(separator: " "))
+        category
     }
     
     @ViewBuilder

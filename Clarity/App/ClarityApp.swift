@@ -4,17 +4,24 @@
 import AppIntents
 import FirebaseCore
 import FirebaseFirestore
+import GoogleSignIn
+import OSLog
 import SwiftUI
 import TipKit
+import UserNotifications
+
+private let logger = Logger(subsystem: "com.idanidev.clarity", category: "ClarityApp")
 
 @main
 struct ClarityApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @State private var authViewModel = AuthViewModel()
+    @State private var lockManager = AppLockManager()
 
     @AppStorage("app.theme") private var selectedTheme: String = "system"
 
     @State private var feedbackManager = FeedbackManager.shared
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -27,12 +34,30 @@ struct ClarityApp: App {
                         feedbackManager.dismiss()
                     }
                 }
+
+                // App Lock Overlay
+                if lockManager.isLocked {
+                    LockScreenView(lockManager: lockManager)
+                        .transition(.opacity)
+                        .zIndex(100)
+                }
             }
+            .animation(.easeInOut(duration: 0.2), value: lockManager.isLocked)
             .environment(authViewModel)
-            .environment(feedbackManager)  // Optional if using singleton directly, but good practice
+            .environment(feedbackManager)
+            .environment(lockManager)
+            .dynamicTypeSize(.xSmall ... .accessibility1)
             .preferredColorScheme(colorScheme)
             .task {
                 authViewModel.startListening()
+
+                // Integridad del dispositivo (solo en Release)
+                #if !DEBUG
+                let report = DeviceIntegrity.check()
+                if report.isCompromised {
+                    logger.warning("⚠️ Dispositivo comprometido: \(report.summary)")
+                }
+                #endif
 
                 // Run after Firebase is configured (AppDelegate.didFinishLaunching)
                 ClarityShortcuts.updateAppShortcutParameters()
@@ -40,6 +65,34 @@ struct ClarityApp: App {
                     .displayFrequency(.immediate),
                     .datastoreLocation(.applicationDefault),
                 ])
+            }
+            .onChange(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .background:
+                    lockManager.sceneDidEnterBackground()
+                case .inactive:
+                    break
+                case .active:
+                    lockManager.sceneWillEnterForeground()
+                    UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+                    Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
+                    removeStaleNotifications()
+                @unknown default:
+                    break
+                }
+            }
+        }
+    }
+
+    /// Elimina notificaciones locales con IDs antiguos (daily reminders, etc.)
+    private func removeStaleNotifications() {
+        let center = UNUserNotificationCenter.current()
+        let validIDs: Set<String> = ["clarity.weekly.reminder", "clarity.endofmonth.reminder"]
+        center.getPendingNotificationRequests { requests in
+            let stale = requests.map(\.identifier).filter { !validIDs.contains($0) }
+            if !stale.isEmpty {
+                center.removePendingNotificationRequests(withIdentifiers: stale)
+                logger.debug("🧹 Eliminadas \(stale.count) notificaciones antiguas: \(stale)")
             }
         }
     }
@@ -64,10 +117,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Layer 1: Enable Firestore offline persistence (disk cache for all reads)
         let firestoreSettings = FirestoreSettings()
         firestoreSettings.cacheSettings = PersistentCacheSettings(
-            sizeBytes: FirestoreCacheSizeUnlimited as NSNumber
+            sizeBytes: NSNumber(value: 100 * 1024 * 1024) // 100 MB limit
         )
         Firestore.firestore().settings = firestoreSettings
 
         return true
+    }
+
+    func application(
+        _ app: UIApplication,
+        open url: URL,
+        options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+    ) -> Bool {
+        GIDSignIn.sharedInstance.handle(url)
     }
 }

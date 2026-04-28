@@ -5,7 +5,7 @@ import SwiftUI
 
 // MARK: - Day Expense Model
 struct DayExpense: Identifiable {
-    let id = UUID()
+    var id: TimeInterval { date.timeIntervalSinceReferenceDate }
     let day: Int
     let amount: Double
     let date: Date
@@ -13,7 +13,7 @@ struct DayExpense: Identifiable {
 
 // MARK: - Week Day Data
 struct WeekDayData: Identifiable {
-    let id = UUID()
+    var id: String { dayShort }
     let dayShort: String
     let amount: Double
 }
@@ -36,11 +36,11 @@ struct ExpenseCalendarView: View {
                     // Month header
                     HStack {
                         Text("Calendario de Gastos - \(monthYearString)")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.white)
-                        
+                            .scaledFont(size: 18, weight: .bold)
+                            .foregroundStyle(.primary)
+
                         Spacer()
-                        
+
                         // Navigation arrows
                         HStack(spacing: Spacing.md) {
                             Button {
@@ -49,16 +49,16 @@ struct ExpenseCalendarView: View {
                                 }
                             } label: {
                                 Image(systemName: "chevron.left")
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.secondary)
                             }
-                            
+
                             Button {
                                 withAnimation {
                                     nextMonth()
                                 }
                             } label: {
                                 Image(systemName: "chevron.right")
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -67,8 +67,8 @@ struct ExpenseCalendarView: View {
                     LazyVGrid(columns: columns, spacing: 4) {
                         ForEach(weekdays, id: \.self) { day in
                             Text(day)
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.gray)
+                                .scaledFont(size: 12, weight: .medium)
+                                .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                         }
                     }
@@ -219,13 +219,13 @@ struct CalendarDayCell: View {
     var body: some View {
         VStack(spacing: 2) {
             Text("\(day)")
-                .font(.system(size: 14, weight: isToday ? .bold : .medium))
-                .foregroundColor(isToday ? .white : (hasExpense ? .white : .gray))
+                .scaledFont(size: 14, weight: isToday ? .bold : .medium)
+                .foregroundStyle(isToday ? .white : (hasExpense ? .white : .secondary))
             
             if let expense = expense, expense > 0 {
                 Text("-\(Int(expense))€")
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isToday ? .white : Color(hex: "#A78BFA"))
+                    .scaledFont(size: 9, weight: .medium)
+                    .foregroundStyle(isToday ? Color.white : Color(hex: "#A78BFA"))
             }
         }
         .frame(maxWidth: .infinity)
@@ -247,6 +247,19 @@ struct CalendarDayCell: View {
                     lineWidth: 1.5
                 )
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+    }
+
+    private var accessibilityDescription: String {
+        var desc = "Día \(day)"
+        if isToday { desc += ", hoy" }
+        if let expense = expense, expense > 0 {
+            desc += ", \(Formatters.currency(expense)) en gastos"
+        } else {
+            desc += ", sin gastos"
+        }
+        return desc
     }
 }
 
@@ -262,8 +275,8 @@ struct WeeklyExpenseChart: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Spacing.md) {
             Text("Gastos de la Semana")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundColor(.white)
+                .scaledFont(size: 16, weight: .bold)
+                .foregroundStyle(.primary)
             
             // Bar chart
             HStack(alignment: .bottom, spacing: Spacing.xs) {
@@ -276,8 +289,8 @@ struct WeeklyExpenseChart: View {
                         
                         // Day label
                         Text(day.dayShort)
-                            .font(.system(size: 10))
-                            .foregroundColor(.gray)
+                            .scaledFont(size: 10)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -287,14 +300,14 @@ struct WeeklyExpenseChart: View {
             // Total
             HStack {
                 Text("Total de la semana:")
-                    .font(.system(size: 14))
-                    .foregroundColor(.gray)
-                
+                    .scaledFont(size: 14)
+                    .foregroundStyle(.secondary)
+
                 Spacer()
-                
+
                 Text(String(format: "%.2f €", total))
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
+                    .scaledFont(size: 16, weight: .bold)
+                    .foregroundStyle(.primary)
             }
         }
         .padding()

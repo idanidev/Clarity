@@ -48,7 +48,7 @@ struct DonutChartContent: View {
     }
     
     private var filteredExpenses: [Expense] {
-        var expenses = viewModel.allExpenses // Updated
+        var expenses = viewModel.allHistoricalExpenses
         
         // Apply date range filter
         let dateRange = filter.dateRangeForQuery()
@@ -104,7 +104,7 @@ struct CalendarChartContent: View {
             ProgressView()
                 .tint(Color.clarityPrimary)
             Spacer()
-        } else if viewModel.allExpenses.isEmpty { // Updated
+        } else if viewModel.allHistoricalExpenses.isEmpty { // Updated
             Spacer()
             ContentUnavailableView {
                 Label("Sin datos", systemImage: "calendar")
@@ -113,7 +113,7 @@ struct CalendarChartContent: View {
             }
             Spacer()
         } else {
-            ExpenseCalendarView(expenses: viewModel.allExpenses) // Updated
+            ExpenseCalendarView(expenses: viewModel.allHistoricalExpenses) // Updated
         }
     }
 }

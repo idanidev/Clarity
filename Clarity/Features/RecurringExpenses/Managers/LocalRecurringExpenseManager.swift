@@ -11,7 +11,7 @@ final class LocalRecurringExpenseManager {
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "RecurringExpenses")
     private let lastCheckKey = "lastRecurringExpensesCheck"
-    private let recurringRepo = RecurringExpenseRepository()
+    private let recurringRepo = DependencyContainer.shared.recurringExpenseRepository
     private let expenseRepo = DependencyContainer.shared.expenseRepository
 
     private init() {}
@@ -22,9 +22,11 @@ final class LocalRecurringExpenseManager {
         logger.info("🔍 Verificando gastos recurrentes pendientes...")
 
         let today = Date()
-        let calendar = Calendar.current
-        let currentDay = calendar.component(.day, from: today)
+        // TZ-safe: extraer día del string ISO (currentDate ya es UTC vía Formatters.isoString).
+        // Antes mezclaba Calendar.current (local) con date string (UTC) → discrepancia entre
+        // "día actual" y "fecha del expense" en zonas horarias != UTC.
         let currentDate = Formatters.isoString(from: today)
+        let currentDay = Int(currentDate.suffix(2)) ?? 1
         let currentMonth = String(currentDate.prefix(7)) // YYYY-MM
 
         // Evitar múltiples ejecuciones el mismo día
@@ -49,6 +51,9 @@ final class LocalRecurringExpenseManager {
 
             logger.info("📋 Encontrados \(activeExpenses.count) gastos recurrentes activos")
 
+            // Pre-cargar gastos UNA vez (evita N fetches en loop)
+            let cachedExpenses = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
+
             var created = 0
             var skipped = 0
             var expired = 0
@@ -69,11 +74,12 @@ final class LocalRecurringExpenseManager {
                 }
 
                 // Verificar si corresponde crear según frecuencia y día del mes
-                let shouldCreate = await shouldCreateExpense(
+                let shouldCreate = shouldCreateExpense(
                     recurring: recurring,
                     currentDay: currentDay,
                     currentMonth: currentMonth,
-                    today: today
+                    today: today,
+                    existingExpenses: cachedExpenses
                 )
 
                 if !shouldCreate {
@@ -118,20 +124,33 @@ final class LocalRecurringExpenseManager {
         logger.info("🔧 Recuperando gastos recurrentes perdidos...")
 
         let today = Date()
-        let calendar = Calendar.current
-        let currentDay = calendar.component(.day, from: today)
+        // TZ-safe: extraer día del string ISO (currentDate ya es UTC vía Formatters.isoString).
+        // Antes mezclaba Calendar.current (local) con date string (UTC) → discrepancia entre
+        // "día actual" y "fecha del expense" en zonas horarias != UTC.
         let currentDate = Formatters.isoString(from: today)
+        let currentDay = Int(currentDate.suffix(2)) ?? 1
         let currentMonth = String(currentDate.prefix(7))
+
+        // Guard: run recovery at most once per day (same key as checkAndCreatePendingExpenses)
+        let recoveryKey = "lastRecurringExpensesRecovery"
+        if let lastRecovery = UserDefaults.standard.string(forKey: recoveryKey),
+           lastRecovery == currentDate {
+            logger.info("⏭️ Recovery ya ejecutada hoy (\(currentDate))")
+            return
+        }
 
         do {
             let recurringExpenses = try await recurringRepo.fetchAll()
-            let activeExpenses = recurringExpenses.filter {
-                $0.active && $0.dayOfMonth <= currentDay
-            }
+            let activeAll = recurringExpenses.filter { $0.active }
+
+            // Pre-cargar gastos UNA vez
+            let cachedExpenses = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
 
             var recovered = 0
 
-            for recurring in activeExpenses {
+            // Para cada regla, calcula los meses (de los últimos 12) en los que DEBERÍA haber
+            // un gasto y, si falta, créalo. Esto recupera trimestrales/semestrales/anuales perdidos.
+            for recurring in activeAll {
                 // Verificar si expiró
                 if let endDate = recurring.endDate,
                    let endDateObj = Formatters.date(from: endDate),
@@ -139,17 +158,26 @@ final class LocalRecurringExpenseManager {
                     continue
                 }
 
-                // Verificar si ya existe el gasto de este mes
-                let exists = await expenseExistsForMonth(
-                    recurringId: recurring.id ?? "",
-                    month: currentMonth
-                )
+                let expectedMonths = expectedBillingMonths(for: recurring, anchor: today)
+                for expectedMonth in expectedMonths {
+                    // Solo intentar recuperar meses cuyo día de cobro ya haya pasado
+                    if expectedMonth == currentMonth && recurring.dayOfMonth > currentDay {
+                        continue
+                    }
 
-                if !exists {
-                    // Crear con la fecha correcta del día del mes
-                    let dayStr = String(format: "%02d", recurring.dayOfMonth)
-                    let expenseDate = "\(currentMonth)-\(dayStr)"
+                    let exists = expenseExists(
+                        in: cachedExpenses,
+                        recurringId: recurring.id ?? "",
+                        month: expectedMonth
+                    )
+                    guard !exists else { continue }
 
+                    // Clamp dayOfMonth a días del mes objetivo (evita "2026-04-31" inválido)
+                    let monthDate = Formatters.date(from: "\(expectedMonth)-01") ?? today
+                    let daysIn = Calendar.current.range(of: .day, in: .month, for: monthDate)?.count ?? 30
+                    let safeDay = min(recurring.dayOfMonth, daysIn)
+                    let dayStr = String(format: "%02d", safeDay)
+                    let expenseDate = "\(expectedMonth)-\(dayStr)"
                     let amount = max(0, recurring.amount)
 
                     let newExpense = Expense(
@@ -164,12 +192,12 @@ final class LocalRecurringExpenseManager {
                     )
 
                     _ = try await expenseRepo.addExpense(newExpense)
-
                     logger.info("🔧 Recuperado: \(recurring.name) (\(expenseDate))")
                     recovered += 1
                 }
             }
 
+            UserDefaults.standard.set(currentDate, forKey: recoveryKey)
             logger.info("📊 Gastos recuperados: \(recovered)")
 
         } catch {
@@ -183,21 +211,28 @@ final class LocalRecurringExpenseManager {
         recurring: RecurringExpense,
         currentDay: Int,
         currentMonth: String,
-        today: Date
-    ) async -> Bool {
-        // Verificar que sea el día del mes correcto
-        guard recurring.dayOfMonth == currentDay else {
+        today: Date,
+        existingExpenses: [Expense]
+    ) -> Bool {
+        // Verificar que sea el día del mes correcto.
+        // Edge case: si dayOfMonth=31 y el mes tiene 30 (o 28/29 en feb), usamos el último día del mes
+        // (sin esto, alquileres/suscripciones del 31 nunca se creaban en abril/junio/sept/nov/feb).
+        let cal = Calendar.current
+        let daysInMonth = cal.range(of: .day, in: .month, for: today)?.count ?? 30
+        let effectiveDay = min(recurring.dayOfMonth, daysInMonth)
+        guard effectiveDay == currentDay else {
             return false
         }
 
         let frequency = recurring.frequency
-        let calendar = Calendar.current
-        let currentMonthNum = calendar.component(.month, from: today)
+        // TZ-safe: extraer month del string ISO (currentMonth = "YYYY-MM")
+        let currentMonthNum = Int(currentMonth.suffix(2)) ?? 1
 
         switch frequency {
         case .monthly:
             // Verificar si ya existe este mes
-            return await !expenseExistsForMonth(
+            return !expenseExists(
+                in: existingExpenses,
                 recurringId: recurring.id ?? "",
                 month: currentMonth
             )
@@ -213,7 +248,8 @@ final class LocalRecurringExpenseManager {
             guard monthDiff % 3 == 0 else {
                 return false
             }
-            return await !expenseExistsForMonth(
+            return !expenseExists(
+                in: existingExpenses,
                 recurringId: recurring.id ?? "",
                 month: currentMonth
             )
@@ -229,7 +265,8 @@ final class LocalRecurringExpenseManager {
             guard monthDiff % 6 == 0 else {
                 return false
             }
-            return await !expenseExistsForMonth(
+            return !expenseExists(
+                in: existingExpenses,
                 recurringId: recurring.id ?? "",
                 month: currentMonth
             )
@@ -243,26 +280,54 @@ final class LocalRecurringExpenseManager {
             guard currentMonthNum == billingMonth else {
                 return false
             }
-            return await !expenseExistsForMonth(
+            return !expenseExists(
+                in: existingExpenses,
                 recurringId: recurring.id ?? "",
                 month: currentMonth
             )
         }
     }
 
-    private func expenseExistsForMonth(recurringId: String, month: String) async -> Bool {
-        guard !recurringId.isEmpty else { return false }
+    /// Devuelve los meses ("YYYY-MM") en los que debería existir un cobro de esta regla
+    /// dentro de los últimos 12 meses (incluyendo el actual). Soporta recovery cross-month
+    /// para frecuencias trimestrales / semestrales / anuales.
+    private func expectedBillingMonths(for rule: RecurringExpense, anchor: Date) -> [String] {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month], from: anchor)
+        guard let curYear = comps.year, let curMonth = comps.month else { return [] }
 
-        do {
-            let expenses = try await expenseRepo.getExpenses(policy: .cacheFirst())
+        var result: [String] = []
+        // Recorre 12 meses hacia atrás incluyendo el actual
+        for offset in 0..<12 {
+            guard let date = cal.date(byAdding: .month, value: -offset, to: anchor) else { continue }
+            let yc = cal.component(.year, from: date)
+            let mc = cal.component(.month, from: date)
+            let monthStr = String(format: "%04d-%02d", yc, mc)
 
-            return expenses.contains { expense in
-                expense.recurringId == recurringId &&
-                expense.date.hasPrefix(month)
+            let due: Bool
+            switch rule.frequency {
+            case .monthly:
+                due = true
+            case .quarterly:
+                guard rule.billingMonth >= 1 else { due = false; break }
+                due = (mc - rule.billingMonth + 12) % 3 == 0
+            case .semestral:
+                guard rule.billingMonth >= 1 else { due = false; break }
+                due = (mc - rule.billingMonth + 12) % 6 == 0
+            case .yearly:
+                due = (mc == rule.billingMonth)
             }
-        } catch {
-            logger.error("❌ Error verificando existencia: \(error.localizedDescription)")
-            return false
+            if due { result.append(monthStr) }
         }
+        // Suprime warnings (curYear/curMonth no se usan directamente; mantengo por claridad si en futuro filtramos)
+        _ = (curYear, curMonth)
+        return result
+    }
+
+    /// Comprueba contra una lista pre-cargada de gastos (evita N fetches).
+    /// IMPORTANTE: en caso de duda devuelve `true` para NO duplicar.
+    private func expenseExists(in expenses: [Expense], recurringId: String, month: String) -> Bool {
+        guard !recurringId.isEmpty else { return true }
+        return expenses.contains { $0.recurringId == recurringId && $0.date.hasPrefix(month) }
     }
 }

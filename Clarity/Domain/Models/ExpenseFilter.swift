@@ -201,62 +201,66 @@ struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
     
     // Static helper to avoid actor isolation issues
     nonisolated static func queryRange(for range: DateRange, customStart: Date, customEnd: Date) -> (start: String, end: String) {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        
         let calendar = Calendar.current
         let now = Date()
         
         let (startDate, endDate): (Date, Date) = {
             switch range {
             case .allTime:
-                let start = calendar.date(byAdding: .year, value: -20, to: now)!
-                let end = calendar.date(byAdding: .year, value: 50, to: now)!
+                let start = calendar.date(byAdding: .year, value: -20, to: now) ?? now
+                let end = calendar.date(byAdding: .year, value: 50, to: now) ?? now
                 return (start, end)
             case .today:
                 let start = calendar.startOfDay(for: now)
                 return (start, now)
             case .yesterday:
-                let yesterday = calendar.date(byAdding: .day, value: -1, to: now)!
+                let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now
                 let start = calendar.startOfDay(for: yesterday)
-                let end = calendar.date(byAdding: .day, value: 1, to: start)!
+                let end = calendar.date(byAdding: .day, value: 1, to: start) ?? now
                 return (start, end)
             case .thisWeek:
-                let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
+                let start = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
                 return (start, now)
             case .lastWeek:
-                let thisWeekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now))!
-                let start = calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart)!
+                let thisWeekStart = calendar.date(from: calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)) ?? now
+                let start = calendar.date(byAdding: .weekOfYear, value: -1, to: thisWeekStart) ?? now
                 return (start, thisWeekStart)
             case .thisMonth:
-                let start = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
-                let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start)!
+                let start = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+                let end = calendar.date(byAdding: DateComponents(month: 1, day: -1), to: start) ?? now
                 return (start, end)
             case .lastMonth:
-                let thisMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
-                let start = calendar.date(byAdding: .month, value: -1, to: thisMonthStart)!
-                return (start, thisMonthStart)
+                let thisMonthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: now)) ?? now
+                let start = calendar.date(byAdding: .month, value: -1, to: thisMonthStart) ?? now
+                let end = calendar.date(byAdding: .day, value: -1, to: thisMonthStart) ?? now
+                return (start, end)
             case .last3Months:
-                let start = calendar.date(byAdding: .month, value: -3, to: now)!
+                let start = calendar.date(byAdding: .month, value: -3, to: now) ?? now
                 return (start, now)
             case .last6Months:
-                let start = calendar.date(byAdding: .month, value: -6, to: now)!
+                let start = calendar.date(byAdding: .month, value: -6, to: now) ?? now
                 return (start, now)
             case .last12Months:
-                let start = calendar.date(byAdding: .month, value: -12, to: now)!
+                let start = calendar.date(byAdding: .month, value: -12, to: now) ?? now
                 return (start, now)
             case .thisYear:
-                let start = calendar.date(from: calendar.dateComponents([.year], from: now))!
+                let start = calendar.date(from: calendar.dateComponents([.year], from: now)) ?? now
                 return (start, now)
             case .lastYear:
-                let thisYearStart = calendar.date(from: calendar.dateComponents([.year], from: now))!
-                let start = calendar.date(byAdding: .year, value: -1, to: thisYearStart)!
+                let thisYearStart = calendar.date(from: calendar.dateComponents([.year], from: now)) ?? now
+                let start = calendar.date(byAdding: .year, value: -1, to: thisYearStart) ?? now
                 return (start, thisYearStart)
             case .custom:
                 return (customStart, customEnd)
             }
         }()
         
-        return (formatter.string(from: startDate), formatter.string(from: endDate))
+        // Las fechas en queryRange se calculan con Calendar.current (LOCAL).
+        // Las fechas guardadas (vía DatePicker → localDayString) también son LOCAL.
+        // Para que coincidan formateamos sin TZ explícita (= local del dispositivo).
+        let fmt = DateFormatter()
+        fmt.dateFormat = "yyyy-MM-dd"
+        fmt.locale = Locale(identifier: "en_US_POSIX")
+        return (fmt.string(from: startDate), fmt.string(from: endDate))
     }
 }

@@ -3,7 +3,7 @@
 // Created by Clarity Team on 2026-01-12.
 
 import FirebaseAuth
-import FirebaseFirestore
+@preconcurrency import FirebaseFirestore
 import Foundation
 import OSLog
 
@@ -27,18 +27,18 @@ actor UserDataService {
 
     // MARK: - Public API
 
-    /// Carga las categorías del usuario desde Firestore
-    /// Patrón cache-first: sirve inmediatamente desde disco, actualiza en background si hay red.
+    /// Carga las categorías del usuario desde Firestore.
+    /// Fase 1 (esta release): MAP FIELD = source of truth (compat 2.0.x).
+    /// Subcolección se mantiene espejo via dual-write para usar en futuro v3.
+    /// Esto evita que un delete desde 2.0.2 deje categoría "fantasma" en 2.0.3.
     func loadCategories(userId: String) async throws -> (categories: [Category], version: String?) {
         let docRef = db.collection("users").document(userId)
 
-        // Try cache first for instant load, fallback to server
         let doc: DocumentSnapshot
         do {
-            doc = try await docRef.getDocument(source: .cache)
-            logger.debug("📦 Categories loaded from Firestore cache")
+            let cached = try await docRef.getDocument(source: .cache)
+            doc = cached.exists ? cached : try await docRef.getDocument(source: .server)
         } catch {
-            logger.debug("⬇️ Cache miss for categories, fetching from server...")
             doc = try await docRef.getDocument(source: .server)
         }
 
@@ -49,29 +49,50 @@ actor UserDataService {
             return (createDefaultCategories(), nil)
         }
 
-        var loadedCategories: [Category] = []
+        var loaded: [Category] = []
         var order = 0
-
         for (key, categoryData) in categoriesMap {
             let name = categoryData["name"] as? String ?? key
             let color = categoryData["color"] as? String ?? "#6366F1"
             let subcategories = categoryData["subcategories"] as? [String] ?? []
-
-            let category = Category(
-                id: key,
-                name: name,
-                color: color,
-                subcategories: subcategories,
-                order: order,
-                createdAt: Date(),
-                updatedAt: Date()
-            )
-            loadedCategories.append(category)
+            loaded.append(Category(
+                id: key, name: name, color: color,
+                subcategories: subcategories, order: order,
+                createdAt: nil, updatedAt: nil
+            ))
             order += 1
         }
 
-        let sorted = loadedCategories.sorted { $0.name < $1.name }
+        // Espejar a subcolección en background (preparación futura v3, no afecta lectura)
+        Task { try? await mirrorCategoriesToSubcollection(userId: userId, map: categoriesMap) }
+
+        let sorted = loaded.sorted { $0.name < $1.name }
         return (sorted, doc.data()?["categoriesVersion"] as? String)
+    }
+
+    /// Espejo Fase 1: replica el map field a la subcolección + borra docs huérfanos.
+    /// Mantiene la subcolección como espejo exacto del map (source of truth).
+    /// Cuando todos los users estén en v2.0.3+, en v3 podemos invertir y leer de subcolección.
+    private func mirrorCategoriesToSubcollection(userId: String, map: [String: [String: Any]]) async throws {
+        let subRef = db.collection("users").document(userId).collection("categories")
+        let mapKeys = Set(map.keys)
+
+        // 1) Upsert entradas del map a subcolección
+        for (key, data) in map {
+            try await subRef.document(key).setData([
+                "name": data["name"] as? String ?? key,
+                "color": data["color"] as? String ?? "#6366F1",
+                "subcategories": data["subcategories"] as? [String] ?? [],
+                "order": data["order"] as? Int ?? 0,
+                "mirroredAt": FieldValue.serverTimestamp(),
+            ], merge: true)
+        }
+
+        // 2) Borrar docs huérfanos en subcolección (si user borró desde 2.0.2)
+        let snap = try await subRef.getDocuments()
+        for doc in snap.documents where !mapKeys.contains(doc.documentID) {
+            try? await doc.reference.delete()
+        }
     }
 
     /// Carga métodos de pago únicos basados en el historial de gastos
@@ -79,7 +100,8 @@ actor UserDataService {
         let ref = db.collection("users").document(userId).collection("expenses").limit(to: 100)
         let snapshot: QuerySnapshot
         do {
-            snapshot = try await ref.getDocuments(source: .cache)
+            let cached = try await ref.getDocuments(source: .cache)
+            snapshot = cached.isEmpty ? try await ref.getDocuments(source: .server) : cached
         } catch {
             snapshot = try await ref.getDocuments(source: .server)
         }
@@ -92,13 +114,16 @@ actor UserDataService {
         return methods
     }
 
-    /// Guarda o actualiza una categoría
+    /// Guarda o actualiza una categoría.
+    /// Fase 1 dual-write: escribe a map field (compat 2.0.x) Y a subcolección (futuro).
     func saveCategory(_ category: Category, userId: String, oldName: String? = nil) async throws {
         let categoryData: [String: Any] = [
             "name": category.name,  // El nombre puede tener /, ~, etc. ¡No importa!
             "color": category.color,
             "subcategories": category.subcategories,
         ]
+        let docRef = db.collection("users").document(userId)
+        let subRef = docRef.collection("categories")
 
         if let existingId = category.id, !existingId.isEmpty {
             // ACTUALIZACIÓN - verificar si el ID tiene caracteres prohibidos
@@ -109,26 +134,25 @@ actor UserDataService {
                     "⚠️ Migrando categoría '\(category.name)' de ID antiguo '\(existingId)' a nuevo UUID '\(newId)'"
                 )
 
-                // Eliminar la entrada antigua y crear una nueva
-                try await db.collection("users").document(userId).updateData([
+                // Atómico: add-new + delete-old en un solo updateData (antes eran 2 ops
+                // separadas; si la 2a fallaba el usuario veía la categoría duplicada).
+                try await docRef.updateData([
                     "categories.\(newId)": categoryData,
-                    "categoriesVersion": UUID().uuidString,
-                    "categoriesUpdatedAt": FieldValue.serverTimestamp(),
-                ])
-
-                // Ahora eliminar la antigua usando FieldPath para IDs con caracteres especiales
-                try await db.collection("users").document(userId).updateData([
                     FieldPath(["categories", existingId]): FieldValue.delete(),
                     "categoriesVersion": UUID().uuidString,
                     "categoriesUpdatedAt": FieldValue.serverTimestamp(),
                 ])
+                // Subcolección: nuevo doc, borra viejo
+                try await subRef.document(newId).setData(categoryData, merge: true)
+                try? await subRef.document(existingId).delete()
             } else {
-                // ID seguro - actualizar normalmente
-                try await db.collection("users").document(userId).updateData([
+                // ID seguro - actualizar map + subcolección
+                try await docRef.updateData([
                     "categories.\(existingId)": categoryData,
                     "categoriesVersion": UUID().uuidString,
                     "categoriesUpdatedAt": FieldValue.serverTimestamp(),
                 ])
+                try await subRef.document(existingId).setData(categoryData, merge: true)
             }
 
             // ✅ Si el nombre cambió, actualizar TODOS los gastos con el nombre antiguo
@@ -139,11 +163,12 @@ actor UserDataService {
         } else {
             // NUEVA - crear UUID único
             let newId = UUID().uuidString
-            try await db.collection("users").document(userId).updateData([
+            try await docRef.updateData([
                 "categories.\(newId)": categoryData,
                 "categoriesVersion": UUID().uuidString,
                 "categoriesUpdatedAt": FieldValue.serverTimestamp(),
             ])
+            try await subRef.document(newId).setData(categoryData, merge: true)
         }
     }
 
@@ -178,14 +203,15 @@ actor UserDataService {
         return string.contains(where: { forbidden.contains($0) })
     }
 
-    /// Elimina una categoría
+    /// Elimina una categoría (dual-delete: map field + subcolección)
     func deleteCategory(id: String, userId: String) async throws {
-        // Usar FieldPath para manejar IDs con caracteres especiales
-        try await db.collection("users").document(userId).updateData([
+        let docRef = db.collection("users").document(userId)
+        try await docRef.updateData([
             FieldPath(["categories", id]): FieldValue.delete(),
             "categoriesVersion": UUID().uuidString,
             "categoriesUpdatedAt": FieldValue.serverTimestamp(),
         ])
+        try? await docRef.collection("categories").document(id).delete()
     }
 
     /// Añade una subcategoría a una categoría existente
@@ -225,11 +251,13 @@ actor UserDataService {
             "subcategories": subcategories,
         ]
 
-        try await db.collection("users").document(userId).updateData([
+        // Dual-write: map field + subcolección
+        try await docRef.updateData([
             FieldPath(["categories", categoryId]): updatedCategoryData,
             "categoriesVersion": UUID().uuidString,
             "categoriesUpdatedAt": FieldValue.serverTimestamp(),
         ])
+        try await docRef.collection("categories").document(categoryId).setData(updatedCategoryData, merge: true)
     }
 
     /// Inicializa categorías por defecto
@@ -264,7 +292,7 @@ actor UserDataService {
     func createDefaultCategories() -> [Category] {
         DefaultCategory.allCases.enumerated().map { index, cat in
             Category(
-                id: nil,
+                id: cat.rawValue,  // ← never nil: ForEach Identifiable necesita id único estable
                 name: cat.rawValue,
                 color: cat.defaultColor,
                 subcategories: cat.defaultSubcategories,

@@ -2,7 +2,7 @@
 // Add new expense form
 
 import SwiftUI
-import TipKit // Added for potential future tips in this sheet
+
 
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -31,6 +31,8 @@ struct AddExpenseSheet: View {
                     Button("Guardar") {
                         Task {
                             await viewModel.save()
+                            // Solo cerrar si el guardado tuvo éxito (sino el alert sigue visible)
+                            guard !viewModel.showError else { return }
                             UserDataManager.shared.completeOnboarding()
                             onSave()
                             dismiss()

@@ -17,6 +17,13 @@ struct ExpenseFilterSheet: View {
     @State private var newPresetName = ""
     @State private var filterToEdit: ExpenseFilter?
     @State private var isEditMode = false
+    @AppStorage("filters.onboardingSeen") private var onboardingSeen: Bool = false
+    @State private var showOnboarding: Bool = false
+
+    // Hold the @Observable singleton in @State so SwiftUI rastrea cambios
+    @State private var userData = UserDataManager.shared
+
+    private var savedPresets: [ExpenseFilter] { userData.savedFilters }
     
     init(
         filter: Binding<ExpenseFilter>,
@@ -39,7 +46,7 @@ struct ExpenseFilterSheet: View {
                     
                     // 2. Main Criteria (Date & Amount)
                     VStack(spacing: 0) {
-                        sectionHeader("Cuándo y Cuánto", icon: "calendar.badge.clock")
+                        sectionHeader(String(localized: "filters.whenAndHowMuch", defaultValue: "Cuándo y Cuánto"), icon: "calendar.badge.clock")
                             .padding()
                         
                         Divider()
@@ -55,7 +62,7 @@ struct ExpenseFilterSheet: View {
                     
                     // 3. Details (Category & Payment)
                     VStack(spacing: 0) {
-                        sectionHeader("Detalles", icon: "tag.fill")
+                        sectionHeader(String(localized: "filters.details", defaultValue: "Detalles"), icon: "tag.fill")
                             .padding()
                         
                         Divider()
@@ -73,19 +80,19 @@ struct ExpenseFilterSheet: View {
                     
                     // 4. Options & Sort (Compact)
                     VStack(spacing: 0) {
-                        sectionHeader("Opciones", icon: "slider.horizontal.3")
+                        sectionHeader(String(localized: "filters.options", defaultValue: "Opciones"), icon: "slider.horizontal.3")
                             .padding()
                         
                         Divider()
                         
                         VStack(spacing: 16) {
-                            Toggle("Solo recurrentes", isOn: $filter.showOnlyRecurring)
+                            Toggle(String(localized: "filters.onlyRecurring", defaultValue: "Solo recurrentes"), isOn: $filter.showOnlyRecurring)
                                 .tint(Color.clarityPrimary)
                             
                             Divider()
                             
                             HStack {
-                                Text("Ordenar por")
+                                Text(String(localized: "filters.sortBy", defaultValue: "Ordenar por"))
                                 Spacer()
                                 Menu {
                                     ForEach(ExpenseFilter.SortOption.allCases, id: \.self) { option in
@@ -111,7 +118,7 @@ struct ExpenseFilterSheet: View {
                     
                     // Clear All (Text Link)
                     if filter.hasActiveFilters {
-                        Button("Limpiar todos los filtros") {
+                        Button(String(localized: "filters.clearAll", defaultValue: "Limpiar todos los filtros")) {
                             resetFilters()
                             HapticManager.shared.notification(.warning)
                         }
@@ -125,22 +132,22 @@ struct ExpenseFilterSheet: View {
                 .padding()
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Filtros")
+            .navigationTitle(String(localized: "filters.navigationTitle", defaultValue: "Filtros"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Cancelar")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Aplicar") { applyFilters() }
+                    Button(String(localized: "filters.apply", defaultValue: "Aplicar")) { applyFilters() }
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.clarityPrimary)
                 }
             }
-            .alert("Guardar Filtro", isPresented: $showSavePresetAlert) {
-                TextField("Nombre del filtro", text: $newPresetName)
-                Button("Cancelar", role: .cancel) { newPresetName = "" }
-                Button("Guardar") {
+            .alert(String(localized: "filters.savePreset.title", defaultValue: "Guardar Filtro"), isPresented: $showSavePresetAlert) {
+                TextField(String(localized: "filters.savePreset.namePlaceholder", defaultValue: "Nombre del filtro"), text: $newPresetName)
+                Button(String(localized: "common.cancel", defaultValue: "Cancelar"), role: .cancel) { newPresetName = "" }
+                Button(String(localized: "common.save", defaultValue: "Guardar")) {
                     saveCurrentAsPreset()
                 }
             } message: {
@@ -154,6 +161,14 @@ struct ExpenseFilterSheet: View {
                 // Initialize text fields
                 if let min = filter.minAmount { minAmountText = String(Int(min)) }
                 if let max = filter.maxAmount { maxAmountText = String(Int(max)) }
+                if !onboardingSeen {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        showOnboarding = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showOnboarding, onDismiss: { onboardingSeen = true }) {
+                FiltersOnboardingSheet()
             }
         }
     }
@@ -162,7 +177,7 @@ struct ExpenseFilterSheet: View {
     
     private var presetsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            sectionHeader("Mis Filtros", icon: "bookmark.fill")
+            sectionHeader(String(localized: "filters.myFilters", defaultValue: "Mis Filtros"), icon: "bookmark.fill")
                 .padding()
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -223,8 +238,8 @@ struct ExpenseFilterSheet: View {
                         }
                     }
                     
-                    let saved = UserDataManager.shared.savedFilters
-                    
+                    let saved = savedPresets
+
                     if saved.isEmpty {
                         // Empty State - Always show if no saved filters
                         HStack {
@@ -513,21 +528,13 @@ struct ExpenseFilterSheet: View {
     }
     
     private func updateExistingFilter() async {
-        guard let filterToEdit = filterToEdit else { 
-            print("❌ No filterToEdit available")
-            return 
+        guard let filterToEdit = filterToEdit else {
+            return
         }
-        
+
         var updatedFilter = filter
         updatedFilter.id = filterToEdit.id  // Mantener el mismo ID
         updatedFilter.name = newPresetName.isEmpty ? filterToEdit.name : newPresetName
-        
-        print("🔄 Updating filter:")
-        print("   - ID: \(updatedFilter.id)")
-        print("   - Name: \(updatedFilter.name ?? "nil")")
-        print("   - Date Range: \(updatedFilter.dateRange.rawValue)")
-        print("   - Categories: \(updatedFilter.selectedCategories)")
-        print("   - Payment Methods: \(updatedFilter.selectedPaymentMethods)")
         
         await UserDataManager.shared.updateFilter(updatedFilter)
         

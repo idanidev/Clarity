@@ -1,7 +1,6 @@
 // AudioWaveVisualizer.swift
 // Real-time audio wave visualization using SwiftUI Canvas
 
-import Combine
 import SwiftUI
 
 struct AudioWaveVisualizer: View {
@@ -11,19 +10,29 @@ struct AudioWaveVisualizer: View {
     @State private var phase: Double = 0
 
     var body: some View {
-        // Only animate at 60fps when active. When idle, standard refresh or static.
-        TimelineView(.animation(minimumInterval: isActive ? 0.016 : 1.0)) { timeline in
-            Canvas { context, size in
-                drawWaves(
-                    context: context, size: size, time: timeline.date.timeIntervalSinceReferenceDate
-                )
+        Group {
+            if isActive {
+                // 60fps animation only while recording
+                TimelineView(.animation(minimumInterval: 0.016)) { timeline in
+                    Canvas { context, size in
+                        drawWaves(
+                            context: context, size: size,
+                            time: timeline.date.timeIntervalSinceReferenceDate
+                        )
+                    }
+                }
+            } else {
+                // Static waveform — no TimelineView, no CPU usage
+                Canvas { context, size in
+                    drawWaves(context: context, size: size, time: 0)
+                }
             }
-            .frame(height: 80)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
-            )
         }
+        .frame(height: 80)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+        )
     }
 
     private func drawWaves(context: GraphicsContext, size: CGSize, time: TimeInterval) {

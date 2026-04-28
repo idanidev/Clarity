@@ -44,7 +44,7 @@ struct ExpandableExpenseList: View {
 
     var body: some View {
         List {
-            ForEach(categories) { category in
+            ForEach(categories, id: \.name) { category in
                 CategorySection(
                     category: category,
                     isExpanded: !collapsedCategories.contains(category.id),
@@ -61,7 +61,7 @@ struct ExpandableExpenseList: View {
                     onExpenseEdit: onExpenseEdit
                 )
                 .id(category.id)
-                .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color(.systemGroupedBackground))
             }
@@ -117,6 +117,8 @@ struct CategorySection: View {
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
         Section {
             if isExpanded {
@@ -126,7 +128,6 @@ struct CategorySection: View {
                         categoryColor: category.color,
                         isExpanded: isSubcategoryExpanded(category.id + "_" + subcategory.id),
                         onToggleExpand: {
-                            // Unique ID for subselection scope
                             onToggleSubcategory(category.id + "_" + subcategory.id)
                         },
                         onExpenseDelete: onExpenseDelete,
@@ -138,49 +139,67 @@ struct CategorySection: View {
             Button {
                 onToggleExpand()
             } label: {
-                HStack(spacing: 12) {
-                    // Barra de color más ancha y prominente
-                    RoundedRectangle(cornerRadius: 3)
-                        .fill(category.color.gradient)
-                        .frame(width: 6, height: 52)
+                HStack(spacing: 0) {
+                    // Barra de acento izquierda — el color de la categoría de un vistazo
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(category.color)
+                        .frame(width: 4)
+                        .padding(.vertical, 1)
 
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(category.name)
-                            .font(.title3.weight(.semibold))  // ⬆️ Más grande (19pt)
-                            .foregroundStyle(.primary)
+                    HStack(spacing: 12) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(category.name)
+                                .scaledFont(size: 17, weight: .bold)
+                                .foregroundStyle(.primary)
 
-                        Text("\(category.expenseCount) gastos")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
+                            Text("\(category.expenseCount) gastos")
+                                .scaledFont(size: 13)
+                                .foregroundStyle(.secondary)
+                        }
 
-                    Spacer()
+                        Spacer()
 
-                    VStack(alignment: .trailing, spacing: 2) {
                         Text(category.totalAmount.formattedCurrency)
-                            .font(.title3.weight(.bold))  // ⬆️ Más grande
+                            .scaledFont(size: 18, weight: .heavy, design: .rounded)
                             .foregroundStyle(category.color)
 
-                        Text("del total")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                        Image(systemName: "chevron.right")
+                            .scaledFont(size: 12, weight: .semibold)
+                            .foregroundStyle(category.color.opacity(0.7))
+                            .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
+                            .frame(width: 18)
                     }
-
-                    Image(
-                        systemName: isExpanded
-                            ? "chevron.up.circle.fill" : "chevron.down.circle.fill"
-                    )
-                    .font(.title3)
-                    .foregroundStyle(category.color)
-                    .symbolRenderingMode(.hierarchical)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 13)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(Color(uiColor: .secondarySystemGroupedBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+                .background(
+                    ZStack {
+                        Color(uiColor: .secondarySystemGroupedBackground)
+                        LinearGradient(
+                            colors: [
+                                category.color.opacity(colorScheme == .dark ? 0.13 : 0.07),
+                                category.color.opacity(0.0)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    }
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(
+                            category.color.opacity(colorScheme == .dark ? 0.18 : 0.25),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(
+                    color: colorScheme == .dark ? .clear : category.color.opacity(0.10),
+                    radius: 4, x: 0, y: 2
+                )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressScaleButtonStyle(scale: 0.98))
         }
     }
 
@@ -196,54 +215,45 @@ struct SubcategorySection: View {
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
         // Subcategory Header (if distinct subcategory) - INDENTED from category
         if !subcategory.name.isEmpty && subcategory.name != "General" {
             Button {
                 onToggleExpand()
             } label: {
-                HStack(spacing: 12) {
-                    // Conector visual más grueso
-                    ZStack(alignment: .top) {
-                        Rectangle()
-                            .fill(categoryColor.opacity(0.25))
-                            .frame(width: 3)  // ⬆️ Más ancho
-
-                        Circle()
-                            .fill(categoryColor)
-                            .frame(width: 8, height: 8)
-                            .offset(y: 12)
-                    }
-                    .frame(width: 16, height: 32)
+                HStack(spacing: 10) {
+                    // Barra izquierda del color de categoría
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(categoryColor.opacity(0.5))
+                        .frame(width: 2, height: 18)
 
                     Text(subcategory.name)
-                        .font(.body.weight(.medium))  // ⬆️ Más grande (17pt)
-                        .foregroundStyle(.primary)  // ⬆️ Primary en vez de secondary
+                        .scaledFont(size: 14, weight: .medium)
+                        .foregroundStyle(Color.primary.opacity(colorScheme == .dark ? 0.55 : 0.70))
 
                     Spacer()
 
-                    // Badge contador
-                    HStack(spacing: 4) {
-                        Image(systemName: "doc.text")
-                            .font(.caption2)
-                        Text("\(subcategory.expenses.count)")
-                            .font(.caption.monospacedDigit())
-                    }
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+                    Text("\(subcategory.expenses.count)")
+                        .scaledFont(size: 12, weight: .semibold, design: .rounded)
+                        .foregroundStyle(categoryColor)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            categoryColor.opacity(colorScheme == .dark ? 0.15 : 0.10),
+                            in: Capsule()
+                        )
 
                     Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
+                        .scaledFont(size: 11, weight: .semibold)
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .padding(.leading, 20)  // ⬆️ Mayor indentación
+                .padding(.vertical, 8)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressScaleButtonStyle(scale: 0.97))
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 2, leading: 28, bottom: 2, trailing: 16))
             .listRowBackground(Color(.systemGroupedBackground))
@@ -252,17 +262,7 @@ struct SubcategorySection: View {
         if isExpanded || subcategory.name == "General" || subcategory.name.isEmpty {
             ForEach(subcategory.expenses, id: \.stableId) { expense in
                 Button {
-                    // Tap Action (Details)
-                    // We can pass a closure or specific action logic here
-                    // Current logic requires edit/delete, taps were handled via ModernExpenseCard onTap
-                    // But ExpandableExpenseList doesn't accept onTap in its init?
-                    // Let's check init: onExpenseDelete, onExpenseEdit.
-                    // It doesn't seem to expose a generic 'onTap'.
-                    // For now, let's assume tap triggers edit or we need to add onTap to ExpandableExpenseList?
-                    // ExpenseRowView (standard) had 'showDetail'.
-                    // Let's add onTap support or defaulting to edit.
-                    onExpenseEdit(expense)  // Default tap to edit for now, or we can add expand support.
-                    // The user wants detail?
+                    onExpenseEdit(expense)
                 } label: {
                     ModernExpenseCard(
                         expense: expense,
@@ -271,12 +271,25 @@ struct SubcategorySection: View {
                         onEdit: nil
                     )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressScaleButtonStyle(scale: 0.97))
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 3, leading: 56, bottom: 3, trailing: 16))  // ⬆️ Mayor indentación
+                .listRowInsets(EdgeInsets(top: 3, leading: 28, bottom: 3, trailing: 16))
+                .transition(.opacity.combined(with: .offset(y: 6)))
+                .contextMenu {
+                    Button {
+                        onExpenseEdit(expense)
+                    } label: {
+                        Label("Editar", systemImage: "pencil")
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        onExpenseDelete(expense)
+                    } label: {
+                        Label("Eliminar", systemImage: "trash")
+                    }
+                }
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    // Solo eliminar a la derecha
                     Button(role: .destructive) {
                         onExpenseDelete(expense)
                     } label: {
@@ -285,7 +298,6 @@ struct SubcategorySection: View {
                     .tint(.red)
                 }
                 .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                    // Solo Editar a la izquierda
                     Button {
                         onExpenseEdit(expense)
                     } label: {
@@ -355,11 +367,7 @@ struct ExpenseRow: View {
     }
 
     private var formattedDate: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: expense.date) else { return expense.date }
-        formatter.dateFormat = "d MMM"
-        return formatter.string(from: date)
+        Formatters.shortDisplay(expense.date)
     }
 
 }

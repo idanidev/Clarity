@@ -19,7 +19,11 @@ struct SimpleVoiceButton: View {
     @State private var silenceTimer: Timer?
     @State private var isStopping = false
     @State private var isProcessing = false
+    @State private var lastSaveDate: Date?
     private let settings = VoiceSettings.load()
+
+    /// Maximum amount allowed via voice (safety guard against parsing errors)
+    private static let maxVoiceAmount: Double = 10_000
 
     // Debug mode for simulator (speech recognition doesn't work in simulator)
     #if targetEnvironment(simulator)
@@ -81,21 +85,23 @@ struct SimpleVoiceButton: View {
                     ? speechManager.transcript
                     : speechManager.interimTranscript
 
-                if !currentText.isEmpty {
-                    Text(currentText)
-                        .font(.callout)
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color(.secondarySystemBackground))
-                        .cornerRadius(12)
-                        .transition(.scale.combined(with: .opacity))
-                } else {
-                    Text("Escuchando...")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .transition(.opacity)
+                VStack(spacing: 6) {
+                    // Live waveform — always visible while recording
+                    AudioWaveformBarsView(levels: speechManager.waveformLevels)
+                        .transition(.opacity.combined(with: .scale(scale: 0.8)))
+
+                    // Transcript appears once speech is detected
+                    if !currentText.isEmpty {
+                        Text(currentText)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color(.secondarySystemBackground))
+                            .cornerRadius(12)
+                            .transition(.scale.combined(with: .opacity))
+                    }
                 }
             } else if isProcessing {
                 HStack(spacing: 6) {
@@ -121,11 +127,11 @@ struct SimpleVoiceButton: View {
                     onConfirm: { confirmed in
                         Task {
                             await saveExpense(confirmed)
-                            await advanceToNextExpense()
+                            advanceToNextExpense()
                         }
                     },
                     onCancel: {
-                        Task { await advanceToNextExpense() }
+                        Task { advanceToNextExpense() }
                     }
                 )
             }
@@ -225,11 +231,27 @@ struct SimpleVoiceButton: View {
 
     private func processTranscript(_ transcript: String) {
         Task {
-            // Multi-expense: parse ALL segments at once
-            let parsed = await SmartTransactionParser.shared.parseMultiple(
-                transcript,
-                history: UserDataManager.shared.expenses
-            )
+            // Multi-expense: parse ALL segments at once (with 5s safety timeout)
+            let parsed: [SmartTransaction]
+            do {
+                parsed = try await withThrowingTaskGroup(of: [SmartTransaction].self) { group in
+                    group.addTask {
+                        await SmartTransactionParser.shared.parseMultiple(
+                            transcript,
+                            history: UserDataManager.shared.expenses
+                        )
+                    }
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: 5_000_000_000)
+                        throw CancellationError()
+                    }
+                    let result = try await group.next() ?? []
+                    group.cancelAll()
+                    return result
+                }
+            } catch {
+                parsed = []
+            }
 
             await MainActor.run {
                 isProcessing = false
@@ -248,6 +270,20 @@ struct SimpleVoiceButton: View {
 
                 // Build Expense objects and check for auto-save
                 for tx in parsed {
+                    let amountDouble = NSDecimalNumber(decimal: tx.amount).doubleValue
+
+                    // Safety: reject implausible amounts
+                    guard amountDouble > 0, amountDouble <= Self.maxVoiceAmount else {
+                        HapticManager.shared.error()
+                        FeedbackManager.shared.show(
+                            .error, title: "Importe no válido",
+                            message: amountDouble > Self.maxVoiceAmount
+                                ? "El importe \(Formatters.currency(amountDouble)) parece demasiado alto. Edítalo manualmente."
+                                : "No se detectó un importe válido."
+                        )
+                        continue
+                    }
+
                     // Detect category + subcategory exclusively from user's real data
                     let normalizedParsedSub = (tx.subcategory ?? "").folding(options: .diacriticInsensitive, locale: .current).lowercased()
                     let normalizedMerchant = tx.merchant.folding(options: .diacriticInsensitive, locale: .current).lowercased()
@@ -267,9 +303,15 @@ struct SimpleVoiceButton: View {
                         }
                     }
 
+                    // Fallback: use parser's detected category when no user-category matched
+                    if category.isEmpty {
+                        category = tx.category ?? ""
+                        subcategory = tx.subcategory
+                    }
+
                     let expense = Expense(
                         id: UUID().uuidString,
-                        amount: NSDecimalNumber(decimal: tx.amount).doubleValue,
+                        amount: amountDouble,
                         name: tx.merchant,
                         category: category,
                         subcategory: subcategory,
@@ -318,7 +360,8 @@ struct SimpleVoiceButton: View {
         pendingExpenses.removeFirst()
         // Open next one after a brief pause so SwiftUI can settle
         if !pendingExpenses.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(400))
                 isShowingExpenseSheet = true
             }
         }
@@ -331,8 +374,15 @@ struct SimpleVoiceButton: View {
     }
 
     private func saveExpense(_ expense: Expense, showFeedback: Bool = true) async {
+        // Duplicate guard: reject saves within 2s of the last one with the same amount
+        if let last = lastSaveDate, Date().timeIntervalSince(last) < 2.0 {
+            return
+        }
+        lastSaveDate = Date()
+
         do {
-            _ = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
+            let id = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
+
             // Teach learning system
             if !expense.category.isEmpty {
                 await UserLearningManager.shared.learn(
@@ -341,13 +391,30 @@ struct SimpleVoiceButton: View {
                     subcategory: expense.subcategory
                 )
             }
-            await viewModel.refresh()
+
+            // Prepend directly — no network roundtrip needed, expense is already persisted
+            var saved = expense
+            saved.id = id
+            viewModel.prependExpense(saved)
+
+            // Silent background sync to reconcile any edge cases (fire-and-forget)
+            Task { await viewModel.refresh() }
+
             if showFeedback {
                 HapticManager.shared.playSuccess()
+                let savedId = id
                 FeedbackManager.shared.show(
                     .success,
                     title: "Gasto añadido",
-                    message: nil
+                    message: "\(Formatters.currency(expense.amount)) - \(expense.name)",
+                    actionLabel: "Deshacer",
+                    action: { [weak viewModel] in
+                        Task { @MainActor in
+                            try? await DependencyContainer.shared.expenseRepository.deleteExpense(id: savedId)
+                            viewModel?.removeExpense(id: savedId)
+                            HapticManager.shared.notification(.warning)
+                        }
+                    }
                 )
             }
         } catch {
@@ -368,18 +435,44 @@ struct SimpleVoiceButton: View {
         silenceTimer?.invalidate()
         var silentSince: Date? = nil
         // Check every 0.3s if audio level is below threshold
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [self] _ in
-            let hasContent =
-                !speechManager.transcript.isEmpty || !speechManager.interimTranscript.isEmpty
-            if speechManager.audioLevel < 0.05 && hasContent {
-                if silentSince == nil { silentSince = Date() }
-                let elapsed = Date().timeIntervalSince(silentSince!)
-                if elapsed >= settings.silenceTimeout {
-                    stopRecording()
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { _ in
+            Task { @MainActor in
+                let hasContent =
+                    !speechManager.transcript.isEmpty || !speechManager.interimTranscript.isEmpty
+                if speechManager.audioLevel < 0.05 && hasContent {
+                    if silentSince == nil { silentSince = Date() }
+                    let elapsed = Date().timeIntervalSince(silentSince!)
+                    if elapsed >= settings.silenceTimeout {
+                        stopRecording()
+                    }
+                } else {
+                    silentSince = nil
                 }
-            } else {
-                silentSince = nil  // Reset when speaking
             }
         }
+    }
+}
+
+// MARK: - Audio Waveform Bars
+private struct AudioWaveformBarsView: View {
+    let levels: [Float]
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 2.5) {
+            ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
+                let height = max(3, CGFloat(level) * 36 + 3)
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.clarityPrimary, Color.clarityPrimary.opacity(0.6)],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 3, height: height)
+                    .animation(.easeOut(duration: 0.08), value: level)
+            }
+        }
+        .frame(height: 40)
     }
 }

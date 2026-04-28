@@ -124,7 +124,7 @@ struct ActiveFilterPillsView: View {
                     // Pills de categorías
                     ForEach(Array(filter.selectedCategories), id: \.self) { category in
                         FilterPill(
-                            text: category.components(separatedBy: " ").dropFirst().joined(separator: " "),
+                            text: category,
                             icon: "tag.circle.fill",
                             color: Color(hex: "#10B981"),
                             onRemove: {

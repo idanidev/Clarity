@@ -92,7 +92,7 @@ struct AdvancedColorPickerView: View {
             // Selected Color Preview
             HStack(spacing: 16) {
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: selectedColor) ?? .gray)
+                    .fill(Color(hex: selectedColor))
                     .frame(width: 60, height: 60)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
@@ -166,7 +166,7 @@ struct GridColorPicker: View {
                                 HapticManager.shared.selection()
                             } label: {
                                 RoundedRectangle(cornerRadius: 4)
-                                    .fill(Color(hex: colorHex) ?? .gray)
+                                    .fill(Color(hex: colorHex))
                                     .frame(height: 34)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 4)

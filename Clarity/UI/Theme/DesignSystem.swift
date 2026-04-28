@@ -126,6 +126,23 @@ extension View {
     }
 }
 
+// MARK: - Press Scale Button Style
+struct PressScaleButtonStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1.0)
+            .animation(.spring(response: 0.2, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
+extension View {
+    func pressScale(_ scale: CGFloat = 0.97) -> some View {
+        buttonStyle(PressScaleButtonStyle(scale: scale))
+    }
+}
+
 // MARK: - Bouncy Animation Extension
 extension Animation {
     static var bouncy: Animation {

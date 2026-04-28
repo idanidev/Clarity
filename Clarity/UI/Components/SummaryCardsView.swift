@@ -18,13 +18,8 @@ struct SummaryCard: View {
     @State private var animateValue = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    // 📱 Responsive sizing based on screen width
-    private var screenWidth: CGFloat {
-        UIScreen.main.bounds.width
-    }
-
     private var isSmallDevice: Bool {
-        screenWidth <= 375 // iPhone SE, iPhone 12/13/14 mini
+        horizontalSizeClass == .compact
     }
 
     private var iconSize: CGFloat {
@@ -36,15 +31,15 @@ struct SummaryCard: View {
     }
 
     private var valueSize: CGFloat {
-        isSmallDevice ? 13 : 15
+        isSmallDevice ? 16 : 18
     }
 
     private var titleSize: CGFloat {
-        isSmallDevice ? 10 : 11
+        isSmallDevice ? 9 : 10
     }
 
     private var verticalPadding: CGFloat {
-        isSmallDevice ? 8 : 10
+        isSmallDevice ? 10 : 12
     }
 
     private var horizontalPadding: CGFloat {
@@ -71,7 +66,7 @@ struct SummaryCard: View {
 
             // Valor principal - RESPONSIVE
             Text(value)
-                .font(.system(size: valueSize, weight: .bold, design: .rounded))
+                .font(.system(size: valueSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(valueColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
@@ -166,9 +161,8 @@ struct SummaryCardsView: View {
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    // 📱 Spacing responsive
     private var cardSpacing: CGFloat {
-        UIScreen.main.bounds.width <= 375 ? 8 : 10
+        horizontalSizeClass == .compact ? 8 : 10
     }
 
     var body: some View {

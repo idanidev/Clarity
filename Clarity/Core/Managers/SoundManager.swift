@@ -63,6 +63,46 @@ final class SoundManager: NSObject {
         }
     }
 
+    /// Configures the audio session specifically for speech recording.
+    /// NO usa .defaultToSpeaker para que los AirPods (y otros Bluetooth) puedan
+    /// activar HFP y usar su micrófono correctamente.
+    /// Usa .measurement mode para mayor precisión en reconocimiento de voz.
+    func configureForRecording() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(
+                .playAndRecord,
+                mode: .measurement,           // mejor para speech recognition
+                options: [
+                    .allowBluetoothA2DP,      // A2DP (AirPods Pro, etc.)
+                    .allowBluetoothHFP,       // HFP mic input
+                    .duckOthers,
+                    .mixWithOthers            // no interrumpe otras apps
+                ]
+            )
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            logger.info("✅ Audio Session configured for recording (Bluetooth-compatible, no speaker override)")
+        } catch {
+            logger.error("❌ Recording session configuration failed: \(error.localizedDescription)")
+            // Fallback a la config general
+            configureAudioSession()
+        }
+    }
+
+    /// Restaura la sesión de audio a la config normal tras una grabación.
+    func restoreAfterRecording() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(
+                .playAndRecord, mode: .default,
+                options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
+            try session.setActive(true, options: .notifyOthersOnDeactivation)
+            logger.info("✅ Audio Session restored to playback mode")
+        } catch {
+            logger.error("❌ Failed to restore audio session: \(error.localizedDescription)")
+        }
+    }
+
     /// Deactivates the session (optional, usually left active or managed by SpeechManager)
     func deactivateSession() {
         do {

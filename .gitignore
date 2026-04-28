@@ -2,9 +2,13 @@
 # Clarity .gitignore
 functions/serviceAccountKey.json
 
-# API Keys — NEVER commit these
+# API Keys & Firebase — NEVER commit these
 Secrets.xcconfig
-# Secrets.swift is committed but with empty placeholders only
+Clarity/Core/Secrets.swift
+Clarity/GoogleService-Info.plist
+GoogleService-Info.plist
+fastlane/api_key.json
+fastlane/AuthKey_*.p8
 .DS_Store
 *.xcuserstate
 xcuserdata/

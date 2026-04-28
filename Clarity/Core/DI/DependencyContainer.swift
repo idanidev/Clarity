@@ -37,6 +37,15 @@ final class DependencyContainer {
         )
     }()
     
+    lazy var recurringExpenseRepository: RecurringExpenseRepository = {
+        RecurringExpenseRepository()
+    }()
+
+    // MARK: - Services
+    lazy var financialService: FinancialService = {
+        FinancialService.shared
+    }()
+
     // MARK: - Use Cases Factories
     // We recreate Use Cases intentionally as they are lightweight structs holding references
     

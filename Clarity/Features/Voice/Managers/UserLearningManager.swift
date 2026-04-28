@@ -31,16 +31,15 @@ actor UserLearningManager {
                 "anade", "añade", "anadir", "añadir", "anademe", "añademe", "gasta", "gastado",
                 "compra", "comprado", "paga", "pagado", "apunta",
             ]
-            self.preferences = decoded.filter { (merchant, _) in
+            let cleaned = decoded.filter { (merchant, _) in
                 !commandWords.contains(where: { merchant.contains($0) })
             }
+            self.preferences = cleaned
 
             // If we filtered anything, save the cleaned data
-            if self.preferences.count < decoded.count {
-                print(
-                    "🧹 Cleaned \(decoded.count - self.preferences.count) corrupted learning entries"
-                )
-                if let cleanData = try? JSONEncoder().encode(self.preferences) {
+            let removedCount = decoded.count - cleaned.count
+            if removedCount > 0 {
+                if let cleanData = try? JSONEncoder().encode(cleaned) {
                     UserDefaults.standard.set(cleanData, forKey: "voice_learning_preferences")
                 }
             }

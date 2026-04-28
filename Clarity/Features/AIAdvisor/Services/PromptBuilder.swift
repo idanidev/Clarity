@@ -2,201 +2,327 @@
 //  PromptBuilder.swift
 //  Clarity
 //
-//  Created by Clarity AI on 2026-01-23.
-//  Optimizes financial data for AI context window (Token Efficient)
+//  Builds a rich, token-efficient financial context for the AI advisor.
 //
 
 import Foundation
 
 struct PromptBuilder {
 
-    // MARK: - Core Methods
-
     static func buildFinancialContext(
-        user: UserDocument?, expenses: [Expense], goals: [Goal], monthBudget: MonthlyBudget?
+        user: UserDocument?,
+        expenses: [Expense],
+        goals: [Goal],
+        monthBudget: MonthlyBudget?,
+        recurringExpenses: [RecurringExpense] = []
     ) -> String {
-        let profileSection = buildProfileSection(user: user, budget: monthBudget, goals: goals)
-        let budgetSection = buildBudgetSection(budget: monthBudget, expenses: expenses)  // Monthly focus
-        let historicalSection = buildHistoricalSection(expenses: expenses)  // Global focus
-        let topExpensesSection = buildTopExpensesSection(expenses: expenses)
-        let patternsSection = detectPatterns(expenses: expenses)
-        let principlesSection = buildPrinciplesSection()
+        let calendar = Calendar.current
+        let now = Date()
 
-        // XML-style tagging for better model comprehension
-        return """
-            <financial_context>
-            \(profileSection)
-
-            \(budgetSection)
-
-            \(historicalSection)
-
-            \(topExpensesSection)
-
-            \(patternsSection)
-
-            \(principlesSection)
-            </financial_context>
-            """
-    }
-
-    // MARK: - Sections
-
-    private static func buildProfileSection(
-        user: UserDocument?, budget: MonthlyBudget?, goals: [Goal]
-    ) -> String {
-        let income = budget?.income ?? 0
-        let savingsAllocated = budget?.savingsAllocated ?? 0
-
-        // Find top active goal
-        let topGoal = goals.filter { !$0.isAchieved && !$0.isArchived }.first
-        let goalStatus =
-            topGoal != nil
-            ? "\(topGoal!.name) (\(Int((topGoal!.currentAmount / topGoal!.targetAmount) * 100))% completada)"
-            : "Sin metas activas"
-
-        return """
-            <user_profile>
-            <income_est>\(Int(income))</income_est>
-            <savings_allocated>\(Int(savingsAllocated))</savings_allocated>
-            <free_cash>\(Int(income - savingsAllocated))</free_cash>
-            <main_goal>\(goalStatus)</main_goal>
-            </user_profile>
-            """
-    }
-
-    private static func buildBudgetSection(budget: MonthlyBudget?, expenses: [Expense]) -> String {
-        // Filter for current month only to show CURRENT STATUS
         let currentMonthExpenses = expenses.filter {
-            Calendar.current.isDate($0.dateAsDate, equalTo: Date(), toGranularity: .month)
+            guard let d = Formatters.date(from: $0.date) else { return false }
+            return calendar.isDate(d, equalTo: now, toGranularity: .month)
         }
+        let totalSpentThisMonth = currentMonthExpenses.reduce(0) { $0 + $1.amount }
+        let income = monthBudget?.income ?? user?.income ?? 0
+        let savingsAllocated = monthBudget?.savingsAllocated ?? 0
+        let freeCash = income - totalSpentThisMonth - savingsAllocated
 
-        // Group expenses by category
-        let expensesByCategory = Dictionary(grouping: currentMonthExpenses, by: { $0.category })
-        let spentByCategory = expensesByCategory.mapValues { $0.reduce(0) { $0 + $1.amount } }
+        let currentMonthName = Self.monthFmt.string(from: now).capitalized
 
-        // Compare with budget limits (if available) - For now just listing top spent categories
-        let topCategories = spentByCategory.sorted { $0.value > $1.value }.prefix(3)
+        // Day-of-month progress (e.g., day 15 of 30 = 50%)
+        let dayOfMonth = calendar.component(.day, from: now)
+        let daysInMonth = calendar.range(of: .day, in: .month, for: now)?.count ?? 30
+        let monthProgress = pct(Double(dayOfMonth), of: Double(daysInMonth))
 
-        var lines = ["<current_month_status>"]
+        // Daily average & projected spend
+        let dailyAvg = dayOfMonth > 0 ? totalSpentThisMonth / Double(dayOfMonth) : 0
+        let projectedSpend = dailyAvg * Double(daysInMonth)
 
-        if topCategories.isEmpty {
-            lines.append("<status>No hay gastos registrados este mes.</status>")
-        } else {
-            lines.append("<top_categories>")
-            for (category, amount) in topCategories {
-                lines.append("<category name=\"\(category)\">\(Int(amount))</category>")
+        // Savings rate
+        let savingsRate = income > 0 ? pct(income - totalSpentThisMonth - savingsAllocated, of: income) : 0
+
+        // Recurring monthly commitment
+        let monthlyCommitments = recurringExpenses
+            .filter { $0.active }
+            .reduce(0.0) { total, r in
+                switch r.frequency {
+                case .monthly: return total + r.amount
+                case .quarterly: return total + r.amount / 3
+                case .semestral: return total + r.amount / 6
+                case .yearly: return total + r.amount / 12
+                }
             }
-            lines.append("</top_categories>")
-        }
+        let reallyFree = freeCash - monthlyCommitments
 
-        // Budget health check
-        let totalSpent = currentMonthExpenses.reduce(0) { $0 + $1.amount }
+        return """
+        <financial_context>
 
-        if let income = budget?.income, income > 0 {
-            let ratio = totalSpent / income
+        <resumen>
+        Mes: \(currentMonthName) (día \(dayOfMonth)/\(daysInMonth), \(monthProgress)% del mes)
+        Ingresos: \(fmt(income))€ | Gastado: \(fmt(totalSpentThisMonth))€ (\(pct(totalSpentThisMonth, of: income))%) | Libre: \(fmt(freeCash))€ | Huchas: \(fmt(savingsAllocated))€
+        Media diaria: \(fmt(dailyAvg))€/día | Proyección fin de mes: \(fmt(projectedSpend))€
+        Compromisos fijos pendientes: \(fmt(monthlyCommitments))€ | Realmente disponible: \(fmt(reallyFree))€
+        Tasa de ahorro: \(savingsRate)%
+        </resumen>
 
-            // Contexto de presupuesto
-            lines.append(
-                "<summary>Estado: \(Int(totalSpent))€ gastados de ~\(Int(income))€ estimados.</summary>"
-            )
+        \(buildCategoryBreakdown(expenses: currentMonthExpenses, income: income))
 
-            if ratio > 1.0 {
-                lines.append(
-                    "<alert type=\"over_budget\">Has superado tus ingresos estimados este mes.</alert>"
-                )
+        \(buildSpendingLimits(goals: goals, expenses: currentMonthExpenses))
+
+        \(buildAllExpenses(expenses: currentMonthExpenses))
+
+        \(buildLast3MonthsTrend(expenses: expenses, calendar: calendar, now: now))
+
+        \(buildGoalsSection(goals: goals))
+
+        \(buildRecurringSection(recurring: recurringExpenses))
+
+        \(buildInsights(currentMonth: currentMonthExpenses, allExpenses: expenses, income: income, dayOfMonth: dayOfMonth, daysInMonth: daysInMonth))
+
+        </financial_context>
+        """
+    }
+
+    // MARK: - Category breakdown
+
+    private static func buildCategoryBreakdown(expenses: [Expense], income: Double) -> String {
+        guard !expenses.isEmpty else { return "" }
+
+        let byCategory = Dictionary(grouping: expenses, by: { $0.category })
+        let sorted = byCategory
+            .map { (cat, exps) in (cat, exps.reduce(0) { $0 + $1.amount }) }
+            .sorted { $0.1 > $1.1 }
+
+        var lines = ["<categorias>"]
+        for (category, amount) in sorted {
+            let pctStr = income > 0 ? " (\(pct(amount, of: income))%)" : ""
+            lines.append("- \(category): \(fmt(amount))€\(pctStr)")
+
+            // Subcategorías solo si hay más de una
+            let bySubcat = Dictionary(grouping: byCategory[category] ?? [], by: { $0.subcategory ?? "" })
+                .filter { !$0.key.isEmpty }
+            if bySubcat.count > 1 {
+                let subcats = bySubcat
+                    .map { (sub, exps) in "  · \(sub): \(fmt(exps.reduce(0) { $0 + $1.amount }))€" }
+                    .sorted()
+                subcats.forEach { lines.append($0) }
             }
-        } else {
-            lines.append("<summary>Total gastado este mes: \(Int(totalSpent))€</summary>")
         }
-
-        lines.append("</current_month_status>")
-
+        lines.append("</categorias>")
         return lines.joined(separator: "\n")
     }
 
-    private static func buildHistoricalSection(expenses: [Expense]) -> String {
-        guard !expenses.isEmpty else {
-            return "<historical_data>Sin datos históricos.</historical_data>"
+    // MARK: - Spending limits (shields) vs actual spend
+
+    private static func buildSpendingLimits(goals: [Goal], expenses: [Expense]) -> String {
+        let shields = goals.filter { $0.type == .spendingLimit && !$0.isArchived }
+        guard !shields.isEmpty else { return "" }
+
+        var lines = ["<limites_gasto>"]
+        for shield in shields {
+            let catId = shield.linkedCategoryId ?? ""
+            let target = normalizeCategory(catId)
+            let spent = expenses
+                .filter {
+                    let catPart = $0.category.components(separatedBy: " / ").first ?? $0.category
+                    return normalizeCategory(catPart) == target
+                }
+                .reduce(0) { $0 + $1.amount }
+            let limit = shield.targetAmount
+            let usage = pct(spent, of: limit)
+            let status = spent > limit ? "EXCEDIDO +\(fmt(spent - limit))€" :
+                         usage >= 80 ? "ALERTA" : "OK"
+            lines.append("- \(escapeXML(shield.name)): \(fmt(spent))€ / \(fmt(limit))€ (\(usage)%) [\(status)]")
         }
-
-        // 1. Calculate Date Range
-        let sortedDates = expenses.map { $0.dateAsDate }.sorted()
-        guard let firstDate = sortedDates.first, let lastDate = sortedDates.last else { return "" }
-
-        let components = Calendar.current.dateComponents([.month], from: firstDate, to: lastDate)
-        let months = max(1, (components.month ?? 0) + 1)  // Avoid division by zero, min 1 month
-
-        // 2. Calculate Totals
-        let totalSpent = expenses.reduce(0) { $0 + $1.amount }
-        let averageMonthly = totalSpent / Double(months)
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMM yyyy"
-
-        return """
-            <historical_data>
-            <range>\(formatter.string(from: firstDate)) - \(formatter.string(from: lastDate)) (\(months) meses)</range>
-            <total_spent>\(Int(totalSpent))</total_spent>
-            <average_monthly>\(Int(averageMonthly))</average_monthly>
-            <note>Al analizar "todos los gastos", usa este promedio mensual para evaluar la salud financiera, NO el total histórico acumulado.</note>
-            </historical_data>
-            """
-    }
-
-    private static func buildTopExpensesSection(expenses: [Expense]) -> String {
-        // We show global top expenses to help identify big ticket items historically
-        let sortedExpenses = expenses.sorted { $0.amount > $1.amount }
-        let top5 = sortedExpenses.prefix(5)
-
-        var lines = ["<historical_top_expenses>"]
-
-        for (index, expense) in top5.enumerated() {
-            let dateStr = expense.dateAsDate.formatted(.dateTime.day().month().year())
-            lines.append(
-                "<expense rank=\"\(index + 1)\" name=\"\(expense.name)\" category=\"\(expense.category)\" date=\"\(dateStr)\">\(Int(expense.amount))</expense>"
-            )
-        }
-
-        lines.append("</historical_top_expenses>")
-
+        lines.append("</limites_gasto>")
         return lines.joined(separator: "\n")
     }
 
-    private static func detectPatterns(expenses: [Expense]) -> String {
-        // Enhanced pattern detection using global data
-        let groupedByName = Dictionary(grouping: expenses, by: { $0.name.lowercased() })
-        let recurrences = groupedByName.filter { $0.value.count >= 3 }  // Must happen at least 3 times
+    private static func normalizeCategory(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .unicodeScalars
+            .filter { CharacterSet.letters.union(.whitespaces).contains($0) }
+            .reduce("") { $0 + String($1) }
+            .trimmingCharacters(in: .whitespaces)
+    }
 
-        var patterns: [String] = []
+    // MARK: - ALL expenses this month (not just top 5)
 
-        for (name, occurrences) in recurrences {
-            let total = occurrences.reduce(0) { $0 + $1.amount }
-            let avg = total / Double(occurrences.count)
-            if avg > 20 {  // Only significant recurring expenses
-                patterns.append(
-                    "<pattern name=\"\(name.capitalized)\" count=\"\(occurrences.count)\">~\(Int(avg))€/vez</pattern>"
-                )
+    private static func buildAllExpenses(expenses: [Expense]) -> String {
+        guard !expenses.isEmpty else { return "" }
+
+        let sorted = expenses.sorted { $0.amount > $1.amount }
+        let dayFmt = DateFormatter()
+        dayFmt.dateFormat = "d MMM"
+        dayFmt.locale = Locale(identifier: "es_ES")
+
+        var lines = ["<gastos_detalle count=\"\(sorted.count)\">"]
+        for exp in sorted.prefix(80) {  // cap at 80 to stay within token budget
+            let date = Formatters.date(from: exp.date).map { dayFmt.string(from: $0) } ?? exp.date
+            let sub = exp.subcategory.map { "/\(escapeXML($0))" } ?? ""
+            lines.append("- \(date) | \(escapeXML(exp.name)) [\(escapeXML(exp.category))\(sub)]: \(fmt(exp.amount))€")
+        }
+        if sorted.count > 80 {
+            let rest = sorted.dropFirst(80).reduce(0) { $0 + $1.amount }
+            lines.append("- ... y \(sorted.count - 80) gastos más: \(fmt(rest))€")
+        }
+        lines.append("</gastos_detalle>")
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Last 3 months trend with category breakdown
+
+    private static func buildLast3MonthsTrend(
+        expenses: [Expense], calendar: Calendar, now: Date
+    ) -> String {
+        var lines = ["<tendencia_3_meses>"]
+
+        for offset in stride(from: -2, through: 0, by: 1) {
+            guard let monthDate = calendar.date(byAdding: .month, value: offset, to: now) else { continue }
+            let monthExpenses = expenses.filter {
+                calendar.isDate($0.dateAsDate, equalTo: monthDate, toGranularity: .month)
+            }
+            let total = monthExpenses.reduce(0) { $0 + $1.amount }
+            let name = Self.shortMonthFmt.string(from: monthDate).capitalized
+            let label = offset == 0 ? " (en curso)" : ""
+
+            // Top 3 categories for this month
+            let topCats = Dictionary(grouping: monthExpenses, by: { $0.category })
+                .map { (cat, exps) in (cat, exps.reduce(0) { $0 + $1.amount }) }
+                .sorted { $0.1 > $1.1 }
+                .prefix(3)
+                .map { "\($0.0): \(fmt($0.1))€" }
+                .joined(separator: ", ")
+
+            lines.append("- \(name)\(label): \(fmt(total))€ (\(monthExpenses.count) gastos)\(topCats.isEmpty ? "" : " | \(topCats)")")
+        }
+
+        lines.append("</tendencia_3_meses>")
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Goals
+
+    private static func buildGoalsSection(goals: [Goal]) -> String {
+        let active = goals.filter { !$0.isArchived }
+        guard !active.isEmpty else { return "" }
+
+        var lines = ["<metas>"]
+        for goal in active {
+            let progress = goal.targetAmount > 0
+                ? Int((goal.currentAmount / goal.targetAmount) * 100) : 0
+            let tipo = goal.type == .savingsTarget ? "Hucha" : "Límite"
+            lines.append(
+                "- [\(tipo)] \(escapeXML(goal.name)): \(fmt(goal.currentAmount))€ / \(fmt(goal.targetAmount))€ (\(progress)%)"
+            )
+        }
+        lines.append("</metas>")
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Recurring expenses
+
+    private static func buildRecurringSection(recurring: [RecurringExpense]) -> String {
+        let active = recurring.filter { $0.active }
+        guard !active.isEmpty else { return "" }
+
+        let total = active.reduce(0) { $0 + $1.amount }
+        var lines = ["<compromisos_fijos total=\"\(fmt(total))€/mes\">"]
+        for r in active.sorted(by: { $0.amount > $1.amount }) {
+            let freq: String
+            switch r.frequency {
+            case .monthly:    freq = "mensual"
+            case .quarterly:  freq = "trimestral"
+            case .semestral:  freq = "semestral"
+            case .yearly:     freq = "anual"
+            }
+            lines.append("- \(escapeXML(r.name)) [\(escapeXML(r.category))]: \(fmt(r.amount))€ (\(freq))")
+        }
+        lines.append("</compromisos_fijos>")
+        return lines.joined(separator: "\n")
+    }
+
+    // MARK: - Quick insights
+
+    private static func buildInsights(
+        currentMonth: [Expense], allExpenses: [Expense], income: Double,
+        dayOfMonth: Int, daysInMonth: Int
+    ) -> String {
+        guard !currentMonth.isEmpty else { return "" }
+
+        var lines = ["<insights>"]
+
+        // Biggest expense this month
+        if let biggest = currentMonth.max(by: { $0.amount < $1.amount }) {
+            lines.append("Gasto más grande: \(escapeXML(biggest.name)) — \(fmt(biggest.amount))€ [\(escapeXML(biggest.category))]")
+        }
+
+        // Day-of-week analysis: which weekday do they spend the most?
+        let calendar = Calendar.current
+        let byWeekday = Dictionary(grouping: currentMonth) {
+            calendar.component(.weekday, from: $0.dateAsDate)
+        }
+        if let (weekday, exps) = byWeekday.max(by: { $0.value.reduce(0) { $0 + $1.amount } < $1.value.reduce(0) { $0 + $1.amount } }) {
+            let dayName = calendar.weekdaySymbols[weekday - 1].capitalized
+            let total = exps.reduce(0) { $0 + $1.amount }
+            lines.append("Día de mayor gasto: \(dayName) (\(fmt(total))€ en \(exps.count) gastos)")
+        }
+
+        // Spending pace indicator
+        if income > 0 && dayOfMonth > 0 {
+            let pctMonth = Double(dayOfMonth) / Double(daysInMonth) * 100
+            let totalSpent = currentMonth.reduce(0) { $0 + $1.amount }
+            let pctIncome = totalSpent / income * 100
+            let pace = pctIncome - pctMonth
+            if pace > 10 {
+                lines.append("Ritmo: gasto va +\(Int(pace))pp por encima del ritmo uniforme")
+            } else if pace < -10 {
+                lines.append("Ritmo: gasto va \(Int(pace))pp por debajo — buen control")
+            } else {
+                lines.append("Ritmo: gasto alineado con el avance del mes")
             }
         }
 
-        if patterns.isEmpty { return "" }
+        // Count of expenses
+        lines.append("Total operaciones: \(currentMonth.count) gastos este mes")
 
-        return """
-            <recurring_patterns>
-            \(patterns.joined(separator: "\n"))
-            </recurring_patterns>
-            """
+        lines.append("</insights>")
+        return lines.joined(separator: "\n")
     }
 
-    private static func buildPrinciplesSection() -> String {
-        return """
-            <financial_principles>
-            <rule name="50/30/20">Idealmente: 50% Necesidades, 30% Deseos, 20% Ahorro/Deuda.</rule>
-            <rule name="Emergency Fund">Prioridad #1: Tener 3-6 meses de gastos ahorrados.</rule>
-            <rule name="High Interest Debt">Si hay deuda >5%, pagarla antes de invertir agresivamente.</rule>
-            <rule name="Impulse Buying">Si es un 'Deseo' > 50€, sugiere esperar 24h.</rule>
-            </financial_principles>
-            """
+    // MARK: - Shared formatters (static, created once)
+
+    private static let monthFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM yyyy"
+        f.locale = Locale(identifier: "es_ES")
+        return f
+    }()
+
+    private static let shortMonthFmt: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMM"
+        f.locale = Locale(identifier: "es_ES")
+        return f
+    }()
+
+    // MARK: - Helpers
+
+    private static func fmt(_ value: Double) -> String {
+        String(format: "%.2f", value)
+    }
+
+    /// Sanitiza texto del usuario para que no rompa la estructura XML del prompt
+    /// (mitigación básica de prompt-injection vía nombres/notas de gastos).
+    private static func escapeXML(_ s: String) -> String {
+        s.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private static func pct(_ value: Double, of total: Double) -> Int {
+        guard total > 0 else { return 0 }
+        return Int((value / total) * 100)
     }
 }

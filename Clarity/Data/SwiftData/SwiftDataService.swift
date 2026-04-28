@@ -30,7 +30,13 @@ final class SwiftDataService {
             } catch {
                 // Last resort: in-memory only so the app doesn't crash
                 let memoryConfig = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-                self.container = try! ModelContainer(for: schema, configurations: [memoryConfig])
+                do {
+                    self.container = try ModelContainer(for: schema, configurations: [memoryConfig])
+                } catch {
+                    // Último recurso: container vacío para que la app no crashee
+                    // Esto nunca debería ocurrir — un container en memoria siempre funciona
+                    self.container = try! ModelContainer(for: schema)
+                }
             }
         }
     }

@@ -4,6 +4,31 @@
 import Foundation
 import SwiftUI
 
+// MARK: - App Notifications
+extension Notification.Name {
+    /// Posted whenever an expense is added, edited, or deleted.
+    static let expenseDidChange = Notification.Name("expenseDidChange")
+}
+
+// MARK: - Error Security Extensions
+extension Error {
+    /// Devuelve un mensaje seguro para mostrar al usuario.
+    /// Nunca expone detalles internos, stack traces ni mensajes del servidor.
+    var safeUserMessage: String {
+        if let appError = self as? AppError {
+            return appError.errorDescription ?? "Ha ocurrido un error"
+        }
+        return "Ha ocurrido un error inesperado. Inténtalo de nuevo."
+    }
+
+    /// Detecta si el error es una cancelación legítima (no debe mostrarse al usuario).
+    var isCancellation: Bool {
+        self is CancellationError
+            || (self as? URLError)?.code == .cancelled
+            || (self as? URLError)?.code == .timedOut
+    }
+}
+
 // MARK: - Date Extensions
 extension Date {
     var startOfMonth: Date {
@@ -71,6 +96,19 @@ extension View {
             transform(self)
         } else {
             self
+        }
+    }
+}
+
+/// Applies `.toolbarBackgroundVisibility(_:for:)` only on iOS 18+; no-op on iOS 17.
+struct ToolbarVisibilityModifier: ViewModifier {
+    let visibility: Visibility
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.toolbarBackgroundVisibility(visibility, for: .navigationBar)
+        } else {
+            content
         }
     }
 }

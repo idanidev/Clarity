@@ -2,7 +2,6 @@
 //  AIAdvisorView.swift
 //  Clarity
 //
-//  Created by Clarity AI on 2026-01-23.
 //  Modern Chat UI for AI Financial Advisor
 //
 
@@ -11,7 +10,7 @@ import SwiftUI
 struct AIAdvisorView: View {
     @State private var viewModel = AIAdvisorViewModel()
     @FocusState private var isInputFocused: Bool
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -24,14 +23,12 @@ struct AIAdvisorView: View {
                                     MessageBubble(message: message)
                                         .id(message.id)
                                 }
-                                
-                                // Typing Indicator
+
                                 if viewModel.isLoading {
                                     TypingIndicator()
                                         .id("typing")
                                 }
                             } else {
-                                // Empty State with Suggestions
                                 emptyState
                             }
                         }
@@ -41,43 +38,35 @@ struct AIAdvisorView: View {
                         }
                     }
                     .onChange(of: viewModel.messages.count) { _, _ in
-                        // Auto-scroll to bottom
                         withAnimation(.easeOut(duration: 0.3)) {
                             if viewModel.isLoading {
                                 proxy.scrollTo("typing", anchor: .bottom)
-                            } else if let lastMessage = viewModel.messages.last {
-                                proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                            } else if let last = viewModel.messages.last {
+                                proxy.scrollTo(last.id, anchor: .bottom)
                             }
                         }
                     }
                 }
-                
+
                 Divider()
-                
+
+                // Quick action chips (visible once conversation has started)
+                if viewModel.hasMessages {
+                    quickActions
+                }
+
                 // Input Bar
                 inputBar
             }
             .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Clarity Advisor")
+            .navigationTitle("Clara")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                await AIRateLimiter.shared.sync()
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        ForEach(AIServiceManager.ProviderType.allCases, id: \.self) { provider in
-                            Button {
-                                AIServiceManager.shared.currentProviderType = provider
-                            } label: {
-                                HStack {
-                                    Text(provider.rawValue)
-                                    if AIServiceManager.shared.currentProviderType == provider {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                        
-                        Divider()
-                        
                         Button(role: .destructive) {
                             viewModel.clearChat()
                         } label: {
@@ -87,7 +76,6 @@ struct AIAdvisorView: View {
                         Image(systemName: "ellipsis.circle")
                     }
                     .accessibilityLabel("Opciones del chat")
-                    .accessibilityHint("Cambia el proveedor de inteligencia artificial o limpia el historial")
                 }
             }
             .alert("Error", isPresented: Binding(
@@ -100,67 +88,92 @@ struct AIAdvisorView: View {
             }
         }
     }
-    
+
     // MARK: - Empty State
-    
+
     private var emptyState: some View {
         VStack(spacing: 24) {
             Spacer()
-            
+
             Image(systemName: "sparkles")
-                .font(.system(size: 56))
+                .scaledFont(size: 56)
                 .foregroundStyle(Color.clarityPrimary)
                 .symbolEffect(.pulse, options: .repeating)
-            
+
             VStack(spacing: 8) {
-                Text("Clarity Advisor")
+                Text("Clara")
                     .font(.title2.bold())
-                
-                Text("Tu asesor financiero personal.\nPregúntame sobre tus gastos.")
+
+                Text("Asesora financiera con acceso\na todos tus datos reales.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            
-            // Suggestions
-            VStack(spacing: 12) {
-                ForEach(viewModel.suggestions, id: \.self) { suggestion in
+
+            // Vertical suggestion buttons (prominent, first visit)
+            VStack(spacing: 10) {
+                ForEach(viewModel.suggestions) { suggestion in
                     Button {
-                        Task {
-                            if suggestion.contains("Analiza") {
-                                // Trigger Auditor Mode
-                                await viewModel.triggerDeepAnalysis()
-                            } else {
-                                // Normal chat
-                                await viewModel.sendSuggestion(suggestion)
-                            }
-                        }
+                        Task { await viewModel.sendSuggestion(suggestion) }
                     } label: {
-                        Text(suggestion)
-                            .font(.subheadline)
+                        Text(suggestion.display)
+                            .font(.subheadline.weight(.medium))
                             .foregroundStyle(Color.clarityPrimary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
                             .background(
                                 Capsule()
                                     .fill(Color.clarityPrimary.opacity(0.1))
                             )
                     }
+                    .disabled(viewModel.isLoading)
                 }
             }
-            
+            .padding(.horizontal, 24)
+
             Spacer()
-            
-            // Provider indicator
-            Text("Usando: \(viewModel.currentProviderName)")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+
+            VStack(spacing: 4) {
+                Text("Usando: \(viewModel.currentProviderName)")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                Text("\(viewModel.remainingQueries) de 3 consultas semanales")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding()
     }
-    
+
+    // MARK: - Quick Actions (inline chips during conversation)
+
+    private var quickActions: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(viewModel.suggestions) { suggestion in
+                    Button {
+                        Task { await viewModel.sendSuggestion(suggestion) }
+                    } label: {
+                        Text(suggestion.display)
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.clarityPrimary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.clarityPrimary.opacity(0.08))
+                            )
+                    }
+                    .disabled(viewModel.isLoading)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+    }
+
     // MARK: - Input Bar
-    
+
     private var inputBar: some View {
         HStack(spacing: 12) {
             TextField("Pregunta algo...", text: $viewModel.inputText, axis: .vertical)
@@ -171,19 +184,16 @@ struct AIAdvisorView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .focused($isInputFocused)
                 .lineLimit(1...4)
-            
+
             Button {
-                Task {
-                    await viewModel.sendMessage()
-                }
+                Task { await viewModel.sendMessage() }
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 32))
+                    .scaledFont(size: 32)
                     .foregroundStyle(viewModel.canSend ? Color.clarityPrimary : .gray)
             }
             .disabled(!viewModel.canSend)
             .accessibilityLabel("Enviar mensaje")
-            .accessibilityHint("Envía tu consulta al asesor financiero")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -195,31 +205,30 @@ struct AIAdvisorView: View {
 
 struct MessageBubble: View {
     let message: AIMessage
-    
-    private var isUser: Bool {
-        message.role == .user
-    }
-    
+
+    private var isUser: Bool { message.role == .user }
+
     var body: some View {
         HStack {
             if isUser { Spacer(minLength: 60) }
-            
+
             VStack(alignment: isUser ? .trailing : .leading, spacing: 4) {
-                Text(LocalizedStringKey(message.content)) // Supports Markdown
+                Text(LocalizedStringKey(message.content))
                     .font(.body)
                     .foregroundStyle(isUser ? .white : .primary)
+                    .textSelection(.enabled)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                     .background(
                         RoundedRectangle(cornerRadius: 20)
                             .fill(isUser ? Color.clarityPrimary : Color(uiColor: .secondarySystemGroupedBackground))
                     )
-                
+
                 Text(message.timestamp, style: .time)
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-            
+
             if !isUser { Spacer(minLength: 60) }
         }
     }
@@ -229,7 +238,7 @@ struct MessageBubble: View {
 
 struct TypingIndicator: View {
     @State private var animationOffset = 0
-    
+
     var body: some View {
         HStack {
             HStack(spacing: 4) {
@@ -246,7 +255,7 @@ struct TypingIndicator: View {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(Color(uiColor: .secondarySystemGroupedBackground))
             )
-            
+
             Spacer()
         }
         .onAppear {
@@ -256,8 +265,6 @@ struct TypingIndicator: View {
         }
     }
 }
-
-// MARK: - Preview
 
 #Preview {
     AIAdvisorView()

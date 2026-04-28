@@ -13,7 +13,7 @@ struct VoiceSettingsPanel: View {
             // Header
             HStack(spacing: 12) {
                 Image(systemName: "mic.circle.fill")
-                    .font(.system(size: 24))
+                    .scaledFont(size: 24)
                     .foregroundStyle(
                         LinearGradient(
                             colors: [.purple, .blue],
@@ -24,16 +24,16 @@ struct VoiceSettingsPanel: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Entrada por Voz")
-                        .font(.system(size: 18, weight: .semibold))
+                        .scaledFont(size: 18, weight: .semibold)
                     
                     Text("Ajusta cómo se comporta el micrófono")
-                        .font(.system(size: 14))
+                        .scaledFont(size: 14)
                         .foregroundColor(.secondary)
                 }
-                
+
                 Spacer()
             }
-            
+
             // Settings
             VStack(spacing: 16) {
                 // Auto-confirm
@@ -82,12 +82,12 @@ struct VoiceSettingsPanel: View {
                             .foregroundColor(.purple)
                         
                         Text("Tiempo de silencio")
-                            .font(.system(size: 16, weight: .medium))
-                        
+                            .scaledFont(size: 16, weight: .medium)
+
                         Spacer()
-                        
+
                         Text(String(format: "%.1fs", settings.silenceTimeout))
-                            .font(.system(size: 14, weight: .medium))
+                            .scaledFont(size: 14, weight: .medium)
                             .foregroundColor(.secondary)
                     }
                     
@@ -98,7 +98,7 @@ struct VoiceSettingsPanel: View {
                         }
                     
                     Text("Tiempo de silencio para detectar fin de frase")
-                        .font(.system(size: 12))
+                        .scaledFont(size: 12)
                         .foregroundColor(.secondary)
                 }
             }
@@ -126,17 +126,17 @@ struct VoiceSettingsPanel: View {
             if showStats {
                 VStack(spacing: 12) {
                     Text("📊 Estadísticas de Uso")
-                        .font(.system(size: 16, weight: .semibold))
+                        .scaledFont(size: 16, weight: .semibold)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
                     if let lastUsed = stats.lastUsed {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Última vez usado")
-                                .font(.system(size: 12, weight: .medium))
+                                .scaledFont(size: 12, weight: .medium)
                                 .foregroundColor(.secondary)
-                            
+
                             Text("\(lastUsed, style: .date) \(lastUsed, style: .time)")
-                                .font(.system(size: 14))
+                                .scaledFont(size: 14)
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -183,16 +183,16 @@ struct SettingRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .scaledFont(size: 20)
                 .foregroundColor(.purple)
                 .frame(width: 24)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 16, weight: .medium))
-                
+                    .scaledFont(size: 16, weight: .medium)
+
                 Text(description)
-                    .font(.system(size: 12))
+                    .scaledFont(size: 12)
                     .foregroundColor(.secondary)
             }
             

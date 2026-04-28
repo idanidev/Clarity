@@ -27,13 +27,11 @@ struct HomeView: View {
 
     var body: some View {
         mainContent
-            .background(DesignTokens.Colors.background)  // Adaptive background
-            .navigationTitle("")  // Hidden title as requested
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(DesignTokens.Colors.background, for: .navigationBar)
-            .toolbarBackgroundVisibility(.visible, for: .navigationBar)
+            .background(DesignTokens.Colors.background)
+            .navigationTitle("")
+            .toolbar(.hidden, for: .navigationBar)
             .refreshable { await viewModel.refresh() }
-            .task { await viewModel.loadExpenses() }
+            .task { await viewModel.loadIfNeeded() }
             .sheet(item: $expenseToEdit) { expense in
                 EditExpenseSheet(expense: expense) {
                     Task { await viewModel.refresh() }
@@ -79,8 +77,7 @@ struct HomeView: View {
                     chartView
                 case 2:
                     calendarView
-                case 3:
-                    comparisonView
+                // case 3: comparisonView  // Temporalmente deshabilitado
                 default:
                     listView
                 }
@@ -104,8 +101,8 @@ struct HomeView: View {
                     .accessibilityLabel("Vista gráficos")
                 viewModeButton(icon: "calendar", index: 2)
                     .accessibilityLabel("Vista calendario")
-                viewModeButton(icon: "arrow.left.arrow.right", index: 3)
-                    .accessibilityLabel("Comparar meses")
+                // viewModeButton(icon: "arrow.left.arrow.right", index: 3)
+                //     .accessibilityLabel("Comparar meses")
             }
             .padding(4)
             .background(.regularMaterial)
@@ -145,11 +142,14 @@ struct HomeView: View {
                 .padding(.horizontal, DesignTokens.Spacing.sm)
                 .padding(.top, 12)  // Espacio limpio desde navigation bar
 
-                // Month Selector (NEW)
-                MonthSelectorView(currentMonth: $viewModel.selectedMonth) {
-                    Task { await viewModel.onMonthChanged() }
+                // Month Selector — hidden while searching (search spans all months)
+                if viewModel.searchText.isEmpty {
+                    MonthSelectorView(currentMonth: $viewModel.selectedMonth) {
+                        Task { await viewModel.onMonthChanged() }
+                    }
+                    .padding(.horizontal, DesignTokens.Spacing.sm)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
-                .padding(.horizontal, DesignTokens.Spacing.sm)
 
                 // Search Bar Moderna + Filter Button
                 HStack(spacing: DesignTokens.Spacing.xs) {
@@ -204,7 +204,22 @@ struct HomeView: View {
                 .padding(.horizontal, DesignTokens.Spacing.sm)
                 // ActiveFilterPillsView removed as requested
             }
+            .animation(.easeInOut(duration: 0.2), value: viewModel.searchText.isEmpty)
             .background(DesignTokens.Colors.background)
+            // Sombra inferior que crea profundidad entre header y lista
+            .overlay(alignment: .bottom) {
+                LinearGradient(
+                    colors: [
+                        DesignTokens.Colors.background,
+                        DesignTokens.Colors.background.opacity(0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 16)
+                .offset(y: 16)
+                .allowsHitTesting(false)
+            }
 
             // List Content - Scrollable
             if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
@@ -279,7 +294,7 @@ struct HomeView: View {
 
     // MARK: - Tab 4: Comparison View (VS)
     private var comparisonView: some View {
-        MonthComparisonView(expenses: viewModel.filteredExpenses)
+        MonthComparisonView(expenses: viewModel.allHistoricalExpenses)
     }
 
     // MARK: - Helpers

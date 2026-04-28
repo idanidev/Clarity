@@ -38,7 +38,7 @@ class VoiceHapticsEngine {
                 do {
                     try self?.engine?.start()
                 } catch {
-                    print("⚠️ Haptic engine reset failed: \(error.localizedDescription)")
+                    self?.logger.warning("⚠️ Haptic engine reset failed: \(error.localizedDescription)")
                 }
             }
 
@@ -178,7 +178,7 @@ class VoiceHapticsEngine {
             let player = try engine.makePlayer(with: pattern)
             try player.start(atTime: CHHapticTimeImmediate)
         } catch {
-            print("⚠️ Haptic pattern play failed: \(error.localizedDescription)")
+            logger.warning("⚠️ Haptic pattern play failed: \(error.localizedDescription)")
         }
     }
 

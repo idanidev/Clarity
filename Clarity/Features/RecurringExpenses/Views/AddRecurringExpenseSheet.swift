@@ -7,7 +7,7 @@ struct AddRecurringExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     let onSuccess: () -> Void
     
-    @StateObject private var repository = RecurringExpenseRepository()
+    private let repository = DependencyContainer.shared.recurringExpenseRepository
     
     @State private var amountString = ""
     @State private var name = ""
@@ -40,7 +40,7 @@ struct AddRecurringExpenseSheet: View {
                             showEmojiPicker = true
                         } label: {
                             Text(selectedIcon)
-                                .font(.system(size: 40))
+                                .scaledFont(size: 40)
                                 .padding(8)
                                 .background(Color.clarityPrimary.opacity(0.15))
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -51,7 +51,7 @@ struct AddRecurringExpenseSheet: View {
                 Section {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
-                        .font(.system(size: 32, weight: .bold))
+                        .scaledFont(size: 32, weight: .bold)
                     
                     TextField("Nombre (ej. Netflix)", text: $name)
                 }
@@ -159,7 +159,6 @@ struct AddRecurringExpenseSheet: View {
                 onSuccess()
                 dismiss()
             } catch {
-                print("Error saving recurring expense: \(error)")
                 isSaving = false
             }
         }

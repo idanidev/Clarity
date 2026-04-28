@@ -247,7 +247,7 @@ enum HapticPattern {
     case filterApplied
     case tabSwitch
 
-    func events() -> CHHapticPattern {
+    func events() throws -> CHHapticPattern {
         let events: [CHHapticEvent]
 
         switch self {
@@ -419,6 +419,6 @@ enum HapticPattern {
             ]
         }
 
-        return try! CHHapticPattern(events: events, parameters: [])
+        return try CHHapticPattern(events: events, parameters: [])
     }
 }

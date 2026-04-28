@@ -8,6 +8,9 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AuthViewModel.self) var authViewModel
     @State private var showLogoutConfirm = false
+    @State private var showDeleteConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteError: String?
     @AppStorage("app.theme") private var selectedTheme: String = "system"
 
     var body: some View {
@@ -23,47 +26,46 @@ struct SettingsView: View {
                         LabeledContent("Nombre", value: name)
                     }
 
+                }
+
+                // Ingresos — sueldo + historial unificados
+                Section("Ingresos") {
                     NavigationLink {
-                        SubscriptionView()
+                        SalarySettingsStandaloneView()
                     } label: {
-                        HStack {
-                            Text("Suscripción")
-                            Spacer()
-                            Text(
-                                authViewModel.userDocument?.subscription?.plan.capitalized ?? "Free"
-                            )
-                            .foregroundStyle(.secondary)
-                        }
+                        Label("Nóminas", systemImage: "eurosign.circle")
                     }
                 }
 
-                // Preferences Section
-                Section("Preferencias") {
-                    NavigationLink("Categorías") {
+                // Gastos — configuración relacionada con gastos
+                Section("Gastos") {
+                    NavigationLink {
                         CategoriesManagementView()
+                    } label: {
+                        Label(String(localized: "settings.preferences.categories", defaultValue: "Categorías"), systemImage: "tag")
                     }
 
-                    NavigationLink("Historial de Nóminas") {
-                        MonthlyBudgetsView()
-                    }
-
-                    NavigationLink("Ajustes de Sueldo") {
-                        SalarySettingsStandaloneView()
-                    }
-
-                    NavigationLink("Gastos Recurrentes") {
+                    NavigationLink {
                         RecurringExpensesView()
+                    } label: {
+                        Label(String(localized: "settings.preferences.recurringExpenses", defaultValue: "Gastos Recurrentes"), systemImage: "arrow.clockwise")
                     }
+                }
 
-                    NavigationLink("Notificaciones") {
+                // App — preferencias UI puras
+                Section("App") {
+                    NavigationLink {
                         NotificationsView()
+                    } label: {
+                        Label(String(localized: "settings.preferences.notifications", defaultValue: "Notificaciones"), systemImage: "bell")
                     }
 
-                    // Theme Picker
-                    Picker("Tema", selection: $selectedTheme) {
-                        Label("Claro", systemImage: "sun.max.fill").tag("light")
-                        Label("Oscuro", systemImage: "moon.fill").tag("dark")
-                        Label("Sistema", systemImage: "iphone").tag("system")
+                    Picker(selection: $selectedTheme) {
+                        Label(String(localized: "settings.theme.light", defaultValue: "Claro"), systemImage: "sun.max.fill").tag("light")
+                        Label(String(localized: "settings.theme.dark", defaultValue: "Oscuro"), systemImage: "moon.fill").tag("dark")
+                        Label(String(localized: "settings.theme.system", defaultValue: "Sistema"), systemImage: "iphone").tag("system")
+                    } label: {
+                        Label(String(localized: "settings.preferences.theme", defaultValue: "Tema"), systemImage: "paintbrush")
                     }
                     .onChange(of: selectedTheme) { _, newTheme in
                         saveThemeToFirebase(newTheme)
@@ -71,11 +73,11 @@ struct SettingsView: View {
                 }
 
                 // Data Section
-                Section("Datos") {
+                Section(String(localized: "settings.data.title", defaultValue: "Datos")) {
                     NavigationLink {
                         BackupSettingsView()
                     } label: {
-                        Label("Copias de Seguridad", systemImage: "arrow.clockwise.icloud")
+                        Label(String(localized: "settings.data.backups", defaultValue: "Copias de Seguridad"), systemImage: "arrow.clockwise.icloud")
                     }
 
                     Button {
@@ -84,11 +86,12 @@ struct SettingsView: View {
                         Label("Exportar a CSV", systemImage: "square.and.arrow.up")
                     }
 
-                    NavigationLink {
-                        ImportFlowView()
-                    } label: {
-                        Label("Importar CSV", systemImage: "square.and.arrow.down")
-                    }
+                    // Temporalmente deshabilitado — pendiente para siguientes versiones
+                    // NavigationLink {
+                    //     ImportFlowView()
+                    // } label: {
+                    //     Label("Importar CSV", systemImage: "square.and.arrow.down")
+                    // }
 
                     if let fileURL = exportedFileURL {
                         ShareLink(item: fileURL) {
@@ -96,32 +99,35 @@ struct SettingsView: View {
                         }
                     }
 
-                    Button {
-                        // PDF export - complex feature for future
-                        HapticManager.shared.notification(.warning)
-                    } label: {
-                        Label("Generar Informe PDF", systemImage: "doc.richtext")
-                    }
-                    .disabled(true)
-                    .opacity(0.5)
                 }
 
                 // About Section
-                Section("Información") {
-                    LabeledContent("Versión", value: appVersion)
+                Section(String(localized: "settings.info.title", defaultValue: "Información")) {
+                    LabeledContent(String(localized: "settings.info.version", defaultValue: "Versión"), value: appVersion)
 
                     if let privacyURL = URL(string: "https://clarity-gastos.web.app/privacy") {
                         Link(destination: privacyURL) {
-                            Text("Política de Privacidad")
+                            Text(String(localized: "settings.info.privacyPolicy", defaultValue: "Política de Privacidad"))
                         }
                     }
 
                     if let termsURL = URL(string: "https://clarity-gastos.web.app/terms") {
                         Link(destination: termsURL) {
-                            Text("Términos de Servicio")
+                            Text(String(localized: "settings.info.termsOfService", defaultValue: "Términos de Servicio"))
                         }
                     }
                 }
+
+                #if DEBUG
+                // Developer / Preview — solo en builds de desarrollo
+                Section(String(localized: "settings.developer.title", defaultValue: "Desarrollador")) {
+                    Button {
+                        UserDataManager.shared.resetOnboarding()
+                    } label: {
+                        Label(String(localized: "settings.developer.showOnboarding", defaultValue: "Ver onboarding"), systemImage: "arrow.counterclockwise")
+                    }
+                }
+                #endif
 
                 // Logout Section
                 Section {
@@ -130,30 +136,82 @@ struct SettingsView: View {
                     } label: {
                         HStack {
                             Spacer()
-                            Text("Cerrar Sesión")
+                            Text(String(localized: "settings.logout.button", defaultValue: "Cerrar Sesión"))
                             Spacer()
                         }
                     }
                 }
+
+                // Delete Account Section — requerido por App Store
+                Section {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if isDeletingAccount {
+                                ProgressView()
+                            } else {
+                                Text("Eliminar Cuenta")
+                            }
+                            Spacer()
+                        }
+                    }
+                    .disabled(isDeletingAccount)
+                } footer: {
+                    Text("Esta acción es permanente. Se borrarán todos tus gastos, presupuestos y datos asociados.")
+                }
             }
-            .navigationTitle("Ajustes")
-            .confirmationDialog(
-                "¿Cerrar sesión?",
-                isPresented: $showLogoutConfirm,
-                titleVisibility: .visible
+            .navigationTitle(String(localized: "settings.navigationTitle", defaultValue: "Ajustes"))
+            .alert(
+                String(localized: "settings.logout.confirmation", defaultValue: "¿Cerrar sesión?"),
+                isPresented: $showLogoutConfirm
             ) {
-                Button("Cerrar Sesión", role: .destructive) {
+                Button(String(localized: "common.cancel", defaultValue: "Cancelar"), role: .cancel) {}
+                Button(String(localized: "settings.logout.button", defaultValue: "Cerrar Sesión"), role: .destructive) {
                     authViewModel.signOut()
                 }
-                Button("Cancelar", role: .cancel) {}
+            } message: {
+                Text("Tendrás que volver a iniciar sesión para acceder a tus datos.")
+            }
+            .alert(
+                "¿Eliminar cuenta permanentemente?",
+                isPresented: $showDeleteConfirm
+            ) {
+                Button(String(localized: "common.cancel", defaultValue: "Cancelar"), role: .cancel) {}
+                Button("Eliminar Cuenta", role: .destructive) {
+                    Task { await performDeleteAccount() }
+                }
+            } message: {
+                Text("Se borrarán todos tus datos y no se pueden recuperar.")
+            }
+            .alert("Error al eliminar cuenta", isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(deleteError ?? "")
             }
         }
     }
 
-    private var appVersion: String {
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
-        return "\(version) (\(build))"
+    private func performDeleteAccount() async {
+        isDeletingAccount = true
+        do {
+            try await authViewModel.deleteAccount()
+        } catch {
+            let nsError = error as NSError
+            if nsError.code == AuthErrorCode.requiresRecentLogin.rawValue {
+                deleteError = "Por seguridad, vuelve a iniciar sesión y pulsa Eliminar Cuenta otra vez."
+                // Cerrar sesión automáticamente para que el usuario re-autentique;
+                // tras login el token es reciente y user.delete() funciona.
+                authViewModel.signOut()
+            } else {
+                deleteError = error.localizedDescription
+            }
+        }
+        isDeletingAccount = false
     }
 
     @State private var exportedFileURL: URL?
@@ -170,6 +228,13 @@ struct SettingsView: View {
             }
         }
     }
+
+    private var appVersion: String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+        return "\(version) (\(build))"
+    }
+
     // MARK: - Theme Functions
 
     private func saveThemeToFirebase(_ theme: String) {
@@ -182,46 +247,9 @@ struct SettingsView: View {
                     .document(userId)
                     .updateData(["settings.theme": theme])
             } catch {
-                print("❌ Error saving theme: \(error)")
+                // Theme save errors are non-critical; silently ignore
             }
         }
-    }
-}
-
-// MARK: - Subscription View
-struct SubscriptionView: View {
-    var body: some View {
-        List {
-            ForEach(SubscriptionPlan.allCases, id: \.self) { plan in
-                VStack(alignment: .leading, spacing: Spacing.sm) {
-                    HStack {
-                        Text(plan.displayName)
-                            .font(.clarityHeadline)
-
-                        Spacer()
-
-                        Text(plan.price)
-                            .font(.claritySubheadline)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.clarityPrimary)
-                    }
-
-                    ForEach(plan.features, id: \.self) { feature in
-                        HStack(spacing: Spacing.xs) {
-                            Image(systemName: "checkmark")
-                                .font(.caption)
-                                .foregroundStyle(.green)
-
-                            Text(feature)
-                                .font(.clarityCaption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                .padding(.vertical, Spacing.xs)
-            }
-        }
-        .navigationTitle("Suscripción")
     }
 }
 

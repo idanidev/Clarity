@@ -10,10 +10,14 @@
 	<string>Clarity</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>es</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Clarity usa Face ID para bloquear automáticamente la app y proteger tus datos financieros</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Usamos el micrófono para añadir gastos por voz</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Necesitamos reconocer tu voz para detectar gastos automáticamente</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

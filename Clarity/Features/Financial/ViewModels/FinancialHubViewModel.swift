@@ -10,7 +10,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import Foundation
 import Observation
-import SwiftUI
+// SwiftUI removed — animations belong in the View layer
 
 @MainActor
 @Observable
@@ -19,6 +19,7 @@ class FinancialHubViewModel {
     private(set) var currentBudget: MonthlyBudget?
     private(set) var goals: [Goal] = []
     private(set) var isLoading = false
+    private(set) var hasLoaded = false
     private(set) var error: String?
 
     // Monthly Setup Wizard
@@ -28,10 +29,39 @@ class FinancialHubViewModel {
     // Salary Settings
     var isSalaryRecurring = false
     var showSalarySettings = false
-    var showAddGoal = false  // NEW
+    var showAddGoal = false
+    var editingGoal: Goal? = nil
 
     // Services
-    private let service = FinancialService.shared
+    private let service: FinancialService
+    private let getExpensesUseCase: GetExpensesUseCase
+    private let recurringRepository: RecurringExpenseRepository
+
+    nonisolated(unsafe) private var expenseObserver: Any?
+
+    init() {
+        self.service = DependencyContainer.shared.financialService
+        self.getExpensesUseCase = DependencyContainer.shared.makeGetExpensesUseCase()
+        self.recurringRepository = DependencyContainer.shared.recurringExpenseRepository
+
+        // Listen for expense changes even when the view isn't visible
+        expenseObserver = NotificationCenter.default.addObserver(
+            forName: .expenseDidChange,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.hasLoaded else { return }
+                await self.refreshCurrentMonthExpenses()
+            }
+        }
+    }
+
+    deinit {
+        if let observer = expenseObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     // MARK: - Computed Properties
 
@@ -45,9 +75,7 @@ class FinancialHubViewModel {
     }
 
     var currentMonthName: String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "es_ES")
-        return formatter.monthSymbols[currentMonth - 1].capitalized
+        Formatters.fullMonthName(currentMonth)
     }
 
     /// The "Energy" available for spending
@@ -69,14 +97,17 @@ class FinancialHubViewModel {
         goals.filter { $0.type == .savingsTarget }
     }
 
-    /// Free Cash = Income - (Real Expenses + Savings Allocated)
-    /// For now, we compute: Income - Savings Allocated (expenses come from ExpenseRepository later)
-    var freeCash: Double {
-        // TODO: Inject real expenses from ExpenseRepository
-        // let totalExpenses = await expenseRepository.getMonthTotal(year:month:)
-        let totalExpenses: Double = 0  // Placeholder
-        return income - (totalExpenses + savingsAllocated)
+    /// All expenses for the current month, loaded server-side for accuracy.
+    /// Refreshed on demand via refreshCurrentMonthExpenses().
+    private(set) var currentMonthExpenses: [Expense] = []
+
+    /// Total spent this month.
+    var totalSpent: Double {
+        currentMonthExpenses.reduce(0) { $0 + $1.amount }
     }
+
+    /// Free Cash = Income - Total Spent (savingsAllocated shown separately)
+    var freeCash: Double { income - totalSpent }
 
     /// Percentage of income remaining
     var freeCashPercentage: Double {
@@ -87,15 +118,24 @@ class FinancialHubViewModel {
     // MARK: - Lifecycle
 
     func load() async {
-        print("🟢 FinancialHubViewModel: Loading started...")
+        guard !hasLoaded && !isLoading else { return }
+
+        // Esperar a que Auth restaure sesión (crítico en simulador donde tarda más)
+        if Auth.auth().currentUser == nil {
+            for _ in 0..<5 {
+                try? await Task.sleep(for: .milliseconds(300))
+                if Auth.auth().currentUser != nil { break }
+            }
+            guard Auth.auth().currentUser != nil else {
+                error = "No autenticado"
+                return
+            }
+        }
+
         isLoading = true
         error = nil
 
         do {
-            print(
-                "🟢 FinancialHubViewModel: Fetching monthly budget for \(currentYear)-\(currentMonth)..."
-            )
-
             // 0. Load User Settings first to check recurring preference
             if let userId = Auth.auth().currentUser?.uid,
                 let doc = try await UserDataService.shared.loadUserDocument(userId: userId)
@@ -107,47 +147,54 @@ class FinancialHubViewModel {
             if let budget = try await service.fetchMonthlyBudget(
                 year: currentYear, month: currentMonth)
             {
-                print("🟢 FinancialHubViewModel: Budget found: \(budget.id)")
                 currentBudget = budget
             } else {
-                print("🟡 FinancialHubViewModel: No budget found.")
-
                 // CHECK RECURRING HERE
                 if let userId = Auth.auth().currentUser?.uid,
                     let doc = try await UserDataService.shared.loadUserDocument(userId: userId),
                     let baseIncome = doc.income,
                     doc.settings?.isSalaryRecurring == true
                 {
-                    print(
-                        "🟢 FinancialHubViewModel: Recurring salary active (€\(baseIncome)). Auto-creating budget."
-                    )
                     await createMonthlyBudget(income: baseIncome)
                 } else {
-                    print("🟡 FinancialHubViewModel: Triggering wizard.")
                     // No budget & No recurring → Trigger wizard
-                    // Also fetch previous month's income for "Use same" feature
                     if let previous = try await service.fetchPreviousMonthBudget() {
-                        print(
-                            "🟢 FinancialHubViewModel: Previous budget found with income: \(previous.income)"
-                        )
                         previousMonthIncome = previous.income
                     }
                     showMonthlySetup = true
                 }
             }
 
-            print("🟢 FinancialHubViewModel: Fetching goals...")
-            // 2. Load goals
-            goals = try await service.fetchGoals()
-            print("🟢 FinancialHubViewModel: Loaded \(goals.count) goals.")
+            // 2. Load goals + current month expenses in parallel
+            let calendar = Calendar.current
+            let monthComponents = DateComponents(year: currentYear, month: currentMonth)
+            let monthStart = calendar.date(from: monthComponents) ?? Date()
+            let monthEnd = calendar.date(
+                byAdding: DateComponents(month: 1, day: -1), to: monthStart) ?? Date()
+            let monthFilter = ExpenseFilter(
+                dateRange: .custom,
+                customStartDate: monthStart,
+                customEndDate: monthEnd
+            )
+
+            async let goalsTask = service.fetchGoals()
+            async let expensesTask = getExpensesUseCase
+                .executePaginated(page: 0, filter: monthFilter)
+            async let rulesTask = recurringRepository.fetchAll()
+
+            goals = try await goalsTask
+            let expensesResult = (try? await expensesTask) ?? PageResult(expenses: [], hasMore: false)
+            let rules = (try? await rulesTask) ?? []
+            currentMonthExpenses = ExpenseSanitizer.sanitize(
+                expenses: expensesResult.expenses, rules: rules)
+
+            hasLoaded = true
 
         } catch {
-            self.error = error.localizedDescription
-            print("❌ FinancialHubViewModel.load() error: \(error)")
+            self.error = error.safeUserMessage
         }
 
         isLoading = false
-        print("🟢 FinancialHubViewModel: Loading finished. isLoading = false")
     }
 
     // MARK: - Monthly Setup Actions
@@ -172,7 +219,7 @@ class FinancialHubViewModel {
             showMonthlySetup = false
             HapticManager.shared.playSuccess()
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.safeUserMessage
         }
     }
 
@@ -185,7 +232,7 @@ class FinancialHubViewModel {
             try await service.saveMonthlyBudget(budget)
             currentBudget = budget
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.safeUserMessage
         }
     }
 
@@ -200,7 +247,7 @@ class FinancialHubViewModel {
             try await Firestore.firestore().collection("users").document(userId).updateData([
                 "income": amount,
                 "settings.isSalaryRecurring": recurring,
-                "updatedAt": Timestamp(date: Date()),
+                "updatedAt": FieldValue.serverTimestamp(),
             ])
 
             // 2. Update Current Month Budget if valid
@@ -212,20 +259,21 @@ class FinancialHubViewModel {
 
             HapticManager.shared.playSuccess()
         } catch {
-            self.error = "Error al guardar ajustes: \(error.localizedDescription)"
+            self.error = "Error al guardar ajustes: \(error.safeUserMessage)"
         }
     }
 
     // MARK: - Goal Actions
 
-    /// Feed a Piggy Bank: Subtract from freeCash, add to goal
+    /// Feed a Piggy Bank: Subtract from freeCash, add to goal, and record an expense
     func feedPiggyBank(goalId: String, amount: Double) async {
         guard let goalIndex = goals.firstIndex(where: { $0.id == goalId }) else { return }
+        let goalName = goals[goalIndex].name
+        let category = goals[goalIndex].savingsExpenseCategory ?? "Ahorros"
+        let subcategory = goals[goalIndex].savingsExpenseSubcategory
 
-        // Optimistic UI update
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) {
-            goals[goalIndex].currentAmount += amount
-        }
+        // Optimistic UI update (animation handled by View)
+        goals[goalIndex].currentAmount += amount
 
         do {
             // 1. Update goal in Firebase
@@ -241,12 +289,28 @@ class FinancialHubViewModel {
                 currentBudget = budget
             }
 
+            // 4. Create a real expense so it appears in the expense list
+            let expense = Expense(
+                amount: amount,
+                name: "Aportación a \(goalName)",
+                category: category,
+                subcategory: subcategory,
+                date: Formatters.isoString(from: Date()),
+                paymentMethod: "Transferencia",
+                goalId: goalId
+            )
+            do {
+                _ = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
+            } catch {
+                self.error = "Error al registrar aportación: \(error.safeUserMessage)"
+            }
+
             HapticManager.shared.playCustomPattern(.expenseAdded)
 
         } catch {
             // Rollback on error
             goals[goalIndex].currentAmount -= amount
-            self.error = error.localizedDescription
+            self.error = error.safeUserMessage
         }
     }
 
@@ -257,28 +321,82 @@ class FinancialHubViewModel {
             goals.append(goal)
             HapticManager.shared.playSuccess()
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.safeUserMessage
         }
     }
 
-    /// Archive a goal
-    func archiveGoal(_ goalId: String) async {
+    /// Update an existing goal
+    func updateGoal(_ goal: Goal) async {
         do {
-            try await service.archiveGoal(goalId)
-            goals.removeAll { $0.id == goalId }
+            try await service.saveGoal(goal)
+            if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
+                goals[idx] = goal
+            }
+            HapticManager.shared.playSuccess()
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.safeUserMessage
+        }
+    }
+
+    /// Delete a goal permanently
+    func deleteGoal(_ goalId: String) async {
+        do {
+            try await service.deleteGoal(goalId)
+            goals.removeAll { $0.id == goalId }
+            HapticManager.shared.notification(.success)
+        } catch {
+            self.error = error.safeUserMessage
         }
     }
 
     // MARK: - Helpers
 
-    /// Get spent amount for a category (for Shields)
-    /// TODO: Inject ExpenseRepository to query real expenses
+    /// Spent amount for a category this month, computed from sanitized currentMonthExpenses.
+    /// Used by GoalCardView (Shields) via spentAmountProvider closure.
     func getSpentAmount(for categoryId: String) -> Double {
-        // Placeholder - In production, query ExpenseRepository
-        // return expenseRepository.getSpentAmount(categoryId: categoryId, year: currentYear, month: currentMonth)
-        return 0
+        guard !categoryId.isEmpty else { return 0 }
+        let target = Self.normalizeCategory(categoryId)
+        return currentMonthExpenses
+            .filter {
+                let catPart = $0.category.components(separatedBy: " / ").first ?? $0.category
+                return Self.normalizeCategory(catPart) == target
+            }
+            .reduce(0) { $0 + $1.amount }
+    }
+
+    private static func normalizeCategory(_ s: String) -> String {
+        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .unicodeScalars
+            .filter { CharacterSet.letters.union(.whitespaces).contains($0) }
+            .reduce("") { $0 + String($1) }
+            .trimmingCharacters(in: .whitespaces)
+    }
+
+    /// Lightweight refresh of current month expenses — called every time the tab appears
+    /// so the spending shields stay up to date without a full reload.
+    func refreshCurrentMonthExpenses() async {
+        let calendar = Calendar.current
+        let monthComponents = DateComponents(year: currentYear, month: currentMonth)
+        let monthStart = calendar.date(from: monthComponents) ?? Date()
+        let monthEnd = calendar.date(
+            byAdding: DateComponents(month: 1, day: -1), to: monthStart) ?? Date()
+        let monthFilter = ExpenseFilter(
+            dateRange: .custom,
+            customStartDate: monthStart,
+            customEndDate: monthEnd
+        )
+        guard let result = try? await getExpensesUseCase
+            .executePaginated(page: 0, filter: monthFilter),
+              let rules = try? await recurringRepository.fetchAll()
+        else { return }
+        currentMonthExpenses = ExpenseSanitizer.sanitize(
+            expenses: result.expenses, rules: rules)
+    }
+
+    /// Force reload (e.g. after adding/archiving a goal)
+    func reload() async {
+        hasLoaded = false
+        await load()
     }
 
     /// Clear error state (for UI bindings)

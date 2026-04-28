@@ -37,20 +37,20 @@ final class SwiftDataExpenseDataSource {
             model.category = expense.category
             model.subcategory = expense.subcategory
             
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            if let dateObj = formatter.date(from: expense.date) {
+            // Usar parser UTC compartido (un DateFormatter sin TZ deriva la fecha al editar)
+            if let dateObj = Formatters.date(from: expense.date) {
                 model.date = dateObj
             }
             
             model.paymentMethod = expense.paymentMethod
             model.notes = expense.notes
+            model.goalId = expense.goalId
             model.updatedAt = Date()
-            
+
             try context.save()
         }
     }
-    
+
     /// Inserts or Updates based on ID existence
     func upsertExpense(_ expense: Expense) throws {
          guard let id = expense.id else { return }
@@ -63,14 +63,13 @@ final class SwiftDataExpenseDataSource {
              model.category = expense.category
              model.subcategory = expense.subcategory
              
-             let formatter = DateFormatter()
-             formatter.dateFormat = "yyyy-MM-dd"
-             if let dateObj = formatter.date(from: expense.date) {
+             if let dateObj = Formatters.date(from: expense.date) {
                  model.date = dateObj
              }
              
              model.paymentMethod = expense.paymentMethod
              model.notes = expense.notes
+             model.goalId = expense.goalId
              model.updatedAt = Date()
          } else {
              // Insert

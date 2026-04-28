@@ -103,6 +103,27 @@ struct RecurringExpense: Codable, Identifiable {
         return nil
     }
     
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        // Encode id as plain String? (not the @DocumentID wrapper) so JSONEncoder works
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encode(amount, forKey: .amount)
+        try container.encode(name, forKey: .name)
+        try container.encode(category, forKey: .category)
+        try container.encodeIfPresent(subcategory, forKey: .subcategory)
+        try container.encode(paymentMethod, forKey: .paymentMethod)
+        try container.encode(frequency, forKey: .frequency)
+        try container.encode(dayOfMonth, forKey: .dayOfMonth)
+        try container.encode(billingMonth, forKey: .billingMonth)
+        try container.encode(active, forKey: .active)
+        try container.encodeIfPresent(icon, forKey: .icon)
+        try container.encodeIfPresent(startDate, forKey: .startDate)
+        try container.encodeIfPresent(endDate, forKey: .endDate)
+        try container.encodeIfPresent(lastCreated, forKey: .lastCreated)
+        try container.encodeIfPresent(createdAt, forKey: .createdAt)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
+    }
+
     // Standard memberwise init for creating new expenses
     init(id: String?, amount: Double, name: String, category: String, subcategory: String?,
          paymentMethod: String, frequency: RecurringFrequency, dayOfMonth: Int, billingMonth: Int, active: Bool,

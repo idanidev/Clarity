@@ -1,6 +1,7 @@
 // ExpenseRepository.swift
 // Data layer implementation of the repository contract
 
+import FirebaseAuth
 import Foundation
 import OSLog
 
@@ -39,10 +40,6 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
             }
             UserDefaults.standard.set(true, forKey: key)
             logger.info("Migration successful. Moved \(legacyExpenses.count) items.")
-            
-            // Optional: Clear legacy? 
-            // try? await legacy.clear() 
-            // Keeping it for safety for now.
         } catch {
             logger.error("Migration failed: \(error.localizedDescription)")
         }
@@ -154,8 +151,38 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     
     private func syncFromRemote() async throws {
         logger.debug("Background syncing...")
+        // Capturar uid antes del await para detectar cambio de usuario durante el sync
+        // (evita escribir datos del usuario A en cache local del usuario B tras sign-out/in).
+        let uidAtStart = Auth.auth().currentUser?.uid
         let remote = try await remoteDataSource.getExpenses()
+        let uidAfter = Auth.auth().currentUser?.uid
+        guard uidAtStart == uidAfter, uidAfter != nil else {
+            logger.warning("syncFromRemote: user changed mid-sync, discarding remote payload")
+            return
+        }
         try await saveToLocal(remote)
+
+        // Remove local expenses that no longer exist remotely (deleted on another device)
+        // Only run orphan detection if we got a reasonable number of remote expenses
+        // to avoid deleting local data when the network response is incomplete
+        let local = try swiftDataSource.fetchExpenses()
+        if remote.count > 0 && remote.count >= local.count / 2 {
+            let remoteIds = Set(remote.compactMap(\.id))
+            let orphans = local.filter { expense in
+                guard let id = expense.id else { return false }
+                return !remoteIds.contains(id)
+            }
+            for orphan in orphans {
+                if let id = orphan.id {
+                    try? swiftDataSource.deleteExpense(id)
+                }
+            }
+            if !orphans.isEmpty {
+                logger.debug("Removed \(orphans.count) orphaned local expenses")
+            }
+        }
+
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncTimestamp")
         logger.debug("Background sync complete")
     }
     

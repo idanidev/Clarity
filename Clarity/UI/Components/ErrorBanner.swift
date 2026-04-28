@@ -49,12 +49,10 @@ struct ErrorBannerModifier: ViewModifier {
                 }
                 .padding(.top, 60) // Adjust based on NavBar
                 .zIndex(100)
-                .onAppear {
-                    // Auto dismiss after 5 seconds
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                        withAnimation {
-                            self.error = nil
-                        }
+                .task {
+                    try? await Task.sleep(for: .seconds(5))
+                    withAnimation {
+                        self.error = nil
                     }
                 }
             }

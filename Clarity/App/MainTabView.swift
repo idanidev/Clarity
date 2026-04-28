@@ -9,6 +9,8 @@ struct MainTabView: View {
     @State private var previousTab = 0
     @State private var showManualExpense = false
     @State private var showRecurring = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.scenePhase) private var scenePhase
     private var userDataManager = UserDataManager.shared
     @State private var homeViewModel = DependencyContainer.shared.makeHomeViewModel()
 
@@ -95,12 +97,15 @@ struct MainTabView: View {
                 .tag(4)
             }
             .tint(Color.clarityPrimary)
+            .modifier(iPadTabViewModifier())
 
         }
         // Sheets and alerts
         .sheet(isPresented: $showManualExpense) {
             AddExpenseSheet {
                 Task { await homeViewModel.refresh() }
+                NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+                NotificationsView.cancelInactivityReminder()
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -135,6 +140,9 @@ struct MainTabView: View {
                 previousTab = newValue
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            OfflineBanner()
+        }
         .overlay(alignment: .top) {
             if voiceCoordinator.showSuccessToast {
                 SuccessToast(message: voiceCoordinator.successMessage)
@@ -144,34 +152,106 @@ struct MainTabView: View {
         .task {
             await userDataManager.loadUserData()
 
-            // Verificar y crear gastos recurrentes pendientes
-            await LocalRecurringExpenseManager.shared.checkAndCreatePendingExpenses()
+            // Refresh notification content (fixes stale/empty bodies)
+            NotificationsView.refreshOnLaunch()
 
-            // Verificar si necesita crear backup automático (cada 7 días)
-            await BackupManager.shared.checkAndCreateAutoBackup()
+            // Check inactivity — notify if 7+ days without expenses
+            let lastExpenseDate = userDataManager.expenses.first?.dateAsDate
+            NotificationsView.scheduleInactivityReminderIfNeeded(lastExpenseDate: lastExpenseDate)
+
+            // Run recurring check and backup in parallel — both are independent
+            async let recurring = LocalRecurringExpenseManager.shared.checkAndCreatePendingExpenses()
+            async let backup = BackupManager.shared.checkAndCreateAutoBackup()
+            await recurring
+            await backup
+        }
+        .sheet(
+            isPresented: Binding(
+                get: {
+                    if case .confirming = voiceCoordinator.state { return true }
+                    return false
+                },
+                set: { show in
+                    if !show { voiceCoordinator.reset() }
+                }
+            )
+        ) {
+            if let expense = voiceCoordinator.pendingExpense {
+                VoiceConfirmationSheet(
+                    expense: expense,
+                    wasFullyDetected: voiceCoordinator.wasFullyDetected,
+                    categories: userDataManager.categories,
+                    speechManager: speechManager,
+                    onConfirm: { confirmed in
+                        Task {
+                            await voiceCoordinator.saveExpense(confirmed, viewModel: homeViewModel)
+                        }
+                    },
+                    onCancel: {
+                        voiceCoordinator.reset()
+                    }
+                )
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .presentationBackground(.regularMaterial)
+                .presentationCornerRadius(CornerRadius.large)
+            }
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                checkWidgetAddExpenseFlag()
+            }
         }
         .onOpenURL { url in
-            if url.scheme == "clarity" && url.host == "add-expense" {
-                // Parse optional input parameter
-                var inputPhrase: String?
-                if let components = URLComponents(url: url, resolvingAgainstBaseURL: true),
-                    let queryItems = components.queryItems
-                {
-                    inputPhrase = queryItems.first(where: { $0.name == "input" })?.value
-                }
+            guard url.scheme == "clarity", url.host == "add-expense",
+                  let components = URLComponents(url: url, resolvingAgainstBaseURL: true)
+            else { return }
 
-                // Small delay to ensure clean state transition if coming from background
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                    if let phrase = inputPhrase, !phrase.isEmpty {
-                        // Use the existing voice logic to parse the text
-                        voiceCoordinator.handleTranscript(
-                            phrase, categories: userDataManager.categories)
-                    } else {
-                        // Fallback to manual entry
-                        showManualExpense = true
-                    }
+            let queryItems = components.queryItems ?? []
+            let merchant = queryItems.first(where: { $0.name == "merchant" })?.value
+            let amountStr = queryItems.first(where: { $0.name == "amount" })?.value
+            let inputPhrase = queryItems.first(where: { $0.name == "input" })?.value
+
+            // Small delay to ensure clean state transition if coming from background
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(300))
+                if let merchant, !merchant.isEmpty,
+                   let amountStr, let amount = Double(amountStr) {
+                    voiceCoordinator.populateFromApplePay(merchant: merchant, amount: amount)
+                } else if let phrase = inputPhrase, !phrase.isEmpty {
+                    voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
+                } else {
+                    showManualExpense = true
                 }
             }
+        }
+    }
+}
+
+// MARK: - Widget Add Expense Flag
+
+private extension MainTabView {
+    func checkWidgetAddExpenseFlag() {
+        guard let defaults = UserDefaults(suiteName: "group.com.idanidev.clarity"),
+              defaults.bool(forKey: "widget_open_add_expense") else { return }
+        defaults.removeObject(forKey: "widget_open_add_expense")
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            showManualExpense = true
+        }
+    }
+}
+
+// MARK: - iPad Sidebar Adaptation
+
+private struct iPadTabViewModifier: ViewModifier {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    func body(content: Content) -> some View {
+        if sizeClass == .regular, #available(iOS 18.0, *) {
+            content.tabViewStyle(.sidebarAdaptable)
+        } else {
+            content
         }
     }
 }

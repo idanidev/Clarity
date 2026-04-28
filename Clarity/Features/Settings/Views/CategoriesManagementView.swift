@@ -11,20 +11,8 @@ struct CategoriesManagementView: View {
 
     var body: some View {
         List {
-            // Prominent add button
             Section {
-                Button {
-                    showAddCategory = true
-                } label: {
-                    Label("Agregar Categoría", systemImage: "plus.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(Color.clarityPrimary)
-                }
-            }
-
-            // Categories list
-            Section {
-                ForEach(userDataManager.categories) { category in
+                ForEach(userDataManager.categories, id: \.name) { category in
                     NavigationLink {
                         CategoryDetailView(category: category) {
                             Task {
@@ -32,26 +20,48 @@ struct CategoriesManagementView: View {
                             }
                         }
                     } label: {
-                        CategoryRow(category: category)
+                        CategoryRow(
+                            category: category,
+                            colorBinding: colorBinding(for: category)
+                        )
                     }
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                 }
                 .onDelete(perform: deleteCategories)
                 .onMove(perform: moveCategories)
             } header: {
-                Text("Mis Categorías")
-            } footer: {
-                if !userDataManager.categories.isEmpty {
-                    Text("Desliza para eliminar • Toca para editar")
-                        .font(.caption2)
+                HStack {
+                    Text("\(userDataManager.categories.count) categorías")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textCase(nil)
+                    Spacer()
+                    let totalSubs = userDataManager.categories.reduce(0) { $0 + $1.subcategories.count }
+                    Text("\(totalSubs) subcategorías")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .textCase(nil)
                 }
+            } footer: {
+                Text("Mantén pulsado para reordenar. Desliza para eliminar.")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Categorías")
+        .navigationTitle(String(localized: "categories.navigationTitle", defaultValue: "Categorías"))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 EditButton()
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showAddCategory = true
+                } label: {
+                    Image(systemName: "plus")
+                        .fontWeight(.semibold)
+                }
             }
         }
         .sheet(isPresented: $showAddCategory) {
@@ -62,15 +72,13 @@ struct CategoriesManagementView: View {
                 }
             }
         }
-        .alert("Eliminar Categoría", isPresented: $showDeleteAlert) {
-            Button("Cancelar", role: .cancel) {}
-            Button("Eliminar", role: .destructive) {
+        .alert(String(localized: "categories.delete.title", defaultValue: "Eliminar Categoría"), isPresented: $showDeleteAlert) {
+            Button(String(localized: "common.cancel", defaultValue: "Cancelar"), role: .cancel) {}
+            Button(String(localized: "common.delete", defaultValue: "Eliminar"), role: .destructive) {
                 confirmDelete()
             }
         } message: {
-            Text(
-                "Esta acción no se puede deshacer. Los gastos existentes mantendrán esta categoría."
-            )
+            Text(String(localized: "categories.delete.message", defaultValue: "Esta acción no se puede deshacer. Los gastos existentes mantendrán esta categoría."))
         }
     }
 
@@ -94,39 +102,104 @@ struct CategoriesManagementView: View {
         // Local reorder only for now - Firebase persist on save
         HapticManager.shared.impact(.light)
     }
+
+    /// Binding<Color> que persiste el cambio de color a la categoría en Firestore.
+    private func colorBinding(for category: Category) -> Binding<Color> {
+        Binding(
+            get: { Color(hex: category.color) },
+            set: { newColor in
+                var updated = category
+                updated.color = newColor.hexString
+                updated.updatedAt = Date()
+                Task {
+                    await userDataManager.updateCategory(updated)
+                    HapticManager.shared.selection()
+                }
+            }
+        )
+    }
 }
 
 // MARK: - Category Row
 
 private struct CategoryRow: View {
     let category: Category
+    @Binding var colorBinding: Color
+
+    /// Separa emoji(s) embebidos al final del nombre.
+    /// Camina por character-clusters desde el final, recogiendo todos los emoji.
+    private var parsed: (name: String, emoji: String?) {
+        let trimmed = category.name.trimmingCharacters(in: .whitespaces)
+        var nameChars = Array(trimmed)
+        var emojiChars: [Character] = []
+        while let last = nameChars.last, last.isEmojiCluster {
+            emojiChars.insert(last, at: 0)
+            nameChars.removeLast()
+        }
+        let cleanName = String(nameChars).trimmingCharacters(in: .whitespaces)
+        let emoji = emojiChars.isEmpty ? nil : String(emojiChars)
+        return (cleanName.isEmpty ? trimmed : cleanName, emoji)
+    }
+
+    private var color: Color { Color(hex: category.color) }
 
     var body: some View {
-        HStack(spacing: 12) {
-            // Color indicator
-            Circle()
-                .fill(Color(hex: category.color) ?? .gray)
-                .frame(width: 44, height: 44)
-                .overlay(
+        HStack(spacing: 14) {
+            // Tile con color + emoji
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(color.opacity(0.18))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(color.opacity(0.4), lineWidth: 1)
+                if let emoji = parsed.emoji {
+                    Text(emoji).font(.system(size: 22))
+                } else {
+                    // Fallback consistente: inicial del nombre en color de la categoría
+                    Text(parsed.name.prefix(1).uppercased())
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(color)
+                }
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(parsed.name)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
                     Circle()
-                        .strokeBorder(Color.primary.opacity(0.15), lineWidth: 1.5)
-                )
-                .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(category.name)
-                    .font(.headline)
-
-                Text(
-                    "\(category.subcategories.count) subcategoría\(category.subcategories.count == 1 ? "" : "s")"
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                        .fill(color)
+                        .frame(width: 6, height: 6)
+                    Text("\(category.subcategories.count) \(category.subcategories.count == 1 ? "subcategoría" : "subcategorías")")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
+
+            // Native ColorPicker — anillo arcoíris al tocar abre selector iOS
+            ColorPicker("", selection: $colorBinding, supportsOpacity: false)
+                .labelsHidden()
+                .scaleEffect(1.1)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+    }
+}
+
+// MARK: - Emoji detection
+
+private extension Character {
+    /// True si el cluster de caracteres es un emoji presentable (incluye VS16, ZWJ sequences, modifiers).
+    var isEmojiCluster: Bool {
+        guard let first = unicodeScalars.first else { return false }
+        // Emoji presentation por defecto, o emoji + variation selector U+FE0F, o secuencias ZWJ
+        if first.properties.isEmojiPresentation { return true }
+        if unicodeScalars.contains(where: { $0.value == 0xFE0F }) { return true }
+        if unicodeScalars.count > 1 && first.properties.isEmoji { return true }
+        return false
     }
 }
 
