@@ -39,6 +39,17 @@ class AddExpenseViewModel {
                 return
             }
 
+            // Priority 1.5: Match contra subcategorías del usuario.
+            // Si el nombre del gasto coincide con una subcategoría existente
+            // (ej: subcat "Developer" en categoría "Trabajo"), autocompletar.
+            if let subMatch = findCategoryBySubcategoryName(newName) {
+                guard !Task.isCancelled else { return }
+                self.category = subMatch.category
+                self.subcategory = subMatch.subcategory
+                self.wasAutoCategorized = true
+                return
+            }
+
             // Priority 2: Check expense history (exact/contains match)
             if let historyMatch = await findCategoryInHistory(for: newName) {
                 guard !Task.isCancelled else { return }
@@ -50,13 +61,80 @@ class AddExpenseViewModel {
 
             guard !Task.isCancelled else { return }
 
-            // Priority 3: Fallback to keyword-based suggestion
-            if let suggestion = SmartTransactionParser.suggestCategory(for: newName) {
-                self.category = suggestion.category
-                self.subcategory = suggestion.subcategory
+            // Priority 3: Fallback to keyword-based suggestion (HARDCODED en parser).
+            // Solo aplicar si la categoría/subcategoría EXISTE en las del usuario.
+            // Sino crearíamos categorías fantasma al añadir un gasto (bug grave).
+            if let suggestion = SmartTransactionParser.suggestCategory(for: newName),
+               let resolved = resolveSuggestionAgainstUserCategories(suggestion) {
+                guard !Task.isCancelled else { return }
+                self.category = resolved.category
+                self.subcategory = resolved.subcategory
                 self.wasAutoCategorized = true
             }
         }
+    }
+
+    /// Mapea una sugerencia hardcoded del parser a las categorías reales del usuario.
+    /// Si no existe match (ni por nombre ni por subcategoría), devuelve nil → no se aplica.
+    private func resolveSuggestionAgainstUserCategories(
+        _ suggestion: (category: String, subcategory: String?)
+    ) -> (category: String, subcategory: String?)? {
+        let userCats = UserDataManager.shared.categories
+        let target = suggestion.category
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+
+        // 1) Match por nombre de categoría (ignora tildes/case/emojis)
+        if let cat = userCats.first(where: {
+            $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .contains(target)
+        }) {
+            // Solo conservar subcategoría si existe en esa categoría
+            let sub = suggestion.subcategory.flatMap { sugSub in
+                cat.subcategories.first {
+                    $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        == sugSub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                }
+            }
+            return (cat.name, sub)
+        }
+
+        // 2) Match por subcategoría (puede que la categoría sea distinta pero la sub coincida)
+        if let sugSub = suggestion.subcategory?
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current),
+           let cat = userCats.first(where: {
+               $0.subcategories.contains {
+                   $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
+               }
+           }),
+           let realSub = cat.subcategories.first(where: {
+               $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
+           })
+        {
+            return (cat.name, realSub)
+        }
+
+        return nil
+    }
+
+    /// Busca una subcategoría existente que coincida (case/diacritic-insensitive)
+    /// con el nombre del gasto. Devuelve la categoría padre + esa subcategoría.
+    private func findCategoryBySubcategoryName(_ text: String) -> (category: String, subcategory: String)? {
+        let normalized = text
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+
+        for cat in UserDataManager.shared.categories {
+            if let match = cat.subcategories.first(where: {
+                $0.folding(options: .diacriticInsensitive, locale: .current)
+                    .lowercased()
+                    .trimmingCharacters(in: .whitespacesAndNewlines) == normalized
+            }) {
+                return (cat.name, match)
+            }
+        }
+        return nil
     }
 
     private func findCategoryInHistory(for text: String) async -> (category: String, subcategory: String?)? {

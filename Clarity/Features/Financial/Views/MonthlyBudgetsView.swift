@@ -226,6 +226,7 @@ struct CreateBudgetSheet: View {
     @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
     @State private var income: String = ""
+    @FocusState private var incomeFocused: Bool
 
     private let monthNames: [String] = {
         let formatter = DateFormatter()
@@ -280,6 +281,7 @@ struct CreateBudgetSheet: View {
                         TextField("1600", text: $income)
                             .keyboardType(.decimalPad)
                             .font(.title3.weight(.medium))
+                            .focused($incomeFocused)
                     }
                 }
 
@@ -305,6 +307,10 @@ struct CreateBudgetSheet: View {
                         dismiss()
                     }
                 }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Listo") { incomeFocused = false }.fontWeight(.semibold)
+                }
             }
         }
     }
@@ -328,6 +334,7 @@ struct EditBudgetSheet: View {
     var viewModel: MonthlyBudgetsViewModel
 
     @State private var income: String = ""
+    @FocusState private var incomeFocused: Bool
 
     private let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -360,6 +367,7 @@ struct EditBudgetSheet: View {
                         TextField("1600", text: $income)
                             .keyboardType(.decimalPad)
                             .font(.title3.weight(.medium))
+                            .focused($incomeFocused)
                     }
                 }
 
@@ -383,6 +391,10 @@ struct EditBudgetSheet: View {
                     Button(String(localized: "common.cancel", defaultValue: "Cancelar")) {
                         dismiss()
                     }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Listo") { incomeFocused = false }.fontWeight(.semibold)
                 }
             }
             .onAppear {

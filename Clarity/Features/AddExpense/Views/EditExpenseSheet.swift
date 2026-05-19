@@ -84,9 +84,11 @@ struct EditExpenseSheet: View {
                 .onChange(of: viewModel.name) { _, newValue in
                     if viewModel.category.isEmpty {
                         guard newValue.count >= 3 else { return }
-                        if let suggestion = SmartTransactionParser.suggestCategory(for: newValue) {
-                            viewModel.category = suggestion.0
-                            viewModel.subcategory = suggestion.1
+                        // Solo aplicar sugerencia si match con categorías reales del user
+                        if let suggestion = SmartTransactionParser.suggestCategory(for: newValue),
+                           let resolved = resolveSuggestion(suggestion) {
+                            viewModel.category = resolved.0
+                            viewModel.subcategory = resolved.1
                         }
                     }
                 }
@@ -163,6 +165,40 @@ struct EditExpenseSheet: View {
             TextField("Notas adicionales...", text: $viewModel.notes, axis: .vertical)
                 .lineLimit(3...6)
         }
+    }
+
+    /// Mapea sugerencia hardcoded del parser a categorías reales del usuario.
+    /// Devuelve nil si no hay match → no se aplica la sugerencia.
+    private func resolveSuggestion(_ suggestion: (String, String?)) -> (String, String?)? {
+        let userCats = UserDataManager.shared.categories
+        let target = suggestion.0
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        if let cat = userCats.first(where: {
+            $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .contains(target)
+        }) {
+            let sub = suggestion.1.flatMap { sugSub in
+                cat.subcategories.first {
+                    $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        == sugSub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                }
+            }
+            return (cat.name, sub)
+        }
+        if let sugSub = suggestion.1?
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current),
+           let cat = userCats.first(where: {
+               $0.subcategories.contains {
+                   $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
+               }
+           }),
+           let realSub = cat.subcategories.first(where: {
+               $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
+           })
+        {
+            return (cat.name, realSub)
+        }
+        return nil
     }
 }
 

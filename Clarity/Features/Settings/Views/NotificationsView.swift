@@ -387,37 +387,83 @@ struct NotificationsView: View {
 
     private static let inactivityID = "clarity.inactivity.reminder"
 
-    /// Schedules a local notification if the user hasn't added an expense in 7+ days.
-    /// Call from app launch after expenses are loaded.
+    private static let inactivityThresholdDays = 7
+    private static let inactivityRenotifyDays = 7  // re-notifica cada 7 días si sigue inactivo
+
+    /// Programa recordatorio de inactividad basado en el ÚLTIMO gasto registrado.
+    /// Reglas:
+    /// - Si han pasado >= 7 días desde último gasto → notifica mañana 10:00.
+    /// - Si han pasado < 7 días → programa para el día exacto en que cumpla 7 días, 10:00.
+    /// - Si no hay ningún gasto registrado → 7 días desde la fecha actual.
+    /// - Después del primer fire, programa re-notif cada `inactivityRenotifyDays`.
+    /// Llamar en cada app launch tras cargar gastos.
     static func scheduleInactivityReminderIfNeeded(lastExpenseDate: Date?) {
         let defaults = UserDefaults.standard
         guard defaults.bool(forKey: "notifications.pushEnabled") else { return }
 
         let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [inactivityID])
+        center.removePendingNotificationRequests(withIdentifiers: [inactivityID, inactivityRecurringID])
 
-        guard let lastDate = lastExpenseDate else { return }
-        let daysSince = Calendar.current.dateComponents([.day], from: lastDate, to: Date()).day ?? 0
-        guard daysSince >= 7 else { return }
-
-        let content = UNMutableNotificationContent()
-        content.title = "Te echamos de menos"
-        content.body = "Llevas \(daysSince) días sin registrar gastos. Mantén tus finanzas al día."
-        content.sound = .default
-
-        // Fire tomorrow at 10:00 AM (sin .day el trigger podía disparar en minutos)
         let cal = Calendar.current
-        guard let tomorrow = cal.date(byAdding: .day, value: 1, to: Date()) else { return }
-        var dc = cal.dateComponents([.year, .month, .day], from: tomorrow)
+        let now = Date()
+        // Anchor: si nunca registró gastos, usamos "hoy" (notif en 7 días).
+        let anchor = lastExpenseDate ?? now
+
+        // Día objetivo del primer aviso = anchor + threshold
+        guard let targetDay = cal.date(byAdding: .day, value: inactivityThresholdDays, to: anchor) else { return }
+
+        // Si el targetDay ya pasó, fire mañana 10:00; si no, ese día 10:00.
+        let fireDay = targetDay < now ? (cal.date(byAdding: .day, value: 1, to: now) ?? now) : targetDay
+
+        var dc = cal.dateComponents([.year, .month, .day], from: fireDay)
         dc.hour = 10
         dc.minute = 0
         let trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
+
+        // Días reales que llevará sin gastos en el momento del fire (más preciso que el +1).
+        let daysAtFire = max(
+            inactivityThresholdDays,
+            cal.dateComponents([.day], from: anchor, to: fireDay).day ?? inactivityThresholdDays
+        )
+
+        let content = UNMutableNotificationContent()
+        content.title = "Te echamos de menos"
+        if lastExpenseDate == nil {
+            content.body = "Aún no has registrado ningún gasto. Empieza hoy con uno por voz: \"Clarity, añade un gasto\"."
+        } else {
+            content.body = "Llevas \(daysAtFire) días sin registrar gastos. Mantén tus finanzas al día."
+        }
+        content.sound = .default
         center.add(UNNotificationRequest(identifier: inactivityID, content: content, trigger: trigger))
+
+        // Re-notif recurrente cada N días tras el primer aviso (mientras siga sin abrir/registrar).
+        scheduleRecurringInactivity(after: fireDay)
+    }
+
+    private static let inactivityRecurringID = "clarity.inactivity.recurring"
+
+    private static func scheduleRecurringInactivity(after firstFire: Date) {
+        let cal = Calendar.current
+        guard let secondFire = cal.date(byAdding: .day, value: inactivityRenotifyDays, to: firstFire) else { return }
+        var dc = cal.dateComponents([.year, .month, .day], from: secondFire)
+        dc.hour = 10
+        dc.minute = 0
+        let trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
+
+        let content = UNMutableNotificationContent()
+        content.title = "Sigues sin registrar gastos"
+        content.body = "Han pasado más de 2 semanas. Un toque al + y vuelves a ordenar tu mes."
+        content.sound = .default
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: inactivityRecurringID, content: content, trigger: trigger)
+        )
     }
 
     /// Cancel inactivity reminder (call after adding an expense).
     static func cancelInactivityReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [inactivityID])
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [inactivityID, inactivityRecurringID]
+        )
     }
 }
 

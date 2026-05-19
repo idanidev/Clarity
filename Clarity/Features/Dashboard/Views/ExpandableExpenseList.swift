@@ -37,10 +37,16 @@ struct ExpandableExpenseList: View {
     let onExpenseEdit: (Expense) -> Void
     var onLoadMore: (() -> Void)? = nil  // Optional for pagination
 
-    // Local View State for expansion
-    // Storing IDs of COLLAPSED items (default behavior is expanded)
-    @State private var collapsedCategories: Set<String> = []
-    @State private var collapsedSubcategories: Set<String> = []
+    // Persistente entre sesiones (UserDefaults). Default: todo expandido.
+    @State private var collapsedCategories: Set<String> = Self.loadSet(key: "expenses.collapsedCategories")
+    @State private var collapsedSubcategories: Set<String> = Self.loadSet(key: "expenses.collapsedSubcategories")
+
+    private static func loadSet(key: String) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
+    }
+    private static func saveSet(_ set: Set<String>, key: String) {
+        UserDefaults.standard.set(Array(set), forKey: key)
+    }
 
     var body: some View {
         List {
@@ -91,6 +97,7 @@ struct ExpandableExpenseList: View {
                 collapsedCategories.insert(id)
             }
         }
+        Self.saveSet(collapsedCategories, key: "expenses.collapsedCategories")
         HapticManager.shared.selection()
     }
 
@@ -102,6 +109,7 @@ struct ExpandableExpenseList: View {
                 collapsedSubcategories.insert(id)
             }
         }
+        Self.saveSet(collapsedSubcategories, key: "expenses.collapsedSubcategories")
         HapticManager.shared.selection()
     }
 }
@@ -266,6 +274,7 @@ struct SubcategorySection: View {
                 } label: {
                     ModernExpenseCard(
                         expense: expense,
+                        categoryColor: categoryColor,
                         onTap: nil,
                         onDelete: nil,
                         onEdit: nil

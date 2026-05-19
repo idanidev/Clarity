@@ -59,12 +59,17 @@ struct ClarityApp: App {
                 }
                 #endif
 
-                // Run after Firebase is configured (AppDelegate.didFinishLaunching)
-                ClarityShortcuts.updateAppShortcutParameters()
-                try? Tips.configure([
-                    .displayFrequency(.immediate),
-                    .datastoreLocation(.applicationDefault),
-                ])
+                // Trabajo no crítico diferido tras el primer frame
+                // (no bloquea el render inicial de la UI).
+                Task.detached(priority: .utility) {
+                    await MainActor.run {
+                        ClarityShortcuts.updateAppShortcutParameters()
+                        try? Tips.configure([
+                            .displayFrequency(.immediate),
+                            .datastoreLocation(.applicationDefault),
+                        ])
+                    }
+                }
             }
             .onChange(of: scenePhase) { _, newPhase in
                 switch newPhase {

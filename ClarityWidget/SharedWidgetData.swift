@@ -16,12 +16,19 @@ struct SharedWidgetData: Codable {
     let currency: String
     let monthName: String
     let updatedAt: Date
+    /// Top categorías del MES. Default vacío para back-compat con datos antiguos.
+    var topMonthCategories: [WidgetCategoryStat] = []
 
     // MARK: Computed
 
     var budgetPercent: Double? {
         guard let budget = monthBudget, budget > 0 else { return nil }
         return min(monthTotal / budget, 1.0)
+    }
+
+    /// Detecta si el usuario aún no tiene gastos este mes/semana/hoy.
+    var isEmpty: Bool {
+        todayTotal == 0 && weekTotal == 0 && monthTotal == 0 && recentExpenses.isEmpty
     }
 
     var formattedToday: String   { format(todayTotal) }
@@ -39,7 +46,7 @@ struct SharedWidgetData: Codable {
     // MARK: Placeholder
 
     static var placeholder: SharedWidgetData {
-        SharedWidgetData(
+        var d = SharedWidgetData(
             todayTotal: 34.50,
             weekTotal: 120.80,
             monthTotal: 312.40,
@@ -55,6 +62,12 @@ struct SharedWidgetData: Codable {
             monthName: "Marzo",
             updatedAt: Date()
         )
+        d.topMonthCategories = [
+            WidgetCategoryStat(name: "Alimentación", emoji: "🛒", amount: 145, percent: 0.46),
+            WidgetCategoryStat(name: "Ocio",         emoji: "🍻", amount: 88,  percent: 0.28),
+            WidgetCategoryStat(name: "Transporte",   emoji: "⛽", amount: 65,  percent: 0.21),
+        ]
+        return d
     }
 }
 
@@ -79,5 +92,28 @@ struct WidgetExpense: Codable, Identifiable {
 
     var formattedAmount: String {
         String(format: "€%.2f", amount)
+    }
+}
+
+// MARK: - Widget Category Stat
+
+struct WidgetCategoryStat: Codable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let emoji: String
+    let amount: Double
+    let percent: Double
+
+    init(name: String, emoji: String, amount: Double, percent: Double) {
+        self.id = name
+        self.name = name
+        self.emoji = emoji
+        self.amount = amount
+        self.percent = percent
+    }
+
+    var formattedAmount: String {
+        if amount >= 1000 { return String(format: "€%.1fk", amount / 1000) }
+        return String(format: "€%.0f", amount)
     }
 }

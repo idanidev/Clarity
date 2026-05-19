@@ -6,19 +6,37 @@ import SwiftUI
 struct VoiceConfirmationSheet: View {
     let expense: Expense
     let wasFullyDetected: Bool
+    /// Snapshot inicial. Si está vacío (cold launch desde Siri sin user data cargado),
+    /// se hace fallback a `userData.categories` que es reactivo.
     let categories: [Category]
     var speechManager: SpeechRecognitionManager
     let onConfirm: (Expense) -> Void
     let onCancel: () -> Void
 
+    /// Reactivo a UserDataManager — garantiza que el Picker tenga opciones
+    /// cuando el snapshot inicial estaba vacío (cold launch / Siri).
+    @State private var userData = UserDataManager.shared
+    private var availableCategories: [Category] {
+        categories.isEmpty ? userData.categories : categories
+    }
+
     @State private var amount: String = ""
     @State private var name: String = ""
-    @State private var selectedCategory: Category?
+    /// Selección por NOMBRE (no por instancia). Antes usábamos `Category?` con tag
+    /// Hashable que incluye `updatedAt` → si la lista se recargaba el match fallaba
+    /// y el Picker quedaba "bloqueado".
+    @State private var selectedCategoryName: String = ""
     @State private var selectedSubcategory: String = ""
+
+    /// Resuelve la Category actual desde el nombre (siempre fresh).
+    private var selectedCategory: Category? {
+        availableCategories.first { $0.name == selectedCategoryName }
+    }
     @State private var timeRemaining: Double
     @State private var progress: Double = 1.0
     @State private var countdownCancelled = false
     @State private var isInitialized = false  // guards against onAppear-triggered onChange
+    @State private var isSaving = false  // evita double-tap "Guardar" → duplicado
     @State private var showNewCategory = false
     @State private var showAddSubcategory = false
     @State private var newSubcategoryName = ""
@@ -68,16 +86,16 @@ struct VoiceConfirmationSheet: View {
 
                 // Category
                 Section("Categoría") {
-                    Picker("Categoría", selection: $selectedCategory) {
-                        Text("Seleccionar").tag(nil as Category?)
-                        ForEach(categories) { category in
-                            Text(category.name).tag(category as Category?)
+                    Picker("Categoría", selection: $selectedCategoryName) {
+                        Text("Seleccionar").tag("")
+                        ForEach(availableCategories, id: \.name) { category in
+                            Text(category.name).tag(category.name)
                         }
                     }
-                    .onChange(of: selectedCategory) { old, new in
+                    .onChange(of: selectedCategoryName) { old, new in
                         cancelCountdown()
-                        if old?.id != new?.id,
-                            let newCategory = new,
+                        if old != new,
+                            let newCategory = availableCategories.first(where: { $0.name == new }),
                             !newCategory.subcategories.contains(selectedSubcategory)
                         {
                             selectedSubcategory = ""
@@ -92,6 +110,13 @@ struct VoiceConfirmationSheet: View {
                             }
                         }
                         .onChange(of: selectedSubcategory) { _, _ in cancelCountdown() }
+                        // Defensa: si la categoría actual ya no contiene la sub seleccionada
+                        // (por refresh externo / reorder), resetea para que Picker no quede vacío.
+                        .onChange(of: category.subcategories) { _, newSubs in
+                            if !selectedSubcategory.isEmpty, !newSubs.contains(selectedSubcategory) {
+                                selectedSubcategory = ""
+                            }
+                        }
 
                         // Inline add subcategory
                         if showAddSubcategory {
@@ -135,9 +160,10 @@ struct VoiceConfirmationSheet: View {
                     }
                 }
             }
-            .simultaneousGesture(
-                TapGesture().onEnded { cancelCountdown() }
-            )
+            // Antes: .simultaneousGesture(TapGesture) cancelaba en cualquier tap.
+            // Eso a veces consumía el tap del Picker → no se abría el detalle.
+            // Cobertura suficiente vía: onChange de campos + onChange de pickers
+            // + botón cancelar en AutoSaveBar + onKeyPress(.tab).
             .sheet(isPresented: $showNewCategory) {
                 NewCategorySheet()
             }
@@ -165,12 +191,14 @@ struct VoiceConfirmationSheet: View {
                                 timeRemaining: timeRemaining,
                                 progress: progress
                             )
+                        } else if isSaving {
+                            ProgressView()
                         } else {
                             Text("Guardar")
                                 .fontWeight(.bold)
                         }
                     }
-                    .disabled(!canSave)
+                    .disabled(!canSave || isSaving)
                 }
             }
             // Native iOS bottom bar — replaces the form section banner
@@ -199,13 +227,13 @@ struct VoiceConfirmationSheet: View {
             let normalizedParsedSub = parsedSub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
             let normalizedName = expense.name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
 
-            outer: for category in categories {
+            outer: for category in availableCategories {
                 for sub in category.subcategories {
                     let normalizedSub = sub.folding(options: .diacriticInsensitive, locale: .current).lowercased()
                     if (!normalizedParsedSub.isEmpty && normalizedSub == normalizedParsedSub)
                         || normalizedSub == normalizedName
                     {
-                        selectedCategory = category
+                        selectedCategoryName = category.name
                         selectedSubcategory = sub
                         break outer
                     }
@@ -220,7 +248,7 @@ struct VoiceConfirmationSheet: View {
                     .filter { CharacterSet.letters.union(.whitespaces).contains($0) }
                     .reduce("") { $0 + String($1) }
                     .trimmingCharacters(in: .whitespaces)
-                selectedCategory = categories.first { cat in
+                if let match = availableCategories.first(where: { cat in
                     let catName = cat.name
                         .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
                         .unicodeScalars
@@ -228,6 +256,8 @@ struct VoiceConfirmationSheet: View {
                         .reduce("") { $0 + String($1) }
                         .trimmingCharacters(in: .whitespaces)
                     return catName == targetCat
+                }) {
+                    selectedCategoryName = match.name
                 }
             }
 
@@ -235,12 +265,13 @@ struct VoiceConfirmationSheet: View {
             if selectedCategory == nil,
                let learned = await UserLearningManager.shared.getPreference(for: expense.name)
             {
-                selectedCategory = categories.first { $0.name == learned.category }
-                if let learnedSub = learned.subcategory,
-                   let cat = selectedCategory,
-                   cat.subcategories.contains(learnedSub)
-                {
-                    selectedSubcategory = learnedSub
+                if let match = availableCategories.first(where: { $0.name == learned.category }) {
+                    selectedCategoryName = match.name
+                    if let learnedSub = learned.subcategory,
+                       match.subcategories.contains(learnedSub)
+                    {
+                        selectedSubcategory = learnedSub
+                    }
                 }
             }
 
@@ -299,12 +330,16 @@ struct VoiceConfirmationSheet: View {
         let categoryId = category.id ?? category.name
         let subToAdd = trimmed
         cancelCountdown()
+        // UI optimista: cierra editor + muestra spinner-like; selección final al refresh.
+        showAddSubcategory = false
+        newSubcategoryName = ""
         Task {
             await UserDataManager.shared.addSubcategory(subToAdd, toCategoryId: categoryId)
+            // refreshCategories ya completó; ahora la subcat está en availableCategories.
+            // Espera un runloop para que @Observable propague antes de set selection.
+            try? await Task.sleep(nanoseconds: 50_000_000)
             await MainActor.run {
                 selectedSubcategory = subToAdd
-                newSubcategoryName = ""
-                showAddSubcategory = false
                 HapticManager.shared.notification(.success)
             }
         }
@@ -322,14 +357,24 @@ struct VoiceConfirmationSheet: View {
               v > 0, v <= 10_000 else {
             return false
         }
-        return selectedCategory != nil
+        guard let cat = selectedCategory else { return false }
+        // Si la categoría tiene subcategorías, EXIGIR una (antes auto-guardaba sin sub).
+        if !cat.subcategories.isEmpty && selectedSubcategory.isEmpty {
+            return false
+        }
+        return true
     }
 
     private func confirmExpense() {
-        guard let amountValue = Double(amount.replacingOccurrences(of: ",", with: ".")),
-            amountValue > 0,
-            let category = selectedCategory
+        // Reentrancy guard: si ya estamos guardando, ignora taps repetidos.
+        guard !isSaving else { return }
+        // Defensa: aplica TODA la regla de canSave (incluida subcategoría obligatoria).
+        guard canSave,
+              let amountValue = Double(amount.replacingOccurrences(of: ",", with: ".")),
+              amountValue > 0,
+              let category = selectedCategory
         else { return }
+        isSaving = true
 
         let categoryName = category.name
         let confirmed = Expense(

@@ -140,7 +140,7 @@ private struct HuchaPage: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Spacer().frame(height: 80)
+                Spacer().frame(height: 50)
 
                 Text("🐖")
                     .font(.system(size: 72))
@@ -168,7 +168,7 @@ private struct HuchaPage: View {
                 .opacity(appear ? 1 : 0)
                 .offset(y: appear ? 0 : 16)
 
-                Spacer().frame(height: 32)
+                Spacer().frame(height: 20)
 
                 // Mock card
                 VStack(alignment: .leading, spacing: 12) {
@@ -246,7 +246,7 @@ private struct EscudoPage: View {
             .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Spacer().frame(height: 80)
+                Spacer().frame(height: 50)
 
                 Text("🛡️")
                     .font(.system(size: 72))
@@ -274,7 +274,7 @@ private struct EscudoPage: View {
                 .opacity(appear ? 1 : 0)
                 .offset(y: appear ? 0 : 16)
 
-                Spacer().frame(height: 32)
+                Spacer().frame(height: 20)
 
                 // Mock card
                 VStack(alignment: .leading, spacing: 12) {

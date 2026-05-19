@@ -1,5 +1,32 @@
 import SwiftUI
 
+// MARK: - String: separar nombre limpio + primer emoji
+extension String {
+    /// Categorías guardan el emoji embebido al final del nombre
+    /// (ej. "Coche-Moto🏎️🏍️"). Devuelve (nombre limpio, primer emoji).
+    var categoryNameEmoji: (name: String, emoji: String?) {
+        let trimmed = trimmingCharacters(in: .whitespaces)
+        var emojiChars: [Character] = []
+        var idx = trimmed.endIndex
+        while idx > trimmed.startIndex {
+            let prev = trimmed.index(before: idx)
+            let ch = trimmed[prev]
+            if ch.unicodeScalars.contains(where: { $0.properties.isEmoji && $0.value > 0x238C }) {
+                emojiChars.insert(ch, at: 0)
+                idx = prev
+            } else if ch == " " && !emojiChars.isEmpty {
+                idx = prev
+            } else {
+                break
+            }
+        }
+        let cleanName = String(trimmed[trimmed.startIndex..<idx])
+            .trimmingCharacters(in: .whitespaces)
+        let firstEmoji = emojiChars.first.map(String.init)
+        return (cleanName.isEmpty ? trimmed : cleanName, firstEmoji)
+    }
+}
+
 // MARK: - Category UI Extensions
 extension Category {
     var uiColor: Color {

@@ -218,6 +218,9 @@ struct LoginView: View {
                 Text("Introduce tu email para recibir un enlace de recuperación")
             }
         }
+        // Login diseñado dark-first (fondo OLED + glow violeta + glass materials).
+        // En light mode queda mal — forzamos dark.
+        .preferredColorScheme(.dark)
     }
 
     private var isValidForm: Bool {

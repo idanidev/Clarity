@@ -85,9 +85,10 @@ struct DonutChartView: View {
                 .frame(width: 290, height: 290)
 
             // Chart segments
-            ForEach(Array(cachedSegments.enumerated()), id: \.element.data.id) { index, segment in
-                let startPct = calculateStartPercentage(for: index)
-                let endPct = startPct + (segment.data.percentage / 100.0)
+            ForEach(cachedSegments, id: \.data.id) { segment in
+                // Usa ángulos ya pre-calculados en cachedSegments (antes O(n²) reduce por render)
+                let startPct = segment.start.degrees / 360.0
+                let endPct = segment.end.degrees / 360.0
                 let visibleEnd = min(endPct, max(startPct, Double(animationProgress)))
 
                 if animationProgress > startPct {
@@ -203,10 +204,6 @@ struct DonutChartView: View {
         }
     }
 
-    private func calculateStartPercentage(for index: Int) -> Double {
-        return categoryData.prefix(index).reduce(0) { $0 + $1.percentage } / 100.0
-    }
-
     // MARK: - Category Legend (below donut)
 
     private var categoryLegend: some View {
@@ -218,8 +215,10 @@ struct DonutChartView: View {
                         .fill(data.color.gradient)
                         .frame(width: 10, height: 10)
 
-                    // Category name
-                    Text(data.name)
+                    // Category name (emoji + nombre limpio)
+                    let parts = data.name.categoryNameEmoji
+                    if let e = parts.emoji { Text(e).font(.system(size: 13)) }
+                    Text(parts.name)
                         .scaledFont(size: 14, weight: .medium)
                         .foregroundStyle(.primary)
                         .lineLimit(1)
@@ -356,26 +355,16 @@ struct DonutChartView: View {
         }
     }
 
-    // MARK: - Angle Calculations
-    private func startAngle(for index: Int) -> Angle {
-        let precedingPercentages = categoryData.prefix(index).reduce(0) { $0 + $1.percentage }
-        return Angle(degrees: (precedingPercentages / 100) * 360 - 90)
-    }
-
-    private func endAngle(for index: Int) -> Angle {
-        let includingPercentages = categoryData.prefix(index + 1).reduce(0) { $0 + $1.percentage }
-        return Angle(degrees: (includingPercentages / 100) * 360 - 90)
-    }
-
     private func updateCachedSegments() {
         var segments: [(start: Angle, end: Angle, data: CategoryChartData)] = []
 
-        for (index, data) in categoryData.enumerated() {
-            segments.append((
-                start: startAngle(for: index),
-                end: endAngle(for: index),
-                data: data
-            ))
+        // Acumulado incremental — O(n) (antes 2 reduce O(n) por elemento = O(n²))
+        var cumulative: Double = 0
+        for data in categoryData {
+            let start = Angle(degrees: (cumulative / 100) * 360 - 90)
+            cumulative += data.percentage
+            let end = Angle(degrees: (cumulative / 100) * 360 - 90)
+            segments.append((start: start, end: end, data: data))
         }
 
         cachedSegments = segments
@@ -416,10 +405,16 @@ struct CategoryChartCard: View {
                 .frame(width: 4, height: 32)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(data.name)
-                    .scaledFont(size: 13, weight: .medium)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    let parts = data.name.categoryNameEmoji
+                    if let e = parts.emoji {
+                        Text(e).font(.system(size: 13))
+                    }
+                    Text(parts.name)
+                        .scaledFont(size: 13, weight: .medium)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: 4) {
                     Text(data.amount.formattedCurrency)

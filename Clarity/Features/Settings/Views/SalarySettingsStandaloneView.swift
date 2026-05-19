@@ -13,9 +13,12 @@ struct SalarySettingsStandaloneView: View {
     @State private var hasChanges = false
     @State private var isSaving = false
     @State private var saveSuccess = false
+    @FocusState private var incomeFieldFocused: Bool
 
     @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
     @State private var editingBudget: MonthlyBudget? = nil
+    @AppStorage("salary.onboardingSeen") private var salaryOnboardingSeen: Bool = false
+    @State private var showSalaryOnboarding: Bool = false
 
     private let currentYear = Calendar.current.component(.year, from: Date())
     private let currentMonth = Calendar.current.component(.month, from: Date())
@@ -64,14 +67,29 @@ struct SalarySettingsStandaloneView: View {
                         .disabled(!hasChanges)
                 }
             }
+            // Botón "Listo" para cerrar teclado decimal (no tiene Return)
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Listo") { incomeFieldFocused = false }
+                    .fontWeight(.semibold)
+            }
         }
-        .task { await historyVM.loadBudgets() }
+        .task {
+            await historyVM.loadBudgets()
+            if !salaryOnboardingSeen {
+                try? await Task.sleep(for: .milliseconds(300))
+                showSalaryOnboarding = true
+            }
+        }
         .onAppear { loadCurrentValues() }
         .onChange(of: selectedYear) { _, newYear in
             Task { await historyVM.loadYear(newYear) }
         }
         .sheet(item: $editingBudget) { budget in
             EditBudgetSheet(budget: budget, viewModel: historyVM)
+        }
+        .sheet(isPresented: $showSalaryOnboarding, onDismiss: { salaryOnboardingSeen = true }) {
+            SalaryOnboardingSheet()
         }
     }
 
@@ -95,6 +113,7 @@ struct SalarySettingsStandaloneView: View {
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.5)
+                        .focused($incomeFieldFocused)
                         .onChange(of: editingIncome) { _, _ in hasChanges = true }
                 }
             }
@@ -259,11 +278,36 @@ struct SalarySettingsStandaloneView: View {
         hasChanges = false
         Task {
             do {
+                // 1. Actualiza doc raíz user (income por defecto + flag recurrente)
                 try await Firestore.firestore().collection("users").document(userId).updateData([
                     "income": value,
                     "settings.isSalaryRecurring": isRecurring,
                     "updatedAt": FieldValue.serverTimestamp(),
                 ])
+
+                // 2. Actualiza/crea MonthlyBudget del mes ACTUAL — sin esto, Home y
+                //    escudos siguen leyendo el income antiguo del budget del mes.
+                let cal = Calendar.current
+                let y = cal.component(.year, from: Date())
+                let m = cal.component(.month, from: Date())
+                let financialSvc = FinancialService()
+                if var current = try? await financialSvc.fetchMonthlyBudget(year: y, month: m) {
+                    current.income = value
+                    try? await financialSvc.saveMonthlyBudget(current)
+                } else {
+                    let newBudget = MonthlyBudget(
+                        userId: userId, year: y, month: m, income: value
+                    )
+                    try? await financialSvc.saveMonthlyBudget(newBudget)
+                }
+
+                // 3. Refresca cache local (UserDataManager.userDocument) para que
+                //    al volver a esta pantalla loadCurrentValues no muestre stale.
+                await UserDataManager.shared.loadUserData()
+
+                // 4. Avisa al resto de pantallas (Home, escudos) para refrescar.
+                NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+
                 await MainActor.run {
                     isSaving = false
                     saveSuccess = true

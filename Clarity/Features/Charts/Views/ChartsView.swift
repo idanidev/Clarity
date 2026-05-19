@@ -83,7 +83,7 @@ private struct BackgroundAurora: View {
     var body: some View {
         ZStack {
             Color.bgPrimary
-            TimelineView(.animation(minimumInterval: 0.1, paused: false)) { ctx in
+            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: false)) { ctx in
                 let t = ctx.date.timeIntervalSinceReferenceDate
                 let a = CGFloat(sin(t / 6) * 40)
                 let b = CGFloat(cos(t / 8) * 40)
@@ -99,6 +99,10 @@ private struct BackgroundAurora: View {
                         .blur(radius: 90)
                         .offset(x: 120 - a, y: 220 - b)
                 }
+                // Rasteriza el blur en GPU (1 textura) en vez de recomponer
+                // 2 blurs grandes por frame. Fondo no interactivo → seguro.
+                .drawingGroup()
+                .allowsHitTesting(false)
             }
         }
     }
@@ -478,11 +482,15 @@ private struct DailyBarChartView: View {
         )
     }
 
-    private func dayLabel(_ d: Date) -> String {
+    private static let dayLabelFormatter: DateFormatter = {
         let df = DateFormatter()
         df.locale = Locale(identifier: "es_ES")
         df.dateFormat = "d MMM"
-        return df.string(from: d)
+        return df
+    }()
+
+    private func dayLabel(_ d: Date) -> String {
+        Self.dayLabelFormatter.string(from: d)
     }
 }
 

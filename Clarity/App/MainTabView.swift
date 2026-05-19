@@ -147,6 +147,10 @@ struct MainTabView: View {
             if voiceCoordinator.showSuccessToast {
                 SuccessToast(message: voiceCoordinator.successMessage)
                     .transition(.move(edge: .top).combined(with: .opacity))
+                    .onTapGesture {
+                        // Tap para cerrar ya y seguir metiendo gastos
+                        withAnimation(.snappy) { voiceCoordinator.showSuccessToast = false }
+                    }
             }
         }
         .task {

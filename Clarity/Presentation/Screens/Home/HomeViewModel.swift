@@ -242,7 +242,7 @@ final class HomeViewModel {
             await loadExpenses()
             WidgetDataManager.shared.updateFromExpenses(
                 currentMonthExpenses,
-                monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+                monthBudget: currentMonthlyBudget?.income
             )
             // Avisar a otras VMs (FinancialHub escudos/metas) para refresh inmediato
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
@@ -357,8 +357,11 @@ final class HomeViewModel {
             self.currentMonthExpenses = sanitizedMonth
             self.hasMorePages = morePages
 
-            // Load all historical expenses from cache for components that need full history
-            if let allCached = try? await getExpensesUseCase.execute(policy: .cacheFirst()) {
+            // Solo cargar historial completo si está vacío (no en cada keystroke
+            // de búsqueda / cada delete). Decodificar cientos de records en
+            // @MainActor bloqueaba el hilo en cada loadExpenses.
+            if allHistoricalExpenses.isEmpty,
+               let allCached = try? await getExpensesUseCase.execute(policy: .cacheFirst()) {
                 self.allHistoricalExpenses = ExpenseSanitizer.sanitize(expenses: allCached, rules: rules)
             }
 
@@ -368,7 +371,7 @@ final class HomeViewModel {
             // ── Widget update ──
             WidgetDataManager.shared.updateFromExpenses(
                 sanitizedMonth,
-                monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+                monthBudget: currentMonthlyBudget?.income
             )
         } catch {
             logger.error("❌ Error loading expenses: \(error)")
@@ -426,7 +429,7 @@ final class HomeViewModel {
         // ── Widget update (inmediato, sin esperar red) ──
         WidgetDataManager.shared.updateFromExpenses(
             currentMonthExpenses,
-            monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+            monthBudget: currentMonthlyBudget?.income
         )
     }
 
@@ -438,7 +441,7 @@ final class HomeViewModel {
         applyFilters()
         WidgetDataManager.shared.updateFromExpenses(
             currentMonthExpenses,
-            monthBudget: currentMonthlyBudget.map { max($0.income - $0.savingsAllocated, 0) }
+            monthBudget: currentMonthlyBudget?.income
         )
     }
 
@@ -520,22 +523,17 @@ final class HomeViewModel {
             }
         }
 
-        // Category Filter
+        // Category Filter — pre-normaliza UNA vez las categorías del filtro
+        // (antes recreaba la closure + normalizaba por cada par gasto×categoría).
         if !selectedFilter.selectedCategories.isEmpty {
-            result = result.filter { expense in
-                selectedFilter.selectedCategories.contains { filterCategory in
-                    let normalize = { (s: String) -> String in
-                        s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                            .replacingOccurrences(of: " / ", with: " ")
-                            .replacingOccurrences(of: " - ", with: " ")
-                    }
-                    let expenseCat = normalize(expense.category)
-                    let filterCat = normalize(filterCategory)
-                    let expenseFirstWord = expenseCat.components(separatedBy: " ").first ?? ""
-                    let filterFirstWord = filterCat.components(separatedBy: " ").first ?? ""
-                    return expenseFirstWord == filterFirstWord
-                }
+            func firstWord(_ s: String) -> String {
+                s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                    .replacingOccurrences(of: " / ", with: " ")
+                    .replacingOccurrences(of: " - ", with: " ")
+                    .components(separatedBy: " ").first ?? ""
             }
+            let filterFirstWords = Set(selectedFilter.selectedCategories.map(firstWord))
+            result = result.filter { filterFirstWords.contains(firstWord($0.category)) }
         }
 
         // Payment Method Filter

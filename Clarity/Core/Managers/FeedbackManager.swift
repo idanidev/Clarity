@@ -78,13 +78,13 @@ final class FeedbackManager {
 
         HapticManager.shared.notification(type.haptic)
 
-        // Dismiss timing: 5s with action, 1.8s for success animation, 3s default
+        // Dismiss timing: 4s con acción, 0.9s success (rápido para seguir metiendo), 2.2s default
         let duration: UInt64 = if action != nil {
-            5_000_000_000
+            4_000_000_000
         } else if type == .success {
-            1_800_000_000
+            900_000_000
         } else {
-            3_000_000_000
+            2_200_000_000
         }
         dismissTask = Task {
             try? await Task.sleep(nanoseconds: duration)

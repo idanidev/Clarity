@@ -74,6 +74,11 @@ struct ClarityWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
 
     var body: some View {
+        // Estado vacío: usuario sin gastos → CTA en lugar del dashboard
+        if entry.data.isEmpty, family == .systemSmall || family == .systemMedium || family == .systemLarge {
+            EmptyWidgetView(family: family)
+                .containerBackground(for: .widget) { WidgetGradientBackground() }
+        } else {
         switch family {
         case .systemSmall:
             SmallWidgetView(data: entry.data)
@@ -97,6 +102,44 @@ struct ClarityWidgetEntryView: View {
             SmallWidgetView(data: entry.data)
                 .containerBackground(for: .widget) { WidgetGradientBackground() }
         }
+        }  // close else
+    }
+}
+
+// MARK: - Empty State
+
+struct EmptyWidgetView: View {
+    let family: WidgetFamily
+
+    var body: some View {
+        VStack(spacing: family == .systemSmall ? 8 : 12) {
+            ZStack {
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [Color.wPurple.opacity(0.85), Color.wIndigo.opacity(0.85)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    ))
+                    .frame(width: family == .systemSmall ? 44 : 56,
+                           height: family == .systemSmall ? 44 : 56)
+                Image(systemName: "plus")
+                    .font(.system(size: family == .systemSmall ? 22 : 28, weight: .black))
+                    .foregroundStyle(.white)
+            }
+
+            VStack(spacing: 4) {
+                Text("Sin gastos aún")
+                    .font(.system(size: family == .systemSmall ? 13 : 16, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text(family == .systemSmall ? "Toca para añadir" : "Toca + para registrar tu primer gasto")
+                    .font(.system(size: family == .systemSmall ? 10 : 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            .padding(.horizontal, 8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetURL(URL(string: "clarity://add-expense"))
     }
 }
 
@@ -139,51 +182,69 @@ struct SmallWidgetView: View {
     let data: SharedWidgetData
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        ZStack(alignment: .topTrailing) {
+            VStack(alignment: .leading, spacing: 6) {
+                // HOY — más grande aprovechando el espacio
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text("HOY")
+                            .font(.system(size: 11, weight: .black, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .kerning(1.4)
+                        Text(data.topCategoryEmoji)
+                            .font(.system(size: 14))
+                    }
+                    Text(data.formattedToday)
+                        .font(.system(size: 36, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                }
 
-            // Header
-            HStack(spacing: 4) {
-                ClarityLogoView(size: 20)
-                Text("CLARITY")
-                    .font(.system(size: 10, weight: .black, design: .rounded))
-                    .foregroundStyle(Color.wPurple)
-                Spacer()
-                Text(data.topCategoryEmoji)
-                    .font(.system(size: 18))
-            }
+                Spacer(minLength: 4)
 
-            Spacer()
-
-            // Main Amount
-            VStack(alignment: .leading, spacing: 2) {
-                Text("HOY")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .kerning(1.2)
-                Text(data.formattedToday)
-                    .font(.system(size: 30, weight: .black, design: .rounded))
-                    .foregroundStyle(.white)
-                    .minimumScaleFactor(0.55)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            // Budget bar or week spending
-            if let pct = data.budgetPercent {
-                BudgetBarView(percent: pct, showLabel: true)
-            } else {
+                // Semana + Mes en una línea
                 HStack(spacing: 0) {
-                    Text("Semana  ")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
-                    Text(data.formattedWeek)
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.85))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("SEMANA")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.4))
+                            .kerning(0.6)
+                        Text(data.formattedWeek)
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("MES")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.4))
+                            .kerning(0.6)
+                        Text(data.formattedMonth)
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.wIndigo)
+                    }
+                }
+
+                // Budget bar al fondo si hay
+                if let pct = data.budgetPercent {
+                    BudgetBarView(percent: pct, showLabel: false, height: 4)
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .padding(.trailing, 22)  // hueco para botón "+"
+
+            // Botón flotante "+" arriba derecha (no compite con el header)
+            Button(intent: OpenAddExpenseIntent()) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color.wPurple)
+                    .background(Circle().fill(.black.opacity(0.001)).frame(width: 28, height: 28))
+            }
+            .buttonStyle(.plain)
+            .padding(10)
         }
-        .padding(14)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hoy \(data.formattedToday), semana \(data.formattedWeek)")
     }
@@ -203,15 +264,11 @@ struct MediumWidgetView: View {
             VStack(alignment: .leading, spacing: 0) {
 
                 HStack(spacing: 4) {
-                    ClarityLogoView(size: 18)
-                    Text("CLARITY")
-                        .font(.system(size: 9, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.wPurple)
+                    Text(data.monthName.uppercased())
+                        .font(.system(size: 10, weight: .black, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.4))
+                        .kerning(1.0)
                     Spacer()
-                    Text(data.monthName)
-                        .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.35))
-
                     Button(intent: OpenAddExpenseIntent()) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 18))
@@ -286,21 +343,15 @@ struct LargeWidgetView: View {
     let data: SharedWidgetData
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
 
             // Header
             HStack {
-                HStack(spacing: 5) {
-                    ClarityLogoView(size: 22)
-                    Text("CLARITY")
-                        .font(.system(size: 12, weight: .black, design: .rounded))
-                        .foregroundStyle(Color.wPurple)
-                }
+                Text("\(data.monthName.uppercased())  \(currentYear())")
+                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .kerning(1.0)
                 Spacer()
-                Text("\(data.monthName)  \(currentYear())")
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35))
-
                 Button(intent: OpenAddExpenseIntent()) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 22))
@@ -308,67 +359,70 @@ struct LargeWidgetView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.bottom, 16)
 
             // Stats row
             HStack(spacing: 0) {
                 StatPillView(label: "HOY",    value: data.formattedToday,  accent: Color.wPurple)
                 Spacer()
-                Rectangle().fill(.white.opacity(0.07)).frame(width: 1, height: 44)
+                Rectangle().fill(.white.opacity(0.07)).frame(width: 1, height: 36)
                 Spacer()
                 StatPillView(label: "SEMANA", value: data.formattedWeek,   accent: Color.wIndigo)
                 Spacer()
-                Rectangle().fill(.white.opacity(0.07)).frame(width: 1, height: 44)
+                Rectangle().fill(.white.opacity(0.07)).frame(width: 1, height: 36)
                 Spacer()
                 StatPillView(label: "MES",    value: data.formattedMonth,  accent: .white.opacity(0.8))
             }
 
-            // Budget section
-            if let pct = data.budgetPercent, let budget = data.formattedBudget {
-                VStack(alignment: .leading, spacing: 7) {
-                    Rectangle()
-                        .fill(.white.opacity(0.07))
-                        .frame(height: 1)
-                        .padding(.vertical, 12)
-
-                    HStack {
-                        Label("Presupuesto mensual", systemImage: "target")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.45))
-                        Spacer()
-                        Text("\(data.formattedMonth) / \(budget)")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.budgetAccent(for: pct))
+            // Top 3 categorías del mes
+            if !data.topMonthCategories.isEmpty {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("TOP CATEGORÍAS")
+                        .font(.system(size: 9, weight: .black, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.35))
+                        .kerning(0.8)
+                    VStack(spacing: 5) {
+                        ForEach(data.topMonthCategories) { cat in
+                            CategoryBarRow(stat: cat)
+                        }
                     }
-
-                    BudgetBarView(percent: pct, showLabel: false, height: 8)
                 }
             }
 
-            // Divider
-            Rectangle()
-                .fill(.white.opacity(0.07))
-                .frame(height: 1)
-                .padding(.vertical, 14)
+            // Presupuesto
+            if let pct = data.budgetPercent, let budget = data.formattedBudget {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack {
+                        Label("Presupuesto", systemImage: "target")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                        Spacer()
+                        Text("\(data.formattedMonth) / \(budget)")
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundStyle(Color.budgetAccent(for: pct))
+                    }
+                    BudgetBarView(percent: pct, showLabel: false, height: 5)
+                }
+            }
 
-            // Recent expenses
-            VStack(alignment: .leading, spacing: 0) {
+            Rectangle().fill(.white.opacity(0.07)).frame(height: 1)
+
+            // Últimos gastos
+            VStack(alignment: .leading, spacing: 5) {
                 Text("ÚLTIMOS GASTOS")
                     .font(.system(size: 9, weight: .black, design: .rounded))
                     .foregroundStyle(.white.opacity(0.35))
                     .kerning(0.8)
-                    .padding(.bottom, 12)
-
-                VStack(spacing: 11) {
+                VStack(spacing: 6) {
                     ForEach(data.recentExpenses.prefix(4)) { expense in
                         ExpenseRowView(expense: expense, compact: false)
                     }
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hoy \(data.formattedToday), semana \(data.formattedWeek), mes \(data.formattedMonth)")
     }
@@ -551,6 +605,45 @@ struct StatPillView: View {
                 .foregroundStyle(accent)
                 .minimumScaleFactor(0.55)
                 .lineLimit(1)
+        }
+    }
+}
+
+/// Fila Top categoría: emoji + nombre + barra + importe
+struct CategoryBarRow: View {
+    let stat: WidgetCategoryStat
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(stat.emoji)
+                .font(.system(size: 14))
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 0) {
+                    Text(stat.name)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(stat.formattedAmount)
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                }
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(0.1))
+                            .frame(height: 4)
+                        Capsule()
+                            .fill(LinearGradient(
+                                colors: [Color.wPurple, Color.wIndigo],
+                                startPoint: .leading, endPoint: .trailing
+                            ))
+                            .frame(width: max(geo.size.width * stat.percent, 4), height: 4)
+                    }
+                }
+                .frame(height: 4)
+            }
         }
     }
 }

@@ -152,7 +152,13 @@ private struct CategoryRow: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(color.opacity(0.4), lineWidth: 1)
                 if let emoji = parsed.emoji {
-                    Text(emoji).font(.system(size: 22))
+                    // Solo el PRIMER emoji-cluster: si la categoría tenía varios
+                    // (ej. "Coche-Moto🚗🏍️"), evita overflow + "..." en el tile 44pt.
+                    Text(String(emoji.first.map(String.init) ?? emoji))
+                        .font(.system(size: 22))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .allowsTightening(true)
                 } else {
                     // Fallback consistente: inicial del nombre en color de la categoría
                     Text(parsed.name.prefix(1).uppercased())

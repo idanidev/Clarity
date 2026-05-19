@@ -7,7 +7,6 @@ import SwiftUI
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
-    @State private var speechManager = SpeechRecognitionManager.shared
     let onSave: () -> Void
     
     var body: some View {
@@ -48,11 +47,6 @@ struct AddExpenseSheet: View {
                 Text(viewModel.errorMessage ?? "Error desconocido")
             }
         }
-        .onChange(of: speechManager.transcript) { _, newTranscript in
-            if !newTranscript.isEmpty {
-                viewModel.onNameChange(newTranscript)
-            }
-        }
     }
     
     // MARK: - Sections
@@ -82,23 +76,6 @@ struct AddExpenseSheet: View {
                 .onChange(of: viewModel.name) { _, newValue in
                     viewModel.onNameChange(newValue)
                 }
-            
-            // Dictate button
-            Button {
-                if speechManager.isListening {
-                    speechManager.stopRecording()
-                } else {
-                    HapticManager.shared.impact(.medium)
-                    Task {
-                        try? await speechManager.startRecording()
-                    }
-                }
-            } label: {
-                Label(speechManager.isListening ? "Escuchando..." : "Dictar",
-                      systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill")
-                    .foregroundStyle(speechManager.isListening ? .red : Color.clarityPrimary)
-                    .symbolEffect(.pulse, isActive: speechManager.isListening)
-            }
         }
     }
     

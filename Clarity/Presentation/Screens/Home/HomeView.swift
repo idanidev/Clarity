@@ -302,34 +302,27 @@ struct HomeView: View {
         userDataManager.userDocument?.income ?? 0
     }
 
-    private var filteredTotal: Double {
-        viewModel.filteredExpenses.reduce(0) { $0 + $1.amount }
-    }
-
-    private var dateFilteredTotal: Double {
-        viewModel.dateFilteredExpenses.reduce(0) { $0 + $1.amount }
-    }
+    // Reusa el total ya calculado por el VM (evita doble reduce por render)
+    private var filteredTotal: Double { viewModel.totalFilteredAmount }
 
     private var savings: Double {
         viewModel.calculatedSavings
     }
 
     private func buildChartData() -> [CategoryChartData] {
-        var categoryTotals: [String: (amount: Double, color: Color)] = [:]
-
+        // 1 pasada: acumula importe por categoría (sin leer color en el loop)
+        var amounts: [String: Double] = [:]
         for expense in viewModel.filteredExpenses {
-            let category = expense.category
-            let currentTotal = categoryTotals[category]?.amount ?? 0
-            let color = UserDataManager.shared.color(for: category)
-            categoryTotals[category] = (currentTotal + expense.amount, color)
+            amounts[expense.category, default: 0] += expense.amount
         }
-
-        return categoryTotals.map { key, value in
+        let total = filteredTotal
+        // color() solo 1× por categoría única (antes 1× por gasto)
+        return amounts.map { key, amount in
             CategoryChartData(
                 name: key,
-                amount: value.amount,
-                percentage: filteredTotal > 0 ? (value.amount / filteredTotal) * 100 : 0,
-                color: value.color
+                amount: amount,
+                percentage: total > 0 ? (amount / total) * 100 : 0,
+                color: UserDataManager.shared.color(for: key)
             )
         }.sorted { $0.amount > $1.amount }
     }

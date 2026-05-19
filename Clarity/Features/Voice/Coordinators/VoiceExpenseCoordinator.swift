@@ -171,7 +171,22 @@ class VoiceExpenseCoordinator {
                     "[Coordinator] Parsed: \(parsed.merchant) -> \(parsed.category ?? "nil") via \(parsed.detectionSource.rawValue)"
                 )
 
-                let categoryName = parsed.category ?? categories.first?.name ?? "Otros"
+                // 1) PRIORIDAD: matchear el merchant + transcript contra nombres de
+                //    categorías y subcategorías REALES del usuario (palabra por palabra).
+                //    Ej: "ITV coche" → user tiene "Coche-moto" → match (en vez de hardcoded "Alimentación").
+                let userMatch = Self.matchUserCategories(
+                    text: parsed.merchant + " " + transcript,
+                    userCategories: categories
+                )
+
+                // 2) Fallback: resolver categoría hardcoded del parser contra cats del user.
+                let parserResolved = parsed.category.flatMap {
+                    Self.resolveSuggestion((category: $0, subcategory: parsed.subcategory))
+                }
+
+                let resolved = userMatch ?? parserResolved
+                let categoryName = resolved?.category ?? categories.first?.name ?? ""
+                let resolvedSub = resolved?.subcategory
 
                 // Decimal -> Double bridge for legacy model
                 let amountDouble = NSDecimalNumber(decimal: parsed.amount).doubleValue
@@ -180,13 +195,14 @@ class VoiceExpenseCoordinator {
                     amount: amountDouble,
                     name: parsed.merchant,
                     category: categoryName,
-                    subcategory: parsed.subcategory,
+                    subcategory: resolvedSub,
                     date: Formatters.isoString(from: parsed.date),
                     paymentMethod: parsed.paymentMethod ?? "Tarjeta"
                 )
 
+                // Solo "fully detected" si el parser SÍ acertó en categorías reales.
                 wasFullyDetected =
-                    parsed.confidence >= 0.8 && parsed.category != nil && parsed.subcategory != nil
+                    parsed.confidence >= 0.8 && resolved?.category != nil && resolvedSub != nil
 
                 state = .confirming
 
@@ -233,7 +249,7 @@ class VoiceExpenseCoordinator {
                 }
             }
 
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
             await MainActor.run {
                 withAnimation(.bouncy) {
                     showSuccessToast = false
@@ -254,20 +270,96 @@ class VoiceExpenseCoordinator {
     /// Rellena un gasto directamente desde datos estructurados (ej: Apple Pay via deep link).
     /// No usa el SmartTransactionParser — el comercio y el importe vienen ya parseados.
     func populateFromApplePay(merchant: String, amount: Double) {
+        // Sugerencia hardcoded del parser → resolver a categorías REALES del usuario.
+        // Si no hay match, dejar vacío para que el user elija (no inventar nuevas).
         let suggestion = SmartTransactionParser.shared.suggestCategory(for: merchant)
-        let categoryName = suggestion?.category ?? UserDataManager.shared.categories.first?.name ?? "Otros"
+        let resolved = suggestion.flatMap { Self.resolveSuggestion($0) }
+        let categoryName = resolved?.category ?? UserDataManager.shared.categories.first?.name ?? ""
 
         pendingExpense = Expense(
             amount: amount,
             name: merchant,
             category: categoryName,
-            subcategory: suggestion?.subcategory,
+            subcategory: resolved?.subcategory,
             date: Formatters.isoString(from: Date()),
             paymentMethod: "Tarjeta"
         )
 
-        wasFullyDetected = suggestion != nil
+        wasFullyDetected = resolved != nil
         state = .confirming
+    }
+
+    /// Busca palabras del transcript que coincidan con nombres de categorías
+    /// o subcategorías del usuario. Devuelve la primera coincidencia (sub > cat).
+    /// Ej: "ITV coche" + cat "Coche-moto" → match. "café desayuno" + sub "Desayunos" → match sub.
+    private static func matchUserCategories(
+        text: String, userCategories: [Category]
+    ) -> (category: String, subcategory: String?)? {
+        let normalized = text
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        // Tokenizar por espacios y separadores comunes ("coche-moto" → "coche", "moto")
+        let tokens = normalized
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count >= 3 }
+        guard !tokens.isEmpty else { return nil }
+
+        // Prioridad 1: match exacto/contains de subcategoría
+        for cat in userCategories {
+            for sub in cat.subcategories {
+                let normSub = sub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                let subTokens = normSub.components(separatedBy: CharacterSet.alphanumerics.inverted)
+                    .filter { $0.count >= 3 }
+                if subTokens.contains(where: { tokens.contains($0) }) {
+                    return (cat.name, sub)
+                }
+            }
+        }
+
+        // Prioridad 2: match nombre de categoría (split por separadores)
+        for cat in userCategories {
+            let normCat = cat.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            let catTokens = normCat.components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { $0.count >= 3 }
+            if catTokens.contains(where: { tokens.contains($0) }) {
+                return (cat.name, nil)
+            }
+        }
+        return nil
+    }
+
+    /// Mapea sugerencia hardcoded a categorías reales del usuario.
+    private static func resolveSuggestion(
+        _ s: (category: String, subcategory: String?)
+    ) -> (category: String, subcategory: String?)? {
+        let userCats = UserDataManager.shared.categories
+        let target = s.category
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        if let cat = userCats.first(where: {
+            $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                .contains(target)
+        }) {
+            let sub = s.subcategory.flatMap { sugSub in
+                cat.subcategories.first {
+                    $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        == sugSub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                }
+            }
+            return (cat.name, sub)
+        }
+        if let sugSub = s.subcategory?
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current),
+           let cat = userCats.first(where: {
+               $0.subcategories.contains {
+                   $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
+               }
+           }),
+           let realSub = cat.subcategories.first(where: {
+               $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
+           })
+        {
+            return (cat.name, realSub)
+        }
+        return nil
     }
 
     func reset() {

@@ -20,6 +20,8 @@ struct SimpleVoiceButton: View {
     @State private var isStopping = false
     @State private var isProcessing = false
     @State private var lastSaveDate: Date?
+    @AppStorage("voice.onboardingSeen") private var voiceOnboardingSeen: Bool = false
+    @State private var showVoiceOnboarding: Bool = false
     private let settings = VoiceSettings.load()
 
     /// Maximum amount allowed via voice (safety guard against parsing errors)
@@ -136,6 +138,12 @@ struct SimpleVoiceButton: View {
                 )
             }
         }
+        .sheet(isPresented: $showVoiceOnboarding, onDismiss: {
+            voiceOnboardingSeen = true
+            startRecording()  // continuar al flow original tras cerrar
+        }) {
+            VoiceOnboardingSheet()
+        }
     }
 
     private var buttonColor: Color {
@@ -147,6 +155,9 @@ struct SimpleVoiceButton: View {
     private func handleTap() {
         if isRecording {
             stopRecording()
+        } else if !voiceOnboardingSeen {
+            // Primera vez: mostrar onboarding antes de empezar a grabar.
+            showVoiceOnboarding = true
         } else {
             startRecording()
         }

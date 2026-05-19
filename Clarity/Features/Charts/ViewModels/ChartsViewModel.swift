@@ -66,11 +66,13 @@ final class ChartsViewModel {
     private var _filteredCache: [Expense]?
     private var _previousCache: [Expense]?
     private var _dailyCache: [DailyPoint]?
+    private var _categoryStatsCache: [CategoryStat]?
 
     private func invalidateCache() {
         _filteredCache = nil
         _previousCache = nil
         _dailyCache = nil
+        _categoryStatsCache = nil
     }
 
     // MARK: - Derived
@@ -139,6 +141,13 @@ final class ChartsViewModel {
     }
 
     var categoryStats: [CategoryStat] {
+        if let cached = _categoryStatsCache { return cached }
+        let result = computeCategoryStats()
+        _categoryStatsCache = result
+        return result
+    }
+
+    private func computeCategoryStats() -> [CategoryStat] {
         let total = self.total
         guard total > 0 else { return [] }
 

@@ -7,6 +7,9 @@ import SwiftUI
 /// Tarjeta simple para mostrar un gasto individual con swipe actions
 struct ModernExpenseCard: View {
     let expense: Expense
+    /// Color de categoría inyectado por el padre (evita leer el singleton
+    /// @Observable en cada body → cascada de re-render en toda la lista).
+    var categoryColor: Color? = nil
     var onTap: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
     var onEdit: (() -> Void)? = nil
@@ -113,7 +116,7 @@ struct ModernExpenseCard: View {
     // MARK: - Computed Properties
     
     private var userDataColor: Color {
-        UserDataManager.shared.color(for: expense.category)
+        categoryColor ?? UserDataManager.shared.color(for: expense.category)
     }
     
     private var paymentIcon: String {

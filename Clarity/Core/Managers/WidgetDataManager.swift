@@ -38,6 +38,7 @@ final class WidgetDataManager {
         var weekTotal: Double = 0
         var monthTotal: Double = 0
         var todayCategoryTotals: [String: Double] = [:]
+        var monthCategoryTotals: [String: Double] = [:]
 
         for expense in expenses {
             guard let d = Formatters.date(from: expense.date) else { continue }
@@ -45,6 +46,7 @@ final class WidgetDataManager {
 
             if d >= monthStart && d <= now {
                 monthTotal += amount
+                monthCategoryTotals[expense.category, default: 0] += amount
             }
             if d >= weekStart && d <= now {
                 weekTotal += amount
@@ -57,6 +59,19 @@ final class WidgetDataManager {
 
         let topCategory = todayCategoryTotals.max(by: { $0.value < $1.value })?.key
         let topEmoji = topCategory.map { categoryEmoji(for: $0) } ?? "💳"
+
+        // ── Top 3 categorías del mes ──
+        let topMonthCats: [WidgetCategoryStat] = monthCategoryTotals
+            .sorted { $0.value > $1.value }
+            .prefix(3)
+            .map { (cat, amount) in
+                WidgetCategoryStat(
+                    name: cat,
+                    emoji: categoryEmoji(for: cat),
+                    amount: amount,
+                    percent: monthTotal > 0 ? min(amount / monthTotal, 1.0) : 0
+                )
+            }
 
         // ── Recent 5 expenses (partial sort) ──
         let recentExpenses = expenses
@@ -75,17 +90,18 @@ final class WidgetDataManager {
         // ── Month name ──
         let monthName = Formatters.fullMonthName(from: now)
 
-        let data = SharedWidgetData(
+        var data = SharedWidgetData(
             todayTotal:       todayTotal,
             weekTotal:        weekTotal,
             monthTotal:       monthTotal,
-            monthBudget:      nil,   // Sin presupuesto en el widget
+            monthBudget:      monthBudget,   // Lo pasa el caller (HomeVM con income - savings)
             recentExpenses:   Array(recentExpenses),
             topCategoryEmoji: topEmoji,
             currency:         "€",
             monthName:        monthName,
             updatedAt:        now
         )
+        data.topMonthCategories = topMonthCats
 
         save(data)
         logger.debug("✅ [Widget] Updated — Hoy: \(todayTotal)€, Mes: \(monthTotal)€")
