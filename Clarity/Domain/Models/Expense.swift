@@ -20,6 +20,30 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
     let createdAt: Date?
     let updatedAt: Date?
     
+    // Equatable/Hashable por campos visibles (excluye createdAt/updatedAt —
+    // cambian en cada save sin afectar UI → menos diffs/re-render en listas).
+    static func == (lhs: Expense, rhs: Expense) -> Bool {
+        lhs.id == rhs.id
+            && lhs.amount == rhs.amount
+            && lhs.name == rhs.name
+            && lhs.category == rhs.category
+            && lhs.subcategory == rhs.subcategory
+            && lhs.date == rhs.date
+            && lhs.paymentMethod == rhs.paymentMethod
+            && lhs.notes == rhs.notes
+            && lhs.isRecurring == rhs.isRecurring
+            && lhs.recurringId == rhs.recurringId
+            && lhs.goalId == rhs.goalId
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(amount)
+        hasher.combine(name)
+        hasher.combine(category)
+        hasher.combine(date)
+    }
+
     // Guaranteed unique ID for ForEach (fallback if Firestore ID is nil)
     var stableId: String {
         id ?? "\(name)_\(date)_\(amount)"

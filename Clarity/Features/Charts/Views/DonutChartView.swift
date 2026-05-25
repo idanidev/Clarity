@@ -10,9 +10,13 @@ struct CategoryChartData: Identifiable, Equatable {
     let amount: Double
     let percentage: Double
     let color: Color
+    /// Variación vs mismo periodo anterior. nil = sin datos previos.
+    /// 0.28 = +28%, -0.15 = -15%.
+    var deltaVsPrevious: Double? = nil
 
     static func == (lhs: CategoryChartData, rhs: CategoryChartData) -> Bool {
         lhs.name == rhs.name && lhs.amount == rhs.amount
+            && lhs.deltaVsPrevious == rhs.deltaVsPrevious
     }
 }
 
@@ -40,15 +44,6 @@ struct DonutChartView: View {
                 ) {
                     VStack(spacing: Spacing.lg) {
                         donutChart
-
-                        // Separator
-                        Rectangle()
-                            .fill(Color.glassBorder)
-                            .frame(height: 1)
-                            .padding(.horizontal, Spacing.md)
-
-                        // Legend ordered by amount
-                        categoryLegend
                     }
                     .padding(.vertical, Spacing.lg)
                 }
@@ -86,7 +81,6 @@ struct DonutChartView: View {
 
             // Chart segments
             ForEach(cachedSegments, id: \.data.id) { segment in
-                // Usa ángulos ya pre-calculados en cachedSegments (antes O(n²) reduce por render)
                 let startPct = segment.start.degrees / 360.0
                 let endPct = segment.end.degrees / 360.0
                 let visibleEnd = min(endPct, max(startPct, Double(animationProgress)))
@@ -98,6 +92,10 @@ struct DonutChartView: View {
                             segment.data.color.gradient,
                             style: StrokeStyle(lineWidth: 52, lineCap: .butt)
                         )
+                        // El trazo de 52 se centra en el path → sobresale 26pt.
+                        // Padding 30 mantiene el aro dentro del frame (no se corta
+                        // a los lados) + margen para el scaleEffect al seleccionar.
+                        .padding(30)
                         .rotationEffect(.degrees(-90))
                         .scaleEffect(selectedCategory == segment.data ? 1.06 : 1.0)
                         .shadow(
@@ -147,10 +145,6 @@ struct DonutChartView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     // Total
-                    Image(systemName: "chart.pie.fill")
-                        .font(.system(size: IconSize.medium))
-                        .foregroundStyle(Color.clarityPrimary.gradient)
-
                     Text("Total")
                         .scaledFont(size: 13)
                         .foregroundStyle(.secondary)
@@ -168,7 +162,8 @@ struct DonutChartView: View {
             .opacity(centerTextOpacity)
             .animation(.easeInOut(duration: AnimationDuration.fast), value: selectedCategory)
         }
-        .frame(width: 320, height: 320)
+        .frame(maxWidth: .infinity)
+        .frame(height: 360)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Grafico de gastos por categoria. Total: \(total.formattedCurrency)")
         .padding(.top, Spacing.md)
@@ -358,12 +353,20 @@ struct DonutChartView: View {
     private func updateCachedSegments() {
         var segments: [(start: Angle, end: Angle, data: CategoryChartData)] = []
 
-        // Acumulado incremental — O(n) (antes 2 reduce O(n) por elemento = O(n²))
+        // Fracción REAL sobre el importe total (no el % redondeado, que sumaba
+        // 99.x% y dejaba un hueco en el aro). El último segmento cierra exacto.
+        let sum = categoryData.reduce(0) { $0 + $1.amount }
+        guard sum > 0 else { cachedSegments = []; return }
+
+        // Ángulos SIN offset -90: el trim trabaja en 0..1 (0 = 3 en punto) y
+        // el .rotationEffect(-90) del Circle lo lleva al top. El último cierra a 360.
         var cumulative: Double = 0
-        for data in categoryData {
-            let start = Angle(degrees: (cumulative / 100) * 360 - 90)
-            cumulative += data.percentage
-            let end = Angle(degrees: (cumulative / 100) * 360 - 90)
+        for (i, data) in categoryData.enumerated() {
+            let start = Angle(degrees: (cumulative / sum) * 360)
+            cumulative += data.amount
+            let isLast = i == categoryData.count - 1
+            let endFraction = isLast ? 1.0 : cumulative / sum
+            let end = Angle(degrees: endFraction * 360)
             segments.append((start: start, end: end, data: data))
         }
 
@@ -424,6 +427,17 @@ struct CategoryChartCard: View {
                     Text("(\(String(format: "%.1f", data.percentage))%)")
                         .scaledFont(size: 11)
                         .foregroundStyle(.tertiary)
+
+                    if let delta = data.deltaVsPrevious, abs(delta) >= 0.01 {
+                        let up = delta > 0
+                        HStack(spacing: 1) {
+                            Image(systemName: up ? "arrow.up.right" : "arrow.down.right")
+                            Text("\(abs(Int((delta * 100).rounded())))%")
+                        }
+                        .scaledFont(size: 10, weight: .bold)
+                        // Subir gasto = malo (rojo), bajar = bueno (verde)
+                        .foregroundStyle(up ? Color.red : Color.green)
+                    }
                 }
             }
 

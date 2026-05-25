@@ -8,7 +8,11 @@ import Observation
 @Observable
 class AddExpenseViewModel {
     // MARK: - Form Fields
-    var amount: Double?
+
+    /// Texto crudo del TextField. Evita parseo Double↔String del `format: .number`
+    /// en cada keystroke (lag visible en input grande monospaced).
+    var amountText: String = ""
+
     var name: String = ""
     var category: String = ""
     var subcategory: String?
@@ -16,12 +20,39 @@ class AddExpenseViewModel {
     var paymentMethod: PaymentMethod = .tarjeta
     var notes: String = ""
 
+    /// Importe parseado del texto. Acepta coma o punto como decimal.
+    var amount: Double? {
+        let normalized = amountText
+            .replacingOccurrences(of: ",", with: ".")
+            .trimmingCharacters(in: .whitespaces)
+        guard !normalized.isEmpty else { return nil }
+        return Double(normalized)
+    }
+
     // MARK: - Auto-Suggest Logic
 
     private var suggestionTask: Task<Void, Never>?
 
+    // MARK: - Cache (warmup al abrir sheet → cero IO al teclear)
+
+    @ObservationIgnored private var cachedExpenses: [Expense] = []
+    @ObservationIgnored private var cachedLearned: [String: UserPreference] = [:]
+    @ObservationIgnored private var didWarmup = false
+
+    /// Carga snapshot único de expenses + learned. Llamar al abrir el sheet.
+    func warmup() async {
+        guard !didWarmup else { return }
+        didWarmup = true
+
+        async let expensesTask: [Expense] = (try? await repository.getExpenses()) ?? []
+        async let learnedTask = UserLearningManager.shared.snapshot()
+
+        cachedExpenses = await expensesTask
+        cachedLearned = await learnedTask
+    }
+
     func onNameChange(_ newName: String) {
-        self.name = newName
+        // name ya lo actualiza el binding del TextField — no re-asignar (evita ciclo @Observable extra).
 
         guard !newName.isEmpty && (category.isEmpty || wasAutoCategorized) else { return }
         guard newName.count >= 3 else { return }
@@ -30,18 +61,21 @@ class AddExpenseViewModel {
         suggestionTask?.cancel()
 
         suggestionTask = Task {
-            // Priority 1: Check learned preferences (UserLearningManager)
-            if let learned = await UserLearningManager.shared.getPreference(for: newName) {
+            // Debounce: espera a que el usuario pare de escribir antes de tocar el repo.
+            try? await Task.sleep(for: .milliseconds(400))
+            guard !Task.isCancelled else { return }
+
+            // Priority 1: Learned preferences (snapshot cacheado, sin await actor)
+            let key = UserLearningManager.normalizeKey(newName)
+            if let pref = cachedLearned[key], pref.count >= 1 {
                 guard !Task.isCancelled else { return }
-                self.category = learned.category
-                self.subcategory = learned.subcategory
+                self.category = pref.category
+                self.subcategory = pref.subcategory
                 self.wasAutoCategorized = true
                 return
             }
 
             // Priority 1.5: Match contra subcategorías del usuario.
-            // Si el nombre del gasto coincide con una subcategoría existente
-            // (ej: subcat "Developer" en categoría "Trabajo"), autocompletar.
             if let subMatch = findCategoryBySubcategoryName(newName) {
                 guard !Task.isCancelled else { return }
                 self.category = subMatch.category
@@ -50,8 +84,8 @@ class AddExpenseViewModel {
                 return
             }
 
-            // Priority 2: Check expense history (exact/contains match)
-            if let historyMatch = await findCategoryInHistory(for: newName) {
+            // Priority 2: Historial cacheado (en memoria, cero IO)
+            if let historyMatch = findCategoryInCachedHistory(for: newName) {
                 guard !Task.isCancelled else { return }
                 self.category = historyMatch.category
                 self.subcategory = historyMatch.subcategory
@@ -61,9 +95,7 @@ class AddExpenseViewModel {
 
             guard !Task.isCancelled else { return }
 
-            // Priority 3: Fallback to keyword-based suggestion (HARDCODED en parser).
-            // Solo aplicar si la categoría/subcategoría EXISTE en las del usuario.
-            // Sino crearíamos categorías fantasma al añadir un gasto (bug grave).
+            // Priority 3: Fallback keyword-based (HARDCODED en parser).
             if let suggestion = SmartTransactionParser.suggestCategory(for: newName),
                let resolved = resolveSuggestionAgainstUserCategories(suggestion) {
                 guard !Task.isCancelled else { return }
@@ -75,7 +107,6 @@ class AddExpenseViewModel {
     }
 
     /// Mapea una sugerencia hardcoded del parser a las categorías reales del usuario.
-    /// Si no existe match (ni por nombre ni por subcategoría), devuelve nil → no se aplica.
     private func resolveSuggestionAgainstUserCategories(
         _ suggestion: (category: String, subcategory: String?)
     ) -> (category: String, subcategory: String?)? {
@@ -83,12 +114,10 @@ class AddExpenseViewModel {
         let target = suggestion.category
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 
-        // 1) Match por nombre de categoría (ignora tildes/case/emojis)
         if let cat = userCats.first(where: {
             $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
                 .contains(target)
         }) {
-            // Solo conservar subcategoría si existe en esa categoría
             let sub = suggestion.subcategory.flatMap { sugSub in
                 cat.subcategories.first {
                     $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -98,7 +127,6 @@ class AddExpenseViewModel {
             return (cat.name, sub)
         }
 
-        // 2) Match por subcategoría (puede que la categoría sea distinta pero la sub coincida)
         if let sugSub = suggestion.subcategory?
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current),
            let cat = userCats.first(where: {
@@ -116,8 +144,6 @@ class AddExpenseViewModel {
         return nil
     }
 
-    /// Busca una subcategoría existente que coincida (case/diacritic-insensitive)
-    /// con el nombre del gasto. Devuelve la categoría padre + esa subcategoría.
     private func findCategoryBySubcategoryName(_ text: String) -> (category: String, subcategory: String)? {
         let normalized = text
             .folding(options: .diacriticInsensitive, locale: .current)
@@ -137,35 +163,29 @@ class AddExpenseViewModel {
         return nil
     }
 
-    private func findCategoryInHistory(for text: String) async -> (category: String, subcategory: String?)? {
+    /// Busca en el snapshot cacheado de expenses. Síncrono, en memoria.
+    private func findCategoryInCachedHistory(for text: String) -> (category: String, subcategory: String?)? {
         let normalized = text
             .folding(options: .diacriticInsensitive, locale: .current)
             .lowercased()
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
 
-        do {
-            let expenses = try await repository.getExpenses()
+        if let exact = cachedExpenses.first(where: {
+            $0.name.folding(options: .diacriticInsensitive, locale: .current)
+                .lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines) == normalized
+        }) {
+            return (exact.category, exact.subcategory)
+        }
 
-            // Exact match
-            if let exact = expenses.first(where: {
-                $0.name.folding(options: .diacriticInsensitive, locale: .current)
-                    .lowercased()
-                    .trimmingCharacters(in: .whitespacesAndNewlines) == normalized
-            }) {
-                return (exact.category, exact.subcategory)
-            }
-
-            // Contains match
-            if let contains = expenses.first(where: {
-                let expNorm = $0.name.folding(options: .diacriticInsensitive, locale: .current)
-                    .lowercased()
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                return expNorm.contains(normalized) || normalized.contains(expNorm)
-            }) {
-                return (contains.category, contains.subcategory)
-            }
-        } catch {
-            // Silently fall through to keyword matching
+        if let contains = cachedExpenses.first(where: {
+            let expNorm = $0.name.folding(options: .diacriticInsensitive, locale: .current)
+                .lowercased()
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return expNorm.contains(normalized) || normalized.contains(expNorm)
+        }) {
+            return (contains.category, contains.subcategory)
         }
 
         return nil
@@ -179,21 +199,19 @@ class AddExpenseViewModel {
 
     // MARK: - Dependencies
     private let repository = DependencyContainer.shared.expenseRepository
-    
+
     // MARK: - Validation
     var isValid: Bool {
         guard let amount = amount, amount > 0 else { return false }
         return !name.isEmpty && !category.isEmpty
     }
-    
+
     // MARK: - Methods
     func save() async {
         guard isValid, let amount = amount else { return }
 
         isLoading = true
 
-        // DatePicker devuelve Date a midnight LOCAL. Formateamos en LOCAL para que
-        // "2026-04-25" represente el día que el usuario eligió, no el día UTC equivalente.
         let dateString = Formatters.localDayString(from: date)
 
         let expense = Expense(
@@ -208,14 +226,12 @@ class AddExpenseViewModel {
 
         do {
             _ = try await repository.addExpense(expense)
-            // Teach the learning system this name→category association
             await UserLearningManager.shared.learn(
                 merchant: name,
                 category: category,
                 subcategory: subcategory
             )
             HapticManager.shared.expenseAdded()
-            // Notificar para que dashboards/escudos/metas se refresquen.
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(.success, title: "Gasto añadido", message: "\(name) guardado correctamente")
         } catch {
@@ -226,9 +242,9 @@ class AddExpenseViewModel {
 
         isLoading = false
     }
-    
+
     func reset() {
-        amount = nil
+        amountText = ""
         name = ""
         category = ""
         subcategory = nil

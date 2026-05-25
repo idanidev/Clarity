@@ -54,6 +54,22 @@ actor UserLearningManager {
         return (pref.category, pref.subcategory)
     }
 
+    /// Snapshot completo del store. Permite a callers cachear localmente
+    /// y evitar un await por keystroke.
+    func snapshot() -> [String: UserPreference] {
+        preferences
+    }
+
+    /// Normaliza desde fuera del actor (helper para usar la misma regla con un snapshot cacheado).
+    nonisolated static func normalizeKey(_ text: String) -> String {
+        text
+            .folding(options: .diacriticInsensitive, locale: .current)
+            .lowercased()
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
     func learn(merchant: String, category: String, subcategory: String?) {
         let normalized = normalize(merchant)
 

@@ -14,7 +14,7 @@ struct MoreMenuView: View {
                 }
                 
                 NavigationLink {
-                    AIAdvisorView()
+                    AIDisabledView()
                 } label: {
                     Label("IA", systemImage: "sparkles")
                 }

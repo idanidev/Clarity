@@ -13,8 +13,25 @@ struct Category: Codable, Identifiable, Hashable {
     var order: Int
     var createdAt: Date?
     var updatedAt: Date?
-    
 
+    // Equatable/Hashable SOLO por campos visibles. Excluye createdAt/updatedAt
+    // (cambian en cada save pero no afectan a la UI) → evita que SwiftUI
+    // recalcule diffs/re-render por timestamps.
+    static func == (lhs: Category, rhs: Category) -> Bool {
+        lhs.id == rhs.id
+            && lhs.name == rhs.name
+            && lhs.color == rhs.color
+            && lhs.order == rhs.order
+            && lhs.subcategories == rhs.subcategories
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+        hasher.combine(name)
+        hasher.combine(color)
+        hasher.combine(order)
+        hasher.combine(subcategories)
+    }
 }
 
 // MARK: - Default Categories

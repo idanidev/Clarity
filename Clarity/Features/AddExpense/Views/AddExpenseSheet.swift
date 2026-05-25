@@ -4,41 +4,49 @@
 import SwiftUI
 
 
+enum AddExpField: Hashable {
+    case amount, name, notes
+}
+
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
+    @FocusState private var focused: AddExpField?
     let onSave: () -> Void
-    
+
     var body: some View {
         NavigationStack {
             Form {
-                amountSection
-                descriptionSection
-                categorySection
-                dateSection
-                paymentSection
-                notesSection
+                AddExpAmountSection(viewModel: viewModel, focused: $focused)
+                AddExpDescriptionSection(viewModel: viewModel, focused: $focused)
+                AddExpCategorySection(viewModel: viewModel)
+                AddExpDateSection(viewModel: viewModel)
+                AddExpPaymentSection(viewModel: viewModel)
+                AddExpNotesSection(viewModel: viewModel, focused: $focused)
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle("Nuevo Gasto")
             .navigationBarTitleDisplayMode(.large)
+            .task {
+                await viewModel.warmup()
+                // Foco inicial en importe
+                if focused == nil { focused = .amount }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        Task {
-                            await viewModel.save()
-                            // Solo cerrar si el guardado tuvo éxito (sino el alert sigue visible)
-                            guard !viewModel.showError else { return }
-                            UserDataManager.shared.completeOnboarding()
-                            onSave()
-                            dismiss()
-                        }
+                    AddExpSaveToolbarButton(viewModel: viewModel, onSave: onSave, dismiss: dismiss)
+                }
+
+                ToolbarItem(placement: .keyboard) {
+                    HStack {
+                        Spacer()
+                        Button("Hecho") { focused = nil }
+                            .fontWeight(.semibold)
                     }
-                    .fontWeight(.semibold)
-                    .disabled(!viewModel.isValid)
                 }
             }
             .alert("Error", isPresented: $viewModel.showError) {
@@ -48,38 +56,58 @@ struct AddExpenseSheet: View {
             }
         }
     }
-    
-    // MARK: - Sections
-    
-    private var amountSection: some View {
+}
+
+// MARK: - Sections (structs separadas para que @Observable solo re-renderice
+// las secciones cuyas propiedades cambian — evita re-render global al teclear)
+
+private struct AddExpAmountSection: View {
+    @Bindable var viewModel: AddExpenseViewModel
+    var focused: FocusState<AddExpField?>.Binding
+
+    var body: some View {
         Section {
             HStack(alignment: .center) {
                 Text("€")
                     .font(.largeTitle)
                     .foregroundStyle(.secondary)
-                
-                TextField("0.00", value: $viewModel.amount, format: .number)
+
+                TextField("0.00", text: $viewModel.amountText)
                     .font(.system(size: 48, weight: .bold, design: .monospaced))
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
+                    .focused(focused, equals: .amount)
+                    .submitLabel(.next)
                     .accessibilityLabel("Cantidad del gasto")
             }
             .padding(.vertical, Spacing.sm)
         }
     }
-    
-    private var descriptionSection: some View {
+}
+
+private struct AddExpDescriptionSection: View {
+    @Bindable var viewModel: AddExpenseViewModel
+    var focused: FocusState<AddExpField?>.Binding
+
+    var body: some View {
         Section("Descripción") {
             TextField("¿En qué gastaste?", text: $viewModel.name)
                 .font(.clarityBody)
+                .focused(focused, equals: .name)
+                .submitLabel(.next)
+                .onSubmit { focused.wrappedValue = nil }
                 .accessibilityLabel("Descripción del gasto")
                 .onChange(of: viewModel.name) { _, newValue in
                     viewModel.onNameChange(newValue)
                 }
         }
     }
-    
-    private var categorySection: some View {
+}
+
+private struct AddExpCategorySection: View {
+    @Bindable var viewModel: AddExpenseViewModel
+
+    var body: some View {
         Section {
             NavigationLink {
                 CategoryPickerView(
@@ -87,34 +115,28 @@ struct AddExpenseSheet: View {
                     selectedSubcategory: $viewModel.subcategory
                 )
                 .onAppear {
-                    // User manually selecting = no longer auto-categorized
                     viewModel.wasAutoCategorized = false
                 }
             } label: {
                 HStack {
-                    // Si no hay categoría seleccionada
                     if viewModel.category.isEmpty {
                         Text("Seleccionar")
                             .foregroundStyle(.secondary)
                     } else {
-                        // Mostrar categoría
                         Text(viewModel.category)
                             .foregroundStyle(.primary)
-                        
+
                         Spacer()
-                        
-                        // Mostrar subcategoría (OBLIGATORIO)
+
                         if let sub = viewModel.subcategory {
                             Text(sub)
                                 .foregroundStyle(.secondary)
                         } else {
-                            // Si hay categoría pero no subcategoría, mostrar advertencia
                             Text("Elige subcategoría")
                                 .foregroundStyle(.orange)
                                 .font(.caption.weight(.medium))
                         }
-                        
-                        // Auto-fill indicator
+
                         if viewModel.wasAutoCategorized && !viewModel.category.isEmpty {
                             Image(systemName: "sparkles")
                                 .font(.caption)
@@ -133,21 +155,29 @@ struct AddExpenseSheet: View {
             }
         }
     }
-    
-    private var dateSection: some View {
+}
+
+private struct AddExpDateSection: View {
+    @Bindable var viewModel: AddExpenseViewModel
+
+    var body: some View {
         Section("Fecha") {
             DatePicker(
-                "",
+                "Fecha",
                 selection: $viewModel.date,
                 displayedComponents: .date
             )
-            .datePickerStyle(.graphical)
+            .datePickerStyle(.compact)
             .tint(Color.clarityPrimary)
             .accessibilityLabel("Fecha del gasto")
         }
     }
-    
-    private var paymentSection: some View {
+}
+
+private struct AddExpPaymentSection: View {
+    @Bindable var viewModel: AddExpenseViewModel
+
+    var body: some View {
         Section("Método de pago") {
             Picker("", selection: $viewModel.paymentMethod) {
                 ForEach(PaymentMethod.allCases) { method in
@@ -158,12 +188,38 @@ struct AddExpenseSheet: View {
             .pickerStyle(.navigationLink)
         }
     }
-    
-    private var notesSection: some View {
+}
+
+private struct AddExpNotesSection: View {
+    @Bindable var viewModel: AddExpenseViewModel
+    var focused: FocusState<AddExpField?>.Binding
+
+    var body: some View {
         Section("Notas (opcional)") {
             TextField("Notas adicionales...", text: $viewModel.notes, axis: .vertical)
+                .focused(focused, equals: .notes)
                 .lineLimit(3...6)
         }
+    }
+}
+
+private struct AddExpSaveToolbarButton: View {
+    @Bindable var viewModel: AddExpenseViewModel
+    let onSave: () -> Void
+    let dismiss: DismissAction
+
+    var body: some View {
+        Button("Guardar") {
+            Task {
+                await viewModel.save()
+                guard !viewModel.showError else { return }
+                UserDataManager.shared.completeOnboarding()
+                onSave()
+                dismiss()
+            }
+        }
+        .fontWeight(.semibold)
+        .disabled(!viewModel.isValid)
     }
 }
 
