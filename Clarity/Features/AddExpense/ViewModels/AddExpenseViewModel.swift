@@ -47,7 +47,9 @@ class AddExpenseViewModel {
         async let expensesTask: [Expense] = (try? await repository.getExpenses()) ?? []
         async let learnedTask = UserLearningManager.shared.snapshot()
 
-        cachedExpenses = await expensesTask
+        // Bias hacia gastos recientes — el autosuggest devuelve el primer match
+        // por orden, así que ordenamos desc por fecha ("YYYY-MM-DD" sortable).
+        cachedExpenses = await expensesTask.sorted { $0.date > $1.date }
         cachedLearned = await learnedTask
     }
 

@@ -195,7 +195,41 @@ final class HomeViewModel {
     // Exposed for View Logic (loading check)
     var allExpenses: [Expense] = []
     /// All historical expenses (from cache, not paginated). Used by MonthComparison, Charts.
-    private(set) var allHistoricalExpenses: [Expense] = []
+    private(set) var allHistoricalExpenses: [Expense] = [] {
+        didSet { _monthlyTotalsByKey = nil }  // invalidar memo
+    }
+
+    /// Memo: gasto total agregado por "YYYY-MM". Se reconstruye cuando cambia
+    /// `allHistoricalExpenses`. Evita filter+reduce O(N·M) por render del calendar.
+    @ObservationIgnored private var _monthlyTotalsByKey: [String: Double]?
+
+    private func monthlyTotalsByKey() -> [String: Double] {
+        if let cached = _monthlyTotalsByKey { return cached }
+        var dict: [String: Double] = [:]
+        dict.reserveCapacity(64)
+        for e in allHistoricalExpenses {
+            let key = String(e.date.prefix(7))  // "YYYY-MM"
+            dict[key, default: 0] += e.amount
+        }
+        _monthlyTotalsByKey = dict
+        return dict
+    }
+
+    /// Serie de los últimos N meses desde `selectedMonth` (inclusive),
+    /// usando el dict memoizado (O(N) consulta vs O(N·M) anterior).
+    func monthlyEvolution(months: Int) -> [MonthlySpending] {
+        let totals = monthlyTotalsByKey()
+        let cal = Calendar.current
+        var out: [MonthlySpending] = []
+        out.reserveCapacity(months)
+        for offset in stride(from: months - 1, through: 0, by: -1) {
+            guard let d = cal.date(byAdding: .month, value: -offset, to: selectedMonth) else { continue }
+            let key = String(Formatters.localDayString(from: d).prefix(7))
+            let label = cal.shortMonthSymbols[cal.component(.month, from: d) - 1].capitalized
+            out.append(MonthlySpending(key: key, label: label, total: totals[key] ?? 0))
+        }
+        return out
+    }
     var allRecurringRules: [RecurringExpense] = []  // Keep them for reference
 
     // Pagination
