@@ -134,6 +134,7 @@ struct ExpenseFilterSheet: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle(String(localized: "filters.navigationTitle", defaultValue: "Filtros"))
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.cancel", defaultValue: "Cancelar")) { dismiss() }

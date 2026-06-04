@@ -59,6 +59,8 @@ struct MonthlySetupSheet: View {
                             .font(.system(size: 64, weight: .bold, design: .rounded))
                             .keyboardType(.numberPad)
                             .multilineTextAlignment(.leading)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.5)
                             .focused($isInputFocused)
                             .foregroundStyle(Color.primary)
                     }
@@ -116,6 +118,7 @@ struct MonthlySetupSheet: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 // No cancel - This is obligatory!
                 // User MUST set up the month before using the dashboard

@@ -37,6 +37,7 @@ struct SalaryDashboardSheet: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Nóminas")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }

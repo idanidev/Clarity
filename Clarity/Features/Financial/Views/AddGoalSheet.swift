@@ -227,6 +227,7 @@ struct AddGoalSheet: View {
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .onAppear { prefill() }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

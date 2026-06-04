@@ -81,6 +81,8 @@ struct IncomeInputView: View {
                     Text(Formatters.currency(income))
                         .font(.system(size: 36, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                         .shadow(color: .black.opacity(0.2), radius: 4, y: 2)
 
                     Text("Disponible")

@@ -204,6 +204,7 @@ struct FeedGoalSheet: View {
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Alimentar")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }

@@ -3,6 +3,10 @@
 
 import SwiftUI
 
+private enum EditRecurringField: Hashable {
+    case amount, name
+}
+
 struct RecurringExpenseDetailView: View {
     @Environment(\.dismiss) private var dismiss
     let expense: RecurringExpense
@@ -255,6 +259,7 @@ struct RecurringExpenseDetailView: View {
 
 struct EditRecurringExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var focused: EditRecurringField?
     let expense: RecurringExpense
     let onSuccess: () -> Void
     
@@ -315,8 +320,12 @@ struct EditRecurringExpenseSheet: View {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
                         .scaledFont(size: 32, weight: .bold)
-                    
+                        .focused($focused, equals: .amount)
+
                     TextField("Nombre", text: $name)
+                        .focused($focused, equals: .name)
+                        .submitLabel(.done)
+                        .onSubmit { focused = nil }
                 }
                 
                 Section {
@@ -372,17 +381,26 @@ struct EditRecurringExpenseSheet: View {
             }
             .navigationTitle("Editar Recurrente")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
                         saveExpense()
                     }
                     .disabled(amountString.isEmpty || name.isEmpty || selectedCategory.isEmpty || isSaving)
                     .fontWeight(.semibold)
+                }
+
+                ToolbarItem(placement: .keyboard) {
+                    HStack {
+                        Spacer()
+                        Button("Hecho") { focused = nil }
+                            .fontWeight(.semibold)
+                    }
                 }
             }
             .fullScreenCover(isPresented: $showEmojiPicker) {

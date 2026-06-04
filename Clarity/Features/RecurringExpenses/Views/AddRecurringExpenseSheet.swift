@@ -3,8 +3,13 @@
 
 import SwiftUI
 
+private enum RecurringField: Hashable {
+    case amount, name
+}
+
 struct AddRecurringExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @FocusState private var focused: RecurringField?
     let onSuccess: () -> Void
     
     private let repository = DependencyContainer.shared.recurringExpenseRepository
@@ -52,8 +57,12 @@ struct AddRecurringExpenseSheet: View {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
                         .scaledFont(size: 32, weight: .bold)
-                    
+                        .focused($focused, equals: .amount)
+
                     TextField("Nombre (ej. Netflix)", text: $name)
+                        .focused($focused, equals: .name)
+                        .submitLabel(.done)
+                        .onSubmit { focused = nil }
                 }
                 
                 Section {
@@ -109,17 +118,26 @@ struct AddRecurringExpenseSheet: View {
             }
             .navigationTitle("Nuevo Recurrente")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
                 }
-                
+
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
                         saveExpense()
                     }
                     .disabled(amountString.isEmpty || name.isEmpty || selectedCategory.isEmpty || isSaving)
                     .fontWeight(.semibold)
+                }
+
+                ToolbarItem(placement: .keyboard) {
+                    HStack {
+                        Spacer()
+                        Button("Hecho") { focused = nil }
+                            .fontWeight(.semibold)
+                    }
                 }
             }
             .sheet(isPresented: $showEmojiPicker) {

@@ -174,6 +174,7 @@ struct VoiceConfirmationSheet: View {
             }
             .navigationTitle("Confirmar Gasto")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {

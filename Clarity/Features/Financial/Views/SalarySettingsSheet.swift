@@ -80,6 +80,7 @@ struct SalarySettingsSheet: View {
             }
             .navigationTitle("Ajustes de Sueldo")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") {

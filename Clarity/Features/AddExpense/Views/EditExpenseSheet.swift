@@ -27,6 +27,7 @@ struct EditExpenseSheet: View {
             }
             .navigationTitle("Editar Gasto")
             .navigationBarTitleDisplayMode(.large)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }

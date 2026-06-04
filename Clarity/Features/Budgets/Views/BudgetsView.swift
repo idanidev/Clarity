@@ -317,6 +317,7 @@ struct EditBudgetsSheet: View {
             }
             .navigationTitle("Editar Presupuestos")
             .navigationBarTitleDisplayMode(.inline)
+            .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancelar") { dismiss() }
