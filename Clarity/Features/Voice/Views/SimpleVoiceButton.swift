@@ -206,6 +206,12 @@ struct SimpleVoiceButton: View {
         // Vibración suave al detener
         HapticManager.shared.impact(.light)
 
+        // Snapshot del texto YA visible en pantalla ANTES de parar. endAudio()
+        // puede limpiar interimTranscript al finalizar async; sin este snapshot
+        // se perdía lo transcrito → falso "Sin audio".
+        let preStopTranscript = (speechManager.transcript + " " + speechManager.interimTranscript)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
         speechManager.stopRecording()
 
         // Transition: recording → processing (spinner stays visible)
@@ -214,13 +220,20 @@ struct SimpleVoiceButton: View {
         isStopping = false
 
         Task {
-            // Give speech recognition a moment to finalize the transcript
-            try? await Task.sleep(nanoseconds: 150_000_000)
+            // Poll hasta ~1.4s esperando el transcript FINAL (servidor remoto
+            // tarda más que on-device). Si llega, gana por precisión; si no,
+            // se usa el snapshot pre-stop que el usuario ya veía.
+            var transcript = preStopTranscript
+            for _ in 0..<9 {
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                let current = (speechManager.transcript + " " + speechManager.interimTranscript)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !current.isEmpty { transcript = current }
+                // transcript no vacío = SFSpeech marcó isFinal → listo
+                if !speechManager.transcript.isEmpty { break }
+            }
 
             await MainActor.run {
-                let transcript = (speechManager.transcript + " " + speechManager.interimTranscript)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-
                 let finalTranscript =
                     isSimulator && transcript.isEmpty ? "Añade 50 euros en comida" : transcript
 
