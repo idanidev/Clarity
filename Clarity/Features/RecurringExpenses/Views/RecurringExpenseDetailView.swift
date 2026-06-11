@@ -20,6 +20,19 @@ struct RecurringExpenseDetailView: View {
     private var categoryColor: Color {
         UserDataManager.shared.color(for: expense.category)
     }
+
+    /// Cargos reales generados por esta regla, más recientes primero.
+    /// Match por recurringId + fallback por nombre (cargos antiguos creados
+    /// antes de que se enlazara recurringId no lo tienen).
+    private var chargeHistory: [Expense] {
+        let ruleId = expense.id ?? ""
+        return UserDataManager.shared.expenses
+            .filter {
+                (!ruleId.isEmpty && $0.recurringId == ruleId)
+                    || (($0.isRecurring ?? $0.recurring ?? false) && $0.name == expense.name)
+            }
+            .sorted { $0.date > $1.date }
+    }
     
     private var emoji: String {
         // Use saved icon, fallback to extracting from category or default
@@ -106,21 +119,31 @@ struct RecurringExpenseDetailView: View {
                 LabeledContent("Método de pago", value: expense.paymentMethod)
             }
             
-            // History
+            // History — gastos REALES generados por esta regla.
+            // Antes mostraba solo rule.lastCreated, campo que nadie escribía al
+            // crear cargos → "sin historial" aunque hubiera meses de cargos.
             Section("Historial") {
-                if let lastCreated = expense.lastCreated {
-                    LabeledContent {
-                        Text(lastCreated)
-                            .foregroundStyle(DesignTokens.Colors.textSecondary)
-                    } label: {
-                        Label("Último cargo", systemImage: "checkmark.circle")
-                            .foregroundStyle(.green)
-                    }
-                } else {
+                if chargeHistory.isEmpty {
                     HStack {
                         Image(systemName: "clock")
                             .foregroundStyle(DesignTokens.Colors.textSecondary)
                         Text("Aún no se ha creado ningún cargo")
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+                    }
+                } else {
+                    ForEach(chargeHistory.prefix(12), id: \.stableId) { charge in
+                        LabeledContent {
+                            Text(Formatters.currency(charge.amount))
+                                .monospacedDigit()
+                                .foregroundStyle(DesignTokens.Colors.textSecondary)
+                        } label: {
+                            Label(Formatters.displayDate(charge.date), systemImage: "checkmark.circle")
+                                .foregroundStyle(.green)
+                        }
+                    }
+                    if chargeHistory.count > 12 {
+                        Text("\(chargeHistory.count) cargos en total")
+                            .font(.caption)
                             .foregroundStyle(DesignTokens.Colors.textSecondary)
                     }
                 }
