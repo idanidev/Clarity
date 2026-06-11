@@ -13,6 +13,22 @@ Domain → Data → Features/Presentation
 - `LocalRecurringExpenseManager` corre en `MainTabView.task` al arrancar
 - Nunca intentar migrar esto de vuelta a Firebase (deprecated por límites del free tier)
 
+## Categorías (REGLAS CRÍTICAS — hubo pérdida de datos real, jun 2026)
+- Source of truth: map `users/{uid}.categories` = `{id: {name, color, subcategories}}`.
+- **PROHIBIDO** escribir una entrada del map (dot-path o FieldPath) sin garantizar
+  antes que el map completo está persistido → usar SIEMPRE
+  `persistCategoriesIfMissing` antes de add/update/delete/addSubcategory.
+- **PROHIBIDO** el estado "defaults solo en memoria": si `loadCategories` no
+  encuentra map (o está vacío), siembra los defaults en Firestore EN ESE MOMENTO.
+  (Bug histórico: defaults en memoria + primer write dot-path → map quedaba con
+  1 sola entrada → el resto de categorías "desaparecía".)
+- **PROHIBIDO** `setData` del campo `categories` completo sin verificación previa
+  contra SERVER. Solo `persistCategoriesIfMissing` escribe el map entero.
+- Ids de defaults llevan emoji → field-paths con `FieldPath(["categories", id])`,
+  no interpolación string.
+- Defaults hardcodeados (`DefaultCategory`) = SOLO seed inicial. Nunca fallback
+  visual si el usuario ya tiene datos persistidos.
+
 ## Firebase
 - Firestore collections: `users`, `expenses`, `budgets`, `categories`, `recurringExpenses`
 - Estrategias de caché: `.cacheFirst` para reads, `.networkFirst` para datos críticos

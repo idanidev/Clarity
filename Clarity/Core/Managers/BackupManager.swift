@@ -622,7 +622,8 @@ final class BackupManager {
         try await db.collection("users")
             .document(userId)
             .updateData([
-                "categories.\(id)": categoryData,
+                // FieldPath: ids de defaults llevan emoji, dot-path string no es fiable
+                FieldPath(["categories", id]): categoryData,
                 "categoriesVersion": UUID().uuidString,
                 "categoriesUpdatedAt": FieldValue.serverTimestamp(),
             ])

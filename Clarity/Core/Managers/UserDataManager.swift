@@ -170,6 +170,10 @@ final class UserDataManager {
     func addCategory(_ category: Category) async {
         guard let userId = userId else { return }
         do {
+            // FIX pérdida de datos: los defaults vivían solo en memoria. Si el map
+            // no está persistido, sembrarlo ANTES de añadir la nueva — si no, el
+            // updateData dot-path crea el map con una sola entrada y borra el resto.
+            try await service.persistCategoriesIfMissing(categories, userId: userId)
             try await service.saveCategory(category, userId: userId)
             await refreshCategories() // Light refresh (solo categorías)
         } catch {
@@ -185,6 +189,9 @@ final class UserDataManager {
         let renamed = oldName != nil && oldName != category.name
 
         do {
+            // Sembrar defaults no persistidos antes de editar (evita que editar
+            // una categoría por defecto cree un map con una sola entrada).
+            try await service.persistCategoriesIfMissing(categories, userId: userId)
             try await service.saveCategory(category, userId: userId, oldName: oldName)
             // Si renombró, gastos cambiaron de category string → recarga gastos también.
             // Si solo color/orden, refresh ligero de categorías es suficiente.
@@ -201,6 +208,7 @@ final class UserDataManager {
     func addSubcategory(_ subcategoryName: String, toCategoryId categoryId: String) async {
         guard let userId = userId else { return }
         do {
+            try await service.persistCategoriesIfMissing(categories, userId: userId)
             try await service.addSubcategory(subcategoryName, toCategoryId: categoryId, userId: userId)
             await refreshCategories() // Light refresh (solo categorías)
         } catch {
@@ -211,6 +219,9 @@ final class UserDataManager {
     func deleteCategory(id: String) async {
         guard let userId = userId else { return }
         do {
+            // Seed previo: si el map no estaba persistido, el delete por id
+            // no-opearía y la categoría "fantasma" reaparecería al refrescar.
+            try await service.persistCategoriesIfMissing(categories, userId: userId)
             try await service.deleteCategory(id: id, userId: userId)
             // Gastos mantienen el string de categoría; solo recargamos lista de categorías.
             await refreshCategories()

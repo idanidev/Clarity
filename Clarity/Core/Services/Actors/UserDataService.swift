@@ -42,11 +42,17 @@ actor UserDataService {
             doc = try await docRef.getDocument(source: .server)
         }
 
-        guard let data = doc.data(),
-            let categoriesMap = data["categories"] as? [String: [String: Any]]
-        else {
-            logger.info("No categories map found. Returning defaults.")
-            return (createDefaultCategories(), nil)
+        let categoriesMap = doc.data()?["categories"] as? [String: [String: Any]] ?? [:]
+
+        // Map ausente O vacío → defaults. CRÍTICO: persistirlos YA en Firestore.
+        // El estado "defaults solo en memoria" causaba pérdida de datos: el primer
+        // write dot-path creaba el map con una única entrada y el resto desaparecía.
+        // También auto-recupera a usuarios que se quedaron con el map vacío.
+        if categoriesMap.isEmpty {
+            logger.info("No categories persisted. Seeding defaults to Firestore.")
+            let defaults = createDefaultCategories()
+            try? await persistCategoriesIfMissing(defaults, userId: userId)
+            return (defaults, nil)
         }
 
         var loaded: [Category] = []
@@ -146,9 +152,12 @@ actor UserDataService {
                 try await subRef.document(newId).setData(categoryData, merge: true)
                 try? await subRef.document(existingId).delete()
             } else {
-                // ID seguro - actualizar map + subcolección
+                // ID seguro - actualizar map + subcolección.
+                // FieldPath (no dot-path string): los ids de categorías default
+                // llevan emoji ("Suscripciones📺") y el parser de dot-paths de
+                // Firestore los rechaza — FieldPath acepta cualquier carácter.
                 try await docRef.updateData([
-                    "categories.\(existingId)": categoryData,
+                    FieldPath(["categories", existingId]): categoryData,
                     "categoriesVersion": UUID().uuidString,
                     "categoriesUpdatedAt": FieldValue.serverTimestamp(),
                 ])
@@ -170,6 +179,44 @@ actor UserDataService {
             ])
             try await subRef.document(newId).setData(categoryData, merge: true)
         }
+    }
+
+    /// Siembra el map `categories` con las categorías dadas SOLO si el documento
+    /// aún no tiene map persistido. Los defaults se devolvían solo en memoria
+    /// (initializeDefaultCategories nunca se llamaba), así que el primer
+    /// addCategory creaba un map con una única entrada vía dot-path y los
+    /// defaults desaparecían. Sembrar primero evita esa pérdida de datos.
+    func persistCategoriesIfMissing(_ categories: [Category], userId: String) async throws {
+        let docRef = db.collection("users").document(userId)
+        // Estado real persistido (cache no tiene los defaults en memoria).
+        let doc = try await docRef.getDocument(source: .server)
+        let existing = doc.data()?["categories"] as? [String: [String: Any]]
+        guard existing == nil || existing?.isEmpty == true else { return }
+
+        var map: [String: [String: Any]] = [:]
+        for c in categories {
+            // Conserva el id propio si es seguro (así un updateCategory posterior
+            // por ese mismo id actualiza la entrada en vez de duplicarla); si no,
+            // UUID. Los defaults usan su rawValue como id (sin caracteres prohibidos).
+            let key: String
+            if let id = c.id, !id.isEmpty, !containsForbiddenChars(id) {
+                key = id
+            } else {
+                key = UUID().uuidString
+            }
+            map[key] = [
+                "name": c.name,
+                "color": c.color,
+                "subcategories": c.subcategories,
+            ]
+        }
+        guard !map.isEmpty else { return }
+        try await docRef.setData([
+            "categories": map,
+            "categoriesVersion": UUID().uuidString,
+            "categoriesUpdatedAt": FieldValue.serverTimestamp(),
+        ], merge: true)
+        logger.info("🌱 Sembradas \(map.count) categorías por defecto (no estaban persistidas)")
     }
 
     /// Actualiza el nombre de categoría en todos los gastos existentes
