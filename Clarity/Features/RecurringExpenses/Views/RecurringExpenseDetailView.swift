@@ -14,7 +14,6 @@ struct RecurringExpenseDetailView: View {
     
     @State private var showEditSheet = false
     @State private var showDeleteConfirm = false
-    @State private var showChargeConfirm = false
     @State private var isProcessing = false
     
     private var categoryColor: Color {
@@ -158,7 +157,9 @@ struct RecurringExpenseDetailView: View {
                 }
                 
                 Button {
-                    showChargeConfirm = true
+                    // Acción directa + toast (patrón de la app). Dialogs solo
+                    // para acciones destructivas — esto es reversible.
+                    Task { await createCharge() }
                 } label: {
                     Label("Crear cargo ahora", systemImage: "plus.circle")
                 }
@@ -197,19 +198,6 @@ struct RecurringExpenseDetailView: View {
             EditRecurringExpenseSheet(expense: expense) {
                 onUpdate()
             }
-        }
-        .confirmationDialog(
-            "¿Crear cargo de \(Formatters.currency(expense.amount))?",
-            isPresented: $showChargeConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Crear Cargo") {
-                Task {
-                    await createCharge()
-                }
-            }
-        } message: {
-            Text("Se creará un gasto inmediato con la información de este gasto recurrente.")
         }
         .confirmationDialog(
             "¿Eliminar \"\(expense.name)\"?",
@@ -257,9 +245,20 @@ struct RecurringExpenseDetailView: View {
         do {
             _ = try await DependencyContainer.shared.expenseRepository.addExpense(newExpense)
             HapticManager.shared.notification(.success)
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            FeedbackManager.shared.show(
+                .success,
+                title: "Cargo creado",
+                message: "\(expense.name) — \(Formatters.currency(expense.amount)) añadido a hoy"
+            )
             dismiss()
         } catch {
             HapticManager.shared.notification(.error)
+            FeedbackManager.shared.show(
+                .error,
+                title: "Error al crear el cargo",
+                message: error.safeUserMessage
+            )
             isProcessing = false
         }
     }
