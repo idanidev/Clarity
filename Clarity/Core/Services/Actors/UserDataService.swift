@@ -31,15 +31,20 @@ actor UserDataService {
     /// Fase 1 (esta release): MAP FIELD = source of truth (compat 2.0.x).
     /// Subcolección se mantiene espejo via dual-write para usar en futuro v3.
     /// Esto evita que un delete desde 2.0.2 deje categoría "fantasma" en 2.0.3.
-    func loadCategories(userId: String) async throws -> (categories: [Category], version: String?) {
+    func loadCategories(userId: String, forceServer: Bool = false) async throws -> (categories: [Category], version: String?) {
         let docRef = db.collection("users").document(userId)
 
         let doc: DocumentSnapshot
-        do {
-            let cached = try await docRef.getDocument(source: .cache)
-            doc = cached.exists ? cached : try await docRef.getDocument(source: .server)
-        } catch {
+        if forceServer {
+            // Refresh multi-device: lectura directa de server (sin cache stale)
             doc = try await docRef.getDocument(source: .server)
+        } else {
+            do {
+                let cached = try await docRef.getDocument(source: .cache)
+                doc = cached.exists ? cached : try await docRef.getDocument(source: .server)
+            } catch {
+                doc = try await docRef.getDocument(source: .server)
+            }
         }
 
         let categoriesMap = doc.data()?["categories"] as? [String: [String: Any]] ?? [:]
@@ -69,11 +74,16 @@ actor UserDataService {
             order += 1
         }
 
-        // Espejar a subcolección en background (preparación futura v3, no afecta lectura)
-        Task { try? await mirrorCategoriesToSubcollection(userId: userId, map: categoriesMap) }
+        // Espejar a subcolección SOLO si la versión cambió desde el último mirror
+        // (antes corría en cada load → N writes Firestore por arranque).
+        let version = doc.data()?["categoriesVersion"] as? String
+        if version == nil || version != categoriesVersion {
+            categoriesVersion = version
+            Task { try? await mirrorCategoriesToSubcollection(userId: userId, map: categoriesMap) }
+        }
 
         let sorted = loaded.sorted { $0.name < $1.name }
-        return (sorted, doc.data()?["categoriesVersion"] as? String)
+        return (sorted, version)
     }
 
     /// Espejo Fase 1: replica el map field a la subcolección + borra docs huérfanos.
@@ -219,8 +229,9 @@ actor UserDataService {
         logger.info("🌱 Sembradas \(map.count) categorías por defecto (no estaban persistidas)")
     }
 
-    /// Actualiza el nombre de categoría en todos los gastos existentes
-    private func updateExpensesCategoryName(userId: String, oldName: String, newName: String)
+    /// Actualiza el nombre de categoría en todos los gastos existentes.
+    /// Internal: también lo usa el flujo "reasignar gastos al borrar categoría".
+    func updateExpensesCategoryName(userId: String, oldName: String, newName: String)
         async throws
     {
         logger.info("🔄 Actualizando gastos de '\(oldName)' a '\(newName)'...")

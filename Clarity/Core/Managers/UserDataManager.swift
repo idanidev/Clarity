@@ -81,6 +81,16 @@ final class UserDataManager {
             
             let (catsResult, _) = try await fetchedCategories
             self.categories = catsResult
+
+            // Multi-device: la primera lectura puede venir de cache. Refresco
+            // contra server en background y actualizo solo si difiere.
+            Task { [weak self] in
+                guard let self, let uid = self.userId else { return }
+                if let (fresh, _) = try? await self.service.loadCategories(userId: uid, forceServer: true),
+                   fresh != self.categories {
+                    self.categories = fresh
+                }
+            }
             
             // Load Local Backup Filters
             var localFilters: [ExpenseFilter] = []
@@ -216,15 +226,31 @@ final class UserDataManager {
         }
     }
     
-    func deleteCategory(id: String) async {
+    /// Elimina una categoría. Si `reassignExpensesTo` viene informado, primero
+    /// migra TODOS los gastos de esta categoría a la nueva (evita huérfanos
+    /// "fantasma" en charts con el string de la categoría borrada).
+    func deleteCategory(id: String, reassignExpensesTo newCategoryName: String? = nil) async {
         guard let userId = userId else { return }
         do {
             // Seed previo: si el map no estaba persistido, el delete por id
             // no-opearía y la categoría "fantasma" reaparecería al refrescar.
             try await service.persistCategoriesIfMissing(categories, userId: userId)
+
+            if let newName = newCategoryName,
+               let oldName = categories.first(where: { $0.id == id })?.name,
+               oldName != newName {
+                try await service.updateExpensesCategoryName(
+                    userId: userId, oldName: oldName, newName: newName)
+            }
+
             try await service.deleteCategory(id: id, userId: userId)
-            // Gastos mantienen el string de categoría; solo recargamos lista de categorías.
             await refreshCategories()
+
+            if newCategoryName != nil {
+                // Gastos cambiaron de categoría → recargar cache + notificar dashboards
+                await loadExpenses()
+                NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            }
         } catch {
             self.error = "Error al eliminar: \(error.localizedDescription)"
         }

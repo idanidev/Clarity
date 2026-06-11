@@ -15,6 +15,7 @@ struct RecurringExpenseDetailView: View {
     @State private var showEditSheet = false
     @State private var showDeleteConfirm = false
     @State private var isProcessing = false
+    @State private var showAllCharges = false
     
     private var categoryColor: Color {
         UserDataManager.shared.color(for: expense.category)
@@ -118,44 +119,14 @@ struct RecurringExpenseDetailView: View {
                 LabeledContent("Método de pago", value: expense.paymentMethod)
             }
             
-            // History — gastos REALES generados por esta regla.
-            // Antes mostraba solo rule.lastCreated, campo que nadie escribía al
-            // crear cargos → "sin historial" aunque hubiera meses de cargos.
-            Section("Historial") {
-                if chargeHistory.isEmpty {
-                    HStack {
-                        Image(systemName: "clock")
-                            .foregroundStyle(DesignTokens.Colors.textSecondary)
-                        Text("Aún no se ha creado ningún cargo")
-                            .foregroundStyle(DesignTokens.Colors.textSecondary)
-                    }
-                } else {
-                    ForEach(chargeHistory.prefix(12), id: \.stableId) { charge in
-                        LabeledContent {
-                            Text(Formatters.currency(charge.amount))
-                                .monospacedDigit()
-                                .foregroundStyle(DesignTokens.Colors.textSecondary)
-                        } label: {
-                            Label(Formatters.displayDate(charge.date), systemImage: "checkmark.circle")
-                                .foregroundStyle(.green)
-                        }
-                    }
-                    if chargeHistory.count > 12 {
-                        Text("\(chargeHistory.count) cargos en total")
-                            .font(.caption)
-                            .foregroundStyle(DesignTokens.Colors.textSecondary)
-                    }
-                }
-            }
-            
-            // Actions
+            // Actions — arriba, antes del historial (acceso rápido)
             Section {
                 Button {
                     showEditSheet = true
                 } label: {
                     Label("Editar", systemImage: "pencil")
                 }
-                
+
                 Button {
                     // Acción directa + toast (patrón de la app). Dialogs solo
                     // para acciones destructivas — esto es reversible.
@@ -164,7 +135,7 @@ struct RecurringExpenseDetailView: View {
                     Label("Crear cargo ahora", systemImage: "plus.circle")
                 }
                 .disabled(isProcessing)
-                
+
                 Button {
                     Task {
                         await toggleActive()
@@ -178,7 +149,50 @@ struct RecurringExpenseDetailView: View {
                 }
                 .disabled(isProcessing)
             }
-            
+
+            // History — gastos REALES generados por esta regla.
+            // Solo el último visible; el resto tras un desplegable.
+            Section("Historial") {
+                if chargeHistory.isEmpty {
+                    HStack {
+                        Image(systemName: "clock")
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+                        Text("Aún no se ha creado ningún cargo")
+                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+                    }
+                } else {
+                    if let last = chargeHistory.first {
+                        LabeledContent {
+                            Text(Formatters.currency(last.amount))
+                                .monospacedDigit()
+                                .foregroundStyle(DesignTokens.Colors.textSecondary)
+                        } label: {
+                            Label(Formatters.displayDate(last.date), systemImage: "checkmark.circle")
+                                .foregroundStyle(.green)
+                        }
+                    }
+
+                    if chargeHistory.count > 1 {
+                        DisclosureGroup(isExpanded: $showAllCharges) {
+                            ForEach(chargeHistory.dropFirst(), id: \.stableId) { charge in
+                                LabeledContent {
+                                    Text(Formatters.currency(charge.amount))
+                                        .monospacedDigit()
+                                        .foregroundStyle(DesignTokens.Colors.textSecondary)
+                                } label: {
+                                    Label(Formatters.displayDate(charge.date), systemImage: "checkmark.circle")
+                                        .foregroundStyle(DesignTokens.Colors.textSecondary)
+                                }
+                            }
+                        } label: {
+                            Text("Ver anteriores (\(chargeHistory.count - 1))")
+                                .font(.subheadline)
+                                .foregroundStyle(DesignTokens.Colors.textSecondary)
+                        }
+                    }
+                }
+            }
+
             // Delete
             Section {
                 Button(role: .destructive) {

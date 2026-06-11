@@ -7,7 +7,19 @@ struct CategoriesManagementView: View {
     private var userDataManager = UserDataManager.shared
     @State private var showAddCategory = false
     @State private var showDeleteAlert = false
+    @State private var showReassignPicker = false
     @State private var categoryToDelete: Category?
+
+    /// Gastos que usan la categoría a borrar (para avisar + ofrecer reasignación).
+    private var affectedExpensesCount: Int {
+        guard let name = categoryToDelete?.name else { return 0 }
+        return userDataManager.expenses.filter { $0.category == name }.count
+    }
+
+    /// Categorías candidatas para reasignar (todas menos la que se borra).
+    private var reassignTargets: [Category] {
+        userDataManager.categories.filter { $0.id != categoryToDelete?.id }
+    }
 
     var body: some View {
         List {
@@ -72,13 +84,38 @@ struct CategoriesManagementView: View {
                 }
             }
         }
-        .alert(String(localized: "categories.delete.title", defaultValue: "Eliminar Categoría"), isPresented: $showDeleteAlert) {
-            Button(String(localized: "common.cancel", defaultValue: "Cancelar"), role: .cancel) {}
-            Button(String(localized: "common.delete", defaultValue: "Eliminar"), role: .destructive) {
-                confirmDelete()
+        .confirmationDialog(
+            "¿Eliminar \"\(categoryToDelete?.name ?? "")\"?",
+            isPresented: $showDeleteAlert,
+            titleVisibility: .visible
+        ) {
+            if affectedExpensesCount > 0 && !reassignTargets.isEmpty {
+                Button("Reasignar \(affectedExpensesCount) gastos y eliminar") {
+                    showReassignPicker = true
+                }
             }
+            Button(affectedExpensesCount > 0 ? "Eliminar y mantener gastos" : "Eliminar", role: .destructive) {
+                confirmDelete(reassignTo: nil)
+            }
+            Button("Cancelar", role: .cancel) {}
         } message: {
-            Text(String(localized: "categories.delete.message", defaultValue: "Esta acción no se puede deshacer. Los gastos existentes mantendrán esta categoría."))
+            if affectedExpensesCount > 0 {
+                Text("\(affectedExpensesCount) gastos usan esta categoría. Puedes moverlos a otra antes de eliminarla.")
+            } else {
+                Text("Esta acción no se puede deshacer.")
+            }
+        }
+        .confirmationDialog(
+            "Mover gastos a…",
+            isPresented: $showReassignPicker,
+            titleVisibility: .visible
+        ) {
+            ForEach(reassignTargets, id: \.id) { target in
+                Button(target.name) {
+                    confirmDelete(reassignTo: target.name)
+                }
+            }
+            Button("Cancelar", role: .cancel) {}
         }
     }
 
@@ -88,12 +125,20 @@ struct CategoriesManagementView: View {
         showDeleteAlert = true
     }
 
-    private func confirmDelete() {
+    private func confirmDelete(reassignTo newCategoryName: String?) {
         guard let category = categoryToDelete, let id = category.id else { return }
+        let movedCount = affectedExpensesCount
 
         Task {
-            await userDataManager.deleteCategory(id: id)
+            await userDataManager.deleteCategory(id: id, reassignExpensesTo: newCategoryName)
             HapticManager.shared.notification(.success)
+            if let newName = newCategoryName {
+                FeedbackManager.shared.show(
+                    .success,
+                    title: "Categoría eliminada",
+                    message: "\(movedCount) gastos movidos a \(newName)"
+                )
+            }
         }
         categoryToDelete = nil
     }
