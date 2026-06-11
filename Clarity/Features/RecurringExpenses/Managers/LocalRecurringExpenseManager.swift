@@ -205,6 +205,55 @@ final class LocalRecurringExpenseManager {
         }
     }
 
+    /// Crea AL MOMENTO el gasto del periodo actual para una regla recién creada o
+    /// editada, si su día de cobro de este mes ya pasó (o es hoy) y aún no existe.
+    /// SIN gate diario — se invoca explícitamente al guardar la regla.
+    /// Feedback de usuario: "estamos a 11, el cobro era el día 9 → que lo meta ya,
+    /// no esperar al día siguiente" (el presupuesto no reflejaba el gasto).
+    func createCurrentPeriodExpenseIfDue(for rule: RecurringExpense) async {
+        guard rule.active, let ruleId = rule.id, !ruleId.isEmpty else { return }
+
+        let today = Date()
+        let currentDate = Formatters.isoString(from: today)
+        let currentDay = Int(currentDate.suffix(2)) ?? 1
+        let currentMonth = String(currentDate.prefix(7))
+
+        // ¿Este mes toca cobro según frecuencia/billingMonth?
+        guard expectedBillingMonths(for: rule, anchor: today).contains(currentMonth) else { return }
+
+        // ¿El día de cobro (clamp al último día del mes) ya llegó?
+        let daysInMonth = Calendar.current.range(of: .day, in: .month, for: today)?.count ?? 30
+        let effectiveDay = min(rule.dayOfMonth, daysInMonth)
+        guard effectiveDay <= currentDay else { return }
+
+        // ¿Expirada?
+        if let endDate = rule.endDate,
+           let endObj = Formatters.date(from: endDate),
+           today > endObj { return }
+
+        do {
+            let existing = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
+            guard !expenseExists(in: existing, recurringId: ruleId, month: currentMonth) else { return }
+
+            let dayStr = String(format: "%02d", effectiveDay)
+            let newExpense = Expense(
+                amount: max(0, rule.amount),
+                name: rule.name,
+                category: rule.category,
+                subcategory: rule.subcategory,
+                date: "\(currentMonth)-\(dayStr)",
+                paymentMethod: rule.paymentMethod,
+                isRecurring: true,
+                recurringId: ruleId
+            )
+            _ = try await expenseRepo.addExpense(newExpense)
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            logger.info("⚡️ Gasto inmediato creado al guardar regla: \(rule.name) (\(currentMonth)-\(dayStr))")
+        } catch {
+            logger.error("❌ Error creando gasto inmediato: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Private Helpers
 
     private func shouldCreateExpense(

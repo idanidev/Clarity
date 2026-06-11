@@ -172,7 +172,12 @@ struct AddRecurringExpenseSheet: View {
         
         Task {
             do {
-                _ = try await repository.add(newExpense)
+                let newId = try await repository.add(newExpense)
+                // Si el día de cobro de este mes ya pasó (p.ej. hoy 11, cobro el 9),
+                // crear el gasto AL MOMENTO — no esperar al chequeo del día siguiente.
+                var saved = newExpense
+                saved.id = newId
+                await LocalRecurringExpenseManager.shared.createCurrentPeriodExpenseIfDue(for: saved)
                 HapticManager.shared.notification(.success)
                 onSuccess()
                 dismiss()

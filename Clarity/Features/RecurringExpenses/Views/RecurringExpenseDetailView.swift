@@ -441,6 +441,9 @@ struct EditRecurringExpenseSheet: View {
         Task {
             do {
                 try await DependencyContainer.shared.recurringExpenseRepository.update(updated)
+                // Si tras editar (p.ej. cambió el día de cobro) el cobro de este mes
+                // ya tocaba, crear el gasto AL MOMENTO (dedupe por mes incluido).
+                await LocalRecurringExpenseManager.shared.createCurrentPeriodExpenseIfDue(for: updated)
                 await MainActor.run {
                     HapticManager.shared.notification(.success)
                     onSuccess()
