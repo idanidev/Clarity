@@ -245,17 +245,39 @@ struct RecurringExpenseDetailView: View {
     
     private func createCharge() async {
         isProcessing = true
-        
+        defer { isProcessing = false }
+
+        let today = Formatters.isoString(from: Date())
+        let currentMonth = String(today.prefix(7))  // YYYY-MM
+        let ruleId = expense.id ?? ""
+
+        // Dedupe: ¿ya hay un cargo de esta regla este mes? Antes creaba siempre
+        // → duplicados + decía "Cargo creado" aunque ya estuviera (falso positivo).
+        let alreadyExists = UserDataManager.shared.expenses.contains {
+            !ruleId.isEmpty && $0.recurringId == ruleId && $0.date.hasPrefix(currentMonth)
+        }
+        guard !alreadyExists else {
+            HapticManager.shared.notification(.warning)
+            FeedbackManager.shared.show(
+                .info,
+                title: "Ya existe el cargo de este mes",
+                message: "\(expense.name) ya tiene un cargo en \(Formatters.monthYear(from: Date()))."
+            )
+            return
+        }
+
         let newExpense = Expense(
             amount: expense.amount,
             name: expense.name,
             category: expense.category,
             subcategory: expense.subcategory,
-            date: Formatters.isoString(from: Date()),
+            date: today,
             paymentMethod: expense.paymentMethod,
-            notes: "Cargo manual de gasto recurrente"
+            notes: "Cargo manual de gasto recurrente",
+            isRecurring: true,
+            recurringId: expense.id  // enlazar → aparece en historial + dedupe futuro
         )
-        
+
         do {
             _ = try await DependencyContainer.shared.expenseRepository.addExpense(newExpense)
             HapticManager.shared.notification(.success)
@@ -273,7 +295,6 @@ struct RecurringExpenseDetailView: View {
                 title: "Error al crear el cargo",
                 message: error.safeUserMessage
             )
-            isProcessing = false
         }
     }
     
