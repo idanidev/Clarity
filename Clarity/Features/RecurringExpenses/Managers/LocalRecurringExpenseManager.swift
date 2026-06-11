@@ -248,8 +248,19 @@ final class LocalRecurringExpenseManager {
             )
             _ = try await expenseRepo.addExpense(newExpense)
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            // Feedback estándar de la app (toast), como cualquier alta de gasto.
+            FeedbackManager.shared.show(
+                .success,
+                title: "Gasto añadido",
+                message: "\(rule.name) — cobro del día \(effectiveDay) añadido a este mes"
+            )
             logger.info("⚡️ Gasto inmediato creado al guardar regla: \(rule.name) (\(currentMonth)-\(dayStr))")
         } catch {
+            FeedbackManager.shared.show(
+                .error,
+                title: "Error al crear el gasto",
+                message: "No se pudo crear el cobro de \(rule.name). Se reintentará al abrir la app."
+            )
             logger.error("❌ Error creando gasto inmediato: \(error.localizedDescription)")
         }
     }
