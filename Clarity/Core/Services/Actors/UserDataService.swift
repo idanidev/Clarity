@@ -201,25 +201,10 @@ actor UserDataService {
         // Estado real persistido (cache no tiene los defaults en memoria).
         let doc = try await docRef.getDocument(source: .server)
         let existing = doc.data()?["categories"] as? [String: [String: Any]]
-        guard existing == nil || existing?.isEmpty == true else { return }
+        guard CategorySeeding.shouldSeed(existingMap: existing) else { return }
 
-        var map: [String: [String: Any]] = [:]
-        for c in categories {
-            // Conserva el id propio si es seguro (así un updateCategory posterior
-            // por ese mismo id actualiza la entrada en vez de duplicarla); si no,
-            // UUID. Los defaults usan su rawValue como id (sin caracteres prohibidos).
-            let key: String
-            if let id = c.id, !id.isEmpty, !containsForbiddenChars(id) {
-                key = id
-            } else {
-                key = UUID().uuidString
-            }
-            map[key] = [
-                "name": c.name,
-                "color": c.color,
-                "subcategories": c.subcategories,
-            ]
-        }
+        // Construcción pura del map (conserva ids seguros, UUID si no) — ver CategorySeeding.
+        let map = CategorySeeding.buildSeedMap(from: categories)
         guard !map.isEmpty else { return }
         try await docRef.setData([
             "categories": map,
@@ -255,10 +240,10 @@ actor UserDataService {
             "✅ Actualizados \(snapshot.documents.count) gastos a la nueva categoría '\(newName)'")
     }
 
-    /// Verifica si un string contiene caracteres prohibidos por Firestore
+    /// Verifica si un string contiene caracteres prohibidos por Firestore.
+    /// Delega en la lógica pura testeable de `CategorySeeding`.
     private func containsForbiddenChars(_ string: String) -> Bool {
-        let forbidden: Set<Character> = ["/", "~", "*", "[", "]"]
-        return string.contains(where: { forbidden.contains($0) })
+        CategorySeeding.containsForbiddenChars(string)
     }
 
     /// Elimina una categoría (dual-delete: map field + subcolección)

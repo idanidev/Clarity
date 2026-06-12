@@ -211,41 +211,20 @@ final class LocalRecurringExpenseManager {
     /// Feedback de usuario: "estamos a 11, el cobro era el día 9 → que lo meta ya,
     /// no esperar al día siguiente" (el presupuesto no reflejaba el gasto).
     func createCurrentPeriodExpenseIfDue(for rule: RecurringExpense) async {
-        guard rule.active, let ruleId = rule.id, !ruleId.isEmpty else { return }
+        guard let ruleId = rule.id, !ruleId.isEmpty else { return }
 
         let today = Date()
-        let currentDate = Formatters.isoString(from: today)
-        let currentDay = Int(currentDate.suffix(2)) ?? 1
-        let currentMonth = String(currentDate.prefix(7))
+        let currentMonth = String(Formatters.isoString(from: today).prefix(7))
 
-        // ¿Este mes toca cobro según frecuencia/billingMonth?
-        guard expectedBillingMonths(for: rule, anchor: today).contains(currentMonth) else { return }
-
-        // ¿El día de cobro (clamp al último día del mes) ya llegó?
-        let daysInMonth = Calendar.current.range(of: .day, in: .month, for: today)?.count ?? 30
-        let effectiveDay = min(rule.dayOfMonth, daysInMonth)
-        guard effectiveDay <= currentDay else { return }
-
-        // ¿Expirada?
-        if let endDate = rule.endDate,
-           let endObj = Formatters.date(from: endDate),
-           today > endObj { return }
+        // Pre-condiciones puras (activa, mes toca, día ya llegó, no expirada) — RecurringScheduler.
+        guard RecurringScheduler.isCurrentPeriodChargeDue(for: rule, today: today) else { return }
 
         do {
             let existing = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
-            guard !expenseExists(in: existing, recurringId: ruleId, month: currentMonth) else { return }
+            guard !RecurringScheduler.expenseExists(in: existing, recurringId: ruleId, month: currentMonth) else { return }
 
-            let dayStr = String(format: "%02d", effectiveDay)
-            let newExpense = Expense(
-                amount: max(0, rule.amount),
-                name: rule.name,
-                category: rule.category,
-                subcategory: rule.subcategory,
-                date: "\(currentMonth)-\(dayStr)",
-                paymentMethod: rule.paymentMethod,
-                isRecurring: true,
-                recurringId: ruleId
-            )
+            let newExpense = RecurringScheduler.currentPeriodExpense(for: rule, today: today)
+            let effectiveDay = Int(newExpense.date.suffix(2)) ?? rule.dayOfMonth
             _ = try await expenseRepo.addExpense(newExpense)
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             // Feedback estándar de la app (toast), como cualquier alta de gasto.
@@ -254,7 +233,7 @@ final class LocalRecurringExpenseManager {
                 title: "Gasto añadido",
                 message: "\(rule.name) — cobro del día \(effectiveDay) añadido a este mes"
             )
-            logger.info("⚡️ Gasto inmediato creado al guardar regla: \(rule.name) (\(currentMonth)-\(dayStr))")
+            logger.info("⚡️ Gasto inmediato creado al guardar regla: \(rule.name) (\(newExpense.date))")
         } catch {
             FeedbackManager.shared.show(
                 .error,
@@ -266,6 +245,10 @@ final class LocalRecurringExpenseManager {
     }
 
     // MARK: - Private Helpers
+    //
+    // La lógica pura (frecuencias, billingMonth, dedupe, clamp de día) vive en
+    // `RecurringScheduler` para poder testearla sin Firestore/DI. Estos wrappers
+    // mantienen las llamadas existentes y delegan sin cambiar el comportamiento.
 
     private func shouldCreateExpense(
         recurring: RecurringExpense,
@@ -274,120 +257,20 @@ final class LocalRecurringExpenseManager {
         today: Date,
         existingExpenses: [Expense]
     ) -> Bool {
-        // Verificar que sea el día del mes correcto.
-        // Edge case: si dayOfMonth=31 y el mes tiene 30 (o 28/29 en feb), usamos el último día del mes
-        // (sin esto, alquileres/suscripciones del 31 nunca se creaban en abril/junio/sept/nov/feb).
-        let cal = Calendar.current
-        let daysInMonth = cal.range(of: .day, in: .month, for: today)?.count ?? 30
-        let effectiveDay = min(recurring.dayOfMonth, daysInMonth)
-        guard effectiveDay == currentDay else {
-            return false
-        }
-
-        let frequency = recurring.frequency
-        // TZ-safe: extraer month del string ISO (currentMonth = "YYYY-MM")
-        let currentMonthNum = Int(currentMonth.suffix(2)) ?? 1
-
-        switch frequency {
-        case .monthly:
-            // Verificar si ya existe este mes
-            return !expenseExists(
-                in: existingExpenses,
-                recurringId: recurring.id ?? "",
-                month: currentMonth
-            )
-
-        case .quarterly:
-            // Trimestral: se cobra cada 3 meses desde billingMonth
-            // Ej: si billingMonth=2 (Feb) → cobra en Feb(2), May(5), Ago(8), Nov(11)
-            let billingMonth = recurring.billingMonth
-            guard billingMonth >= 1 && billingMonth <= 12 else { return false }
-
-            // Calcular si este mes corresponde (mes - billingMonth) % 3 == 0
-            let monthDiff = (currentMonthNum - billingMonth + 12) % 12
-            guard monthDiff % 3 == 0 else {
-                return false
-            }
-            return !expenseExists(
-                in: existingExpenses,
-                recurringId: recurring.id ?? "",
-                month: currentMonth
-            )
-
-        case .semestral:
-            // Semestral: se cobra cada 6 meses desde billingMonth
-            // Ej: si billingMonth=3 (Mar) → cobra en Mar(3), Sep(9)
-            let billingMonth = recurring.billingMonth
-            guard billingMonth >= 1 && billingMonth <= 12 else { return false }
-
-            // Calcular si este mes corresponde (mes - billingMonth) % 6 == 0
-            let monthDiff = (currentMonthNum - billingMonth + 12) % 12
-            guard monthDiff % 6 == 0 else {
-                return false
-            }
-            return !expenseExists(
-                in: existingExpenses,
-                recurringId: recurring.id ?? "",
-                month: currentMonth
-            )
-
-        case .yearly:
-            // Anual: se cobra solo en el billingMonth
-            // Ej: si billingMonth=5 (May) → cobra solo en Mayo
-            let billingMonth = recurring.billingMonth
-            guard billingMonth >= 1 && billingMonth <= 12 else { return false }
-
-            guard currentMonthNum == billingMonth else {
-                return false
-            }
-            return !expenseExists(
-                in: existingExpenses,
-                recurringId: recurring.id ?? "",
-                month: currentMonth
-            )
-        }
+        RecurringScheduler.shouldCreateExpense(
+            recurring: recurring,
+            currentDay: currentDay,
+            currentMonth: currentMonth,
+            today: today,
+            existingExpenses: existingExpenses
+        )
     }
 
-    /// Devuelve los meses ("YYYY-MM") en los que debería existir un cobro de esta regla
-    /// dentro de los últimos 12 meses (incluyendo el actual). Soporta recovery cross-month
-    /// para frecuencias trimestrales / semestrales / anuales.
     private func expectedBillingMonths(for rule: RecurringExpense, anchor: Date) -> [String] {
-        let cal = Calendar.current
-        let comps = cal.dateComponents([.year, .month], from: anchor)
-        guard let curYear = comps.year, let curMonth = comps.month else { return [] }
-
-        var result: [String] = []
-        // Recorre 12 meses hacia atrás incluyendo el actual
-        for offset in 0..<12 {
-            guard let date = cal.date(byAdding: .month, value: -offset, to: anchor) else { continue }
-            let yc = cal.component(.year, from: date)
-            let mc = cal.component(.month, from: date)
-            let monthStr = String(format: "%04d-%02d", yc, mc)
-
-            let due: Bool
-            switch rule.frequency {
-            case .monthly:
-                due = true
-            case .quarterly:
-                guard rule.billingMonth >= 1 else { due = false; break }
-                due = (mc - rule.billingMonth + 12) % 3 == 0
-            case .semestral:
-                guard rule.billingMonth >= 1 else { due = false; break }
-                due = (mc - rule.billingMonth + 12) % 6 == 0
-            case .yearly:
-                due = (mc == rule.billingMonth)
-            }
-            if due { result.append(monthStr) }
-        }
-        // Suprime warnings (curYear/curMonth no se usan directamente; mantengo por claridad si en futuro filtramos)
-        _ = (curYear, curMonth)
-        return result
+        RecurringScheduler.expectedBillingMonths(for: rule, anchor: anchor)
     }
 
-    /// Comprueba contra una lista pre-cargada de gastos (evita N fetches).
-    /// IMPORTANTE: en caso de duda devuelve `true` para NO duplicar.
     private func expenseExists(in expenses: [Expense], recurringId: String, month: String) -> Bool {
-        guard !recurringId.isEmpty else { return true }
-        return expenses.contains { $0.recurringId == recurringId && $0.date.hasPrefix(month) }
+        RecurringScheduler.expenseExists(in: expenses, recurringId: recurringId, month: month)
     }
 }
