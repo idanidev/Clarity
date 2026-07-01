@@ -93,22 +93,26 @@ actor UserDataService {
         let subRef = db.collection("users").document(userId).collection("categories")
         let mapKeys = Set(map.keys)
 
-        // 1) Upsert entradas del map a subcolección
+        // Un solo batch: upserts del map + delete de huérfanos. La lectura previa
+        // (detectar huérfanos) no es batcheable; los writes sí. Antes: 1 await por categoría.
+        let snap = try await subRef.getDocuments()
+        let batch = db.batch()
+
         for (key, data) in map {
-            try await subRef.document(key).setData([
+            batch.setData([
                 "name": data["name"] as? String ?? key,
                 "color": data["color"] as? String ?? "#6366F1",
                 "subcategories": data["subcategories"] as? [String] ?? [],
                 "order": data["order"] as? Int ?? 0,
                 "mirroredAt": FieldValue.serverTimestamp(),
-            ], merge: true)
+            ], forDocument: subRef.document(key), merge: true)
         }
 
-        // 2) Borrar docs huérfanos en subcolección (si user borró desde 2.0.2)
-        let snap = try await subRef.getDocuments()
         for doc in snap.documents where !mapKeys.contains(doc.documentID) {
-            try? await doc.reference.delete()
+            batch.deleteDocument(doc.reference)
         }
+
+        try await batch.commit()
     }
 
     /// Carga métodos de pago únicos basados en el historial de gastos
@@ -228,12 +232,17 @@ actor UserDataService {
 
         logger.info("📦 Encontrados \(snapshot.documents.count) gastos con categoría '\(oldName)'")
 
-        // Actualizar cada gasto
-        for doc in snapshot.documents {
-            try await doc.reference.updateData([
-                "category": newName,
-                "updatedAt": FieldValue.serverTimestamp(),
-            ])
+        // Batch write troceado (límite Firestore: 500 ops/batch) — antes era un
+        // updateData secuencial por gasto: N round-trips y sin atomicidad por grupo.
+        for chunk in snapshot.documents.chunked(into: 450) {
+            let batch = db.batch()
+            for doc in chunk {
+                batch.updateData([
+                    "category": newName,
+                    "updatedAt": FieldValue.serverTimestamp(),
+                ], forDocument: doc.reference)
+            }
+            try await batch.commit()
         }
 
         logger.info(
@@ -269,9 +278,7 @@ actor UserDataService {
             let categoriesMap = data["categories"] as? [String: [String: Any]],
             let categoryData = categoriesMap[categoryId]
         else {
-            throw NSError(
-                domain: "UserDataService", code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Categoría no encontrada"])
+            throw UserDataError.categoryNotFound
         }
 
         // Obtener subcategorías actuales
@@ -279,9 +286,7 @@ actor UserDataService {
 
         // Verificar que no exista ya
         guard !subcategories.contains(subcategoryName) else {
-            throw NSError(
-                domain: "UserDataService", code: 409,
-                userInfo: [NSLocalizedDescriptionKey: "Esta subcategoría ya existe"])
+            throw UserDataError.subcategoryAlreadyExists
         }
 
         // Añadir la nueva subcategoría

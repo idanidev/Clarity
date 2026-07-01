@@ -36,10 +36,14 @@ struct HomeViewModelTests {
 
     // MARK: - Initial State
 
-    @Test("Initial state is idle")
+    @Test("Initial state is empty before any load")
     func initialState() {
         let (vm, _) = makeSUT()
-        #expect(vm.state == .idle)
+        // .empty, NO .idle: bajo @Observable los didSet SÍ disparan dentro de init
+        // (la macro convierte la propiedad en computada). El init asigna
+        // selectedFilter → didSet → applyFilters() → con allExpenses vacío
+        // deja state = .empty. Comportamiento esperado, no bug.
+        #expect(vm.state == .empty)
         #expect(vm.hasLoaded == false)
         #expect(vm.allExpenses.isEmpty)
     }

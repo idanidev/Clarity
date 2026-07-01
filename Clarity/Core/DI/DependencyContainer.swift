@@ -23,17 +23,12 @@ final class DependencyContainer {
         FirebaseExpenseDataSource()
     }()
     
-    private lazy var legacyLocalDataSource: LocalExpenseDataSource = {
-        LocalExpenseDataSource()
-    }()
-    
     // MARK: - Repositories
     // Public so Intents or other specialized non-VM classes can reuse if strictly needed
     lazy var expenseRepository: ExpenseRepositoryProtocol = {
         ExpenseRepository(
             remote: firebaseDataSource,
-            swiftData: swiftDataSource,
-            legacy: legacyLocalDataSource
+            swiftData: swiftDataSource
         )
     }()
     

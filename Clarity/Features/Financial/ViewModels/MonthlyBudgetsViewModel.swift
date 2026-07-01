@@ -17,7 +17,8 @@ struct YearBudgetGroup: Identifiable {
     var id: Int { year }
 
     var totalIncome: Double {
-        budgets.reduce(0) { $0 + $1.income }
+        // totalIncome del budget = nómina + ingresos extra del mes
+        budgets.reduce(0) { $0 + $1.totalIncome }
     }
 
     var averageIncome: Double {

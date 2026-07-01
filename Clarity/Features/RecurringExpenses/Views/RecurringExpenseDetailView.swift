@@ -266,7 +266,10 @@ struct RecurringExpenseDetailView: View {
             return
         }
 
+        // Mismo id determinista que el cargo automático del mes: si el automático
+        // corre después, sobrescribe este doc (idempotente) en vez de duplicarlo.
         let newExpense = Expense(
+            id: ruleId.isEmpty ? nil : RecurringScheduler.chargeDocumentId(ruleId: ruleId, month: currentMonth),
             amount: expense.amount,
             name: expense.name,
             category: expense.category,

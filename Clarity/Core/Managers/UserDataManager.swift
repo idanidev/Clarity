@@ -27,22 +27,31 @@ final class UserDataManager {
     var userDocument: UserDocument?
     
     // MARK: - Dependencies
-    private let service = UserDataService.shared
+    private let service: any UserDataStore
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "UserDataManager")
-    
+
     var hasLoaded: Bool { !categories.isEmpty }
-    
-    private var userId: String? {
-        Auth.auth().currentUser?.uid
-    }
-    
+
+    // Inyectable para tests (default: Firebase Auth). NO cachear el uid: cambia en sign-out/in.
+    @ObservationIgnored private let userIdProvider: () -> String?
+    private var userId: String? { userIdProvider() }
+
     // MARK: - Initialization
     private init() {
+        self.service = UserDataService.shared
+        self.userIdProvider = { Auth.auth().currentUser?.uid }
         // Cargar defaults inmediatos para que la UI no esté vacía
         Task {
             categories = await service.createDefaultCategories()
-            paymentMethods = PaymentMethod.allCases.map { $0.rawValue }
+            paymentMethods = PaymentMethod.pickerOptions.map { $0.rawValue }
         }
+    }
+
+    /// Init testable: inyecta store mock + uid fake. NO precarga defaults en Task
+    /// (en tests sería una race contra el setup del fixture); el singleton sí lo hace.
+    init(service: any UserDataStore, userIdProvider: @escaping () -> String?) {
+        self.service = service
+        self.userIdProvider = userIdProvider
     }
     
     // MARK: - Public API
@@ -75,7 +84,7 @@ final class UserDataManager {
         error = nil
 
         do {
-            async let fetchedCategories = service.loadCategories(userId: userId)
+            async let fetchedCategories = service.loadCategories(userId: userId, forceServer: false)
             async let fetchedMethods = service.loadPaymentMethods(userId: userId)
             await self.loadExpenses() // Load expenses for cache
             
@@ -115,7 +124,9 @@ final class UserDataManager {
             }
             
             let customMethods = try await fetchedMethods
-            var allMethods = Set(PaymentMethod.allCases.map { $0.rawValue })
+            // Defaults comunes + métodos históricos cosechados de los gastos
+            // (un gasto antiguo con "PayPal" mantiene su opción en el picker para ese usuario).
+            var allMethods = Set(PaymentMethod.pickerOptions.map { $0.rawValue })
             allMethods.formUnion(customMethods)
             self.paymentMethods = allMethods.sorted()
 
@@ -152,7 +163,7 @@ final class UserDataManager {
         // Ahora: solo categorías (lo único que cambió). 10× más rápido.
         guard let userId = userId else { return }
         do {
-            let (cats, _) = try await service.loadCategories(userId: userId)
+            let (cats, _) = try await service.loadCategories(userId: userId, forceServer: false)
             self.categories = cats
         } catch {
             logger.error("refreshCategories failed: \(error.localizedDescription)")
@@ -184,7 +195,7 @@ final class UserDataManager {
             // no está persistido, sembrarlo ANTES de añadir la nueva — si no, el
             // updateData dot-path crea el map con una sola entrada y borra el resto.
             try await service.persistCategoriesIfMissing(categories, userId: userId)
-            try await service.saveCategory(category, userId: userId)
+            try await service.saveCategory(category, userId: userId, oldName: nil)
             await refreshCategories() // Light refresh (solo categorías)
         } catch {
             self.error = "Error al guardar categoría: \(error.localizedDescription)"
@@ -259,7 +270,7 @@ final class UserDataManager {
     func clearCache() {
         Task {
             categories = await service.createDefaultCategories()
-            paymentMethods = PaymentMethod.allCases.map { $0.rawValue }
+            paymentMethods = PaymentMethod.pickerOptions.map { $0.rawValue }
             error = nil
         }
     }
@@ -429,115 +440,73 @@ final class UserDataManager {
     
     func saveFilter(_ filter: ExpenseFilter, name: String) async {
         guard var document = userDocument, let userId = userId else { return }
-        
+
         var newFilter = filter
         newFilter.id = UUID() // Always new ID for fresh save
         newFilter.name = name
         newFilter.createdAt = Date()
-        
-        // 1. Update Local
+
+        // 1. Update Local (optimista — el enfoque híbrido NO revierte en fallo remoto)
         var currentFilters = document.savedFilters ?? []
         currentFilters.append(newFilter)
         document.savedFilters = currentFilters
         self.userDocument = document
-        
-        // 2. Update Remote — Firestore.Encoder NO admite array top-level;
-        // hay que serializar cada filtro a [String: Any] y pasar el array de dicts.
-        do {
-            let dicts = try currentFilters.map { try Firestore.Encoder().encode($0) }
-            try await Firestore.firestore()
-                .collection("users")
-                .document(userId)
-                .updateData(["savedFilters": dicts])
-            logger.info("✅ Filter saved: \(name)")
-            
-            // Backup to UserDefaults
-            if let encoded = try? JSONEncoder().encode(currentFilters) {
-                UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
-            }
-        } catch {
-            logger.error("❌ Error saving filter: \(error.localizedDescription)")
-            self.error = "Error al guardar filtro: \(error.localizedDescription)"
-            
-            // Still save to UserDefaults even if remote fails
-            if let encoded = try? JSONEncoder().encode(currentFilters) {
-                UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
-            }
-            
-            // Revert local on error - DISABLED for hybrid approach
-            /*
-            if var revertedDoc = self.userDocument {
-                revertedDoc.savedFilters?.removeAll { $0.id == newFilter.id }
-                self.userDocument = revertedDoc
-            }
-            */
-        }
+
+        // 2. Remote + backup local SIEMPRE (también si el write remoto falla)
+        await persistFilters(currentFilters, userId: userId, failureMessage: "Error al guardar filtro")
+        logger.info("✅ Filter saved: \(name)")
     }
-    
+
     func deleteFilter(_ filter: ExpenseFilter) async {
         guard var document = userDocument, let userId = userId else { return }
-        
-        // 1. Update Local
+
         var currentFilters = document.savedFilters ?? []
         currentFilters.removeAll { $0.id == filter.id }
         document.savedFilters = currentFilters
         self.userDocument = document
-        
-        // 2. Update Remote — array de dicts (Firestore.Encoder no admite top-level array)
-        do {
-            let dicts = try currentFilters.map { try Firestore.Encoder().encode($0) }
-            try await Firestore.firestore()
-                .collection("users")
-                .document(userId)
-                .updateData(["savedFilters": dicts])
-        } catch {
-            self.error = "Error al eliminar filtro: \(error.localizedDescription)"
-        }
-        
-        // 3. Update UserDefaults backup
-        if let encoded = try? JSONEncoder().encode(currentFilters) {
-            UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
-        }
+
+        await persistFilters(currentFilters, userId: userId, failureMessage: "Error al eliminar filtro")
     }
-    
+
     func updateFilter(_ updatedFilter: ExpenseFilter) async {
-        guard var document = userDocument, let userId = userId else { 
+        guard var document = userDocument, let userId = userId else {
             logger.warning("⚠️ No userDocument or userId available")
-            return 
-        }
-        
-        logger.info("🔄 Updating filter '\(updatedFilter.name ?? "unnamed")' (ID: \(updatedFilter.id))")
-        
-        // 1. Update Local
-        var currentFilters = document.savedFilters ?? []
-        if let index = currentFilters.firstIndex(where: { $0.id == updatedFilter.id }) {
-            logger.info("✅ Found filter at index \(index), updating...")
-            currentFilters[index] = updatedFilter
-            document.savedFilters = currentFilters
-            self.userDocument = document
-        } else {
-            logger.error("❌ Filter not found in local cache")
-            self.error = "Filtro no encontrado"
             return
         }
-        
-        // 2. Update Remote — array de dicts
+
+        var currentFilters = document.savedFilters ?? []
+        guard let index = currentFilters.firstIndex(where: { $0.id == updatedFilter.id }) else {
+            logger.error("❌ Filter not found in local cache")
+            self.error = UserDataError.filterNotFound.errorDescription
+            return
+        }
+        currentFilters[index] = updatedFilter
+        document.savedFilters = currentFilters
+        self.userDocument = document
+
+        await persistFilters(currentFilters, userId: userId, failureMessage: "Error al actualizar filtro")
+    }
+
+    // MARK: - Filters persistence (helper único — antes triplicado en save/delete/update)
+
+    /// Escribe la lista completa de filtros en Firestore y deja backup en UserDefaults
+    /// SIEMPRE (también si el remoto falla — el backup es la red de seguridad offline
+    /// que loadUserData reinyecta si el documento remoto viene sin filtros).
+    private func persistFilters(_ filters: [ExpenseFilter], userId: String, failureMessage: String) async {
         do {
-            let dicts = try currentFilters.map { try Firestore.Encoder().encode($0) }
+            // Firestore.Encoder NO admite array top-level → array de dicts.
+            let dicts = try filters.map { try Firestore.Encoder().encode($0) }
             try await Firestore.firestore()
                 .collection("users")
                 .document(userId)
                 .updateData(["savedFilters": dicts])
-            logger.info("✅ Filter updated in Firestore")
         } catch {
-            logger.error("❌ Error updating filter in Firestore: \(error.localizedDescription)")
-            self.error = "Error al actualizar filtro: \(error.localizedDescription)"
+            logger.error("❌ \(failureMessage): \(error.localizedDescription)")
+            self.error = "\(failureMessage): \(error.localizedDescription)"
         }
-        
-        // 3. Update UserDefaults backup
-        if let encoded = try? JSONEncoder().encode(currentFilters) {
+
+        if let encoded = try? JSONEncoder().encode(filters) {
             UserDefaults.standard.set(encoded, forKey: "backup_saved_filters")
-            logger.info("✅ Filter backed up to UserDefaults")
         }
     }
 }

@@ -81,15 +81,20 @@ struct ExpenseSanitizer {
                 .map { $0.element }
         }
         
-        // 3. General ID Deduplication (Safety Net)
-        var seenIds = Set<String>()
+        // 3. Dedup final por `stableId` — CLAVE del ForEach de la lista
+        //    (ExpandableExpenseList usa `id: \.stableId`, que es `id ?? "nombre_fecha_importe"`).
+        //    Antes deduplicaba por `id` y DEJABA PASAR los de id vacío: dos gastos con el
+        //    mismo stableId reventaban la List con "invalid number of items in section"
+        //    (NSInternalInconsistencyException) al borrar/actualizar. Deduplicar por la
+        //    misma clave que el ForEach garantiza filas únicas → sin crash.
+        var seenStableIds = Set<String>()
         cleanExpenses = cleanExpenses.filter { expense in
-            guard let id = expense.id, !id.isEmpty else { return true }
-            if seenIds.contains(id) { return false }
-            seenIds.insert(id)
+            let key = expense.stableId
+            if seenStableIds.contains(key) { return false }
+            seenStableIds.insert(key)
             return true
         }
-        
+
         return cleanExpenses
     }
 }

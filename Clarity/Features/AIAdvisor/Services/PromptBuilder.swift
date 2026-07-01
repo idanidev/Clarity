@@ -24,7 +24,7 @@ struct PromptBuilder {
             return calendar.isDate(d, equalTo: now, toGranularity: .month)
         }
         let totalSpentThisMonth = currentMonthExpenses.reduce(0) { $0 + $1.amount }
-        let income = monthBudget?.income ?? user?.income ?? 0
+        let income = monthBudget?.totalIncome ?? user?.income ?? 0
         let savingsAllocated = monthBudget?.savingsAllocated ?? 0
         let freeCash = income - totalSpentThisMonth - savingsAllocated
 

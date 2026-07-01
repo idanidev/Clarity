@@ -14,6 +14,16 @@ import Foundation
 
 enum RecurringScheduler {
 
+    // MARK: - Deterministic id
+
+    /// Doc id determinista para el cargo de una regla en un mes: "rec_<ruleId>_<YYYY-MM>".
+    /// Firestore sobrescribe silenciosamente en colisión → el write es idempotente:
+    /// dos dispositivos creando el cargo del mismo mes producen UN doc, no duplicado.
+    /// Los cargos legacy tienen auto-id → el scan expenseExists sigue siendo necesario.
+    static func chargeDocumentId(ruleId: String, month: String) -> String {
+        "rec_\(ruleId)_\(month)"
+    }
+
     // MARK: - Dedupe
 
     /// Comprueba contra una lista pre-cargada de gastos (evita N fetches).
@@ -163,8 +173,12 @@ enum RecurringScheduler {
         let daysInMonth = calendar.range(of: .day, in: .month, for: today)?.count ?? 30
         let effectiveDay = min(rule.dayOfMonth, daysInMonth)
         let dayStr = String(format: "%02d", effectiveDay)
+        let deterministicId = (rule.id?.isEmpty == false)
+            ? chargeDocumentId(ruleId: rule.id!, month: currentMonth)
+            : nil
 
         return Expense(
+            id: deterministicId,
             amount: max(0, rule.amount),
             name: rule.name,
             category: rule.category,

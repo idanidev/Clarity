@@ -170,6 +170,7 @@ struct FinancialDashboardView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
+
         }
         .padding(16)
         .background(Color(.secondarySystemGroupedBackground))

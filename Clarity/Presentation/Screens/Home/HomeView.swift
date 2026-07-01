@@ -33,6 +33,13 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await viewModel.refresh() }
             .task { await viewModel.loadIfNeeded() }
+            // Cambios desde otras pantallas (ingreso extra en Ajustes, nómina, huchas…)
+            // → recarga SOLO el budget para que el ahorro quede al día. NO recarga la
+            // lista de gastos: borrar un gasto postea esta misma notificación y recargar
+            // la lista durante la animación de swipe crasheaba la List.
+            .onReceive(NotificationCenter.default.publisher(for: .expenseDidChange)) { _ in
+                Task { await viewModel.reloadBudget() }
+            }
             .sheet(item: $expenseToEdit) { expense in
                 EditExpenseSheet(expense: expense) {
                     Task { await viewModel.refresh() }
@@ -337,8 +344,10 @@ struct HomeView: View {
     }
 
     // MARK: - Helpers
+    // Misma fuente que el VM (budget del mes, nómina + extras) — antes leía el
+    // income raíz del userDocument y el % de ahorro discrepaba del importe.
     private var monthlyIncome: Double {
-        userDataManager.userDocument?.income ?? 0
+        viewModel.monthlyIncome
     }
 
     // Reusa el total ya calculado por el VM (evita doble reduce por render)

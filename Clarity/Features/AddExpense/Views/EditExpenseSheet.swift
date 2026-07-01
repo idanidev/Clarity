@@ -152,13 +152,23 @@ struct EditExpenseSheet: View {
     private var paymentSection: some View {
         Section("Método de pago") {
             Picker("", selection: $viewModel.paymentMethod) {
-                ForEach(PaymentMethod.allCases) { method in
+                ForEach(paymentOptions) { method in
                     Label(method.rawValue, systemImage: method.icon)
                         .tag(method)
                 }
             }
             .pickerStyle(.navigationLink)
         }
+    }
+
+    /// Métodos comunes + el actual si es legacy (PayPal, Apple Pay…), para que editar
+    /// un gasto antiguo NO reescriba su método a "Otro" al no estar en la lista.
+    private var paymentOptions: [PaymentMethod] {
+        var opts = PaymentMethod.pickerOptions
+        if !opts.contains(viewModel.paymentMethod) {
+            opts.append(viewModel.paymentMethod)
+        }
+        return opts
     }
 
     private var notesSection: some View {

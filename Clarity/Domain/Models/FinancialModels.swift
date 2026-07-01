@@ -9,6 +9,27 @@
 import FirebaseFirestore
 import Foundation
 
+// MARK: - Income Entry (ingreso extra del mes)
+/// Ingreso puntual (bonus, freelance, venta, regalo...) ligado a la nómina del mes:
+/// vive DENTRO del MonthlyBudget — un solo doc por mes, los consumidores que ya
+/// leen el budget (Home, Financial hub, widget) obtienen el total sin reads extra.
+struct IncomeEntry: Codable, Identifiable, Hashable, Sendable {
+    var id: String
+    var name: String
+    var amount: Double
+    var date: String  // "yyyy-MM-dd" (mismo formato que Expense.date)
+    var createdAt: Date?
+
+    init(id: String = UUID().uuidString, name: String, amount: Double,
+         date: String, createdAt: Date? = Date()) {
+        self.id = id
+        self.name = name
+        self.amount = amount
+        self.date = date
+        self.createdAt = createdAt
+    }
+}
+
 // MARK: - Monthly Budget (Firebase Root Document)
 /// Tracks a user's financial setup for a specific month.
 /// Document ID format: `{userId}_{year}_{month}` (e.g., "abc123_2026_02")
@@ -20,11 +41,22 @@ struct MonthlyBudget: Codable, Identifiable, Hashable {
     var userId: String
     var year: Int
     var month: Int
-    var income: Double  // Monthly income/salary
+    var income: Double  // Monthly income/salary (nómina base del mes)
+    var extraIncomes: [IncomeEntry]  // Ingresos extra del mes (bonus, freelance...)
     var currency: String
     var savingsAllocated: Double  // Total moved to Piggy Banks this month
     var createdAt: Date
     var updatedAt: Date
+
+    /// Ingreso efectivo del mes = nómina + extras. Usar SIEMPRE este en cálculos
+    /// de disponible/ahorro — `income` solo es la nómina base.
+    var totalIncome: Double {
+        income + extraIncomeTotal
+    }
+
+    var extraIncomeTotal: Double {
+        extraIncomes.reduce(0) { $0 + $1.amount }
+    }
 
     // Computed helper for display
     var monthName: String {
@@ -43,12 +75,14 @@ struct MonthlyBudget: Codable, Identifiable, Hashable {
         month: Int,
         income: Double,
         currency: String = "EUR",
-        savingsAllocated: Double = 0
+        savingsAllocated: Double = 0,
+        extraIncomes: [IncomeEntry] = []
     ) {
         self.userId = userId
         self.year = year
         self.month = month
         self.income = income
+        self.extraIncomes = extraIncomes
         self.currency = currency
         self.savingsAllocated = savingsAllocated
         self.createdAt = Date()
@@ -62,6 +96,7 @@ struct MonthlyBudget: Codable, Identifiable, Hashable {
         case income
         case estimatedIncome  // Legacy
         case realIncome  // Legacy
+        case extraIncomes
         case currency
         case savingsAllocated
         case createdAt
@@ -79,6 +114,8 @@ struct MonthlyBudget: Codable, Identifiable, Hashable {
             try container.decodeIfPresent(Double.self, forKey: .savingsAllocated) ?? 0
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        // Docs anteriores a la feature no tienen el campo → []
+        extraIncomes = try container.decodeIfPresent([IncomeEntry].self, forKey: .extraIncomes) ?? []
 
         // Handle migration from estimatedIncome/realIncome to single income
         if let incomeValue = try container.decodeIfPresent(Double.self, forKey: .income) {
@@ -99,6 +136,7 @@ struct MonthlyBudget: Codable, Identifiable, Hashable {
         try container.encode(year, forKey: .year)
         try container.encode(month, forKey: .month)
         try container.encode(income, forKey: .income)
+        try container.encode(extraIncomes, forKey: .extraIncomes)
         try container.encode(currency, forKey: .currency)
         try container.encode(savingsAllocated, forKey: .savingsAllocated)
         try container.encode(createdAt, forKey: .createdAt)

@@ -28,12 +28,18 @@ struct SettingsView: View {
 
                 }
 
-                // Ingresos — sueldo + historial unificados
+                // Ingresos — sueldo + historial + ingresos extra del mes
                 Section("Ingresos") {
                     NavigationLink {
                         SalarySettingsStandaloneView()
                     } label: {
                         Label("Nóminas", systemImage: "eurosign.circle")
+                    }
+
+                    NavigationLink {
+                        ExtraIncomeView()
+                    } label: {
+                        Label("Ingresos extra", systemImage: "plus.circle")
                     }
                 }
 

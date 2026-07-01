@@ -66,8 +66,10 @@ struct MonthlySetupSheet: View {
                     }
                     .padding(.horizontal, 32)
                     
-                    // Quick Tip
-                    Text("Incluye tu sueldo, extras, y cualquier ingreso esperado")
+                    // Quick Tip — solo la nómina/ingreso fijo del mes. Los ingresos
+                    // puntuales (bonus, freelance…) se añaden aparte como "ingresos extra"
+                    // para no contarlos dos veces.
+                    Text("Indica tu nómina o ingreso fijo del mes. Los extras los añades luego.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

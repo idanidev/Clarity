@@ -77,9 +77,12 @@ final class HomeViewModel {
         return monthlyIncome - periodExpenses - savingsAllocated
     }
 
-    /// Income for the currently selected month (from MonthlyBudget)
-    private var monthlyIncome: Double {
-        return currentMonthlyBudget?.income ?? income
+    /// Income for the currently selected month (from MonthlyBudget).
+    /// totalIncome = nómina + ingresos extra del mes. Internal (no private):
+    /// HomeView lo usa para el % de ahorro — antes leía el income RAÍZ del
+    /// userDocument y podía discrepar del importe calculado aquí.
+    var monthlyIncome: Double {
+        return currentMonthlyBudget?.totalIncome ?? income
     }
 
     /// Income del mes ANTERIOR al seleccionado (para cálculo de ahorros)
@@ -87,12 +90,12 @@ final class HomeViewModel {
     private var previousMonthIncome: Double {
         // Si tenemos el budget del mes anterior cargado, usarlo
         if let previousBudget = previousMonthlyBudget {
-            return previousBudget.income
+            return previousBudget.totalIncome
         }
 
         // Fallback: usar el mismo income del mes actual
         // (asumiendo que la nómina es estable)
-        return currentMonthlyBudget?.income ?? income
+        return currentMonthlyBudget?.totalIncome ?? income
     }
 
     /// Load MonthlyBudget from Firebase for a specific month
@@ -276,7 +279,7 @@ final class HomeViewModel {
             await loadExpenses()
             WidgetDataManager.shared.updateFromExpenses(
                 currentMonthExpenses,
-                monthBudget: currentMonthlyBudget?.income
+                monthBudget: currentMonthlyBudget?.totalIncome
             )
             // Avisar a otras VMs (FinancialHub escudos/metas) para refresh inmediato
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
@@ -405,7 +408,7 @@ final class HomeViewModel {
             // ── Widget update ──
             WidgetDataManager.shared.updateFromExpenses(
                 sanitizedMonth,
-                monthBudget: currentMonthlyBudget?.income
+                monthBudget: currentMonthlyBudget?.totalIncome
             )
         } catch {
             logger.error("❌ Error loading expenses: \(error)")
@@ -440,6 +443,16 @@ final class HomeViewModel {
 
     func refresh() async {
         await loadExpenses(silent: true)
+        // Recarga el budget del mes → el ahorro refleja nómina + ingresos extra al día
+        // (antes solo recargaba gastos; añadir un ingreso extra no actualizaba el ahorro).
+        await loadMonthlyBudget(for: selectedMonth)
+    }
+
+    /// Recarga SOLO el budget del mes (nómina + ingresos extra) → recalcula el ahorro.
+    /// Se usa al recibir `.expenseDidChange` desde otras pantallas: NO recarga la lista
+    /// de gastos (hacerlo re-entraba durante el borrado con swipe y crasheaba la List).
+    func reloadBudget() async {
+        await loadMonthlyBudget(for: selectedMonth)
     }
 
     /// Inserts an expense directly into in-memory state — no network roundtrip.
@@ -463,7 +476,7 @@ final class HomeViewModel {
         // ── Widget update (inmediato, sin esperar red) ──
         WidgetDataManager.shared.updateFromExpenses(
             currentMonthExpenses,
-            monthBudget: currentMonthlyBudget?.income
+            monthBudget: currentMonthlyBudget?.totalIncome
         )
     }
 
@@ -475,7 +488,7 @@ final class HomeViewModel {
         applyFilters()
         WidgetDataManager.shared.updateFromExpenses(
             currentMonthExpenses,
-            monthBudget: currentMonthlyBudget?.income
+            monthBudget: currentMonthlyBudget?.totalIncome
         )
     }
 

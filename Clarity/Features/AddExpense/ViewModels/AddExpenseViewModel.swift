@@ -20,13 +20,90 @@ class AddExpenseViewModel {
     var paymentMethod: PaymentMethod = .tarjeta
     var notes: String = ""
 
-    /// Importe parseado del texto. Acepta coma o punto como decimal.
+    /// Importe parseado del texto. Acepta coma o punto como decimal Y sumas/restas
+    /// de importes ("1,50 + 2" = una fanta y unas patatas → 3,50).
     var amount: Double? {
-        let normalized = amountText
+        Self.evaluateAmount(amountText)
+    }
+
+    /// ¿El texto es una operación (contiene + − × ÷ entre importes), no un número suelto?
+    var amountIsExpression: Bool {
+        let s = amountText.replacingOccurrences(of: " ", with: "")
+        // Ignora un posible signo inicial (número negativo) — solo cuenta operadores internos.
+        return s.dropFirst().contains(where: { "+-×÷*/".contains($0) })
+    }
+
+    /// Añade un operador para seguir sumando/restando importes. No hace nada si el
+    /// campo está vacío o el último carácter ya es un operador (evita "1 + + 2").
+    func appendAmountOperator(_ op: String) {
+        let trimmed = amountText.trimmingCharacters(in: .whitespaces)
+        guard let last = trimmed.last, last.isNumber else { return }
+        amountText = trimmed + " " + op + " "
+    }
+
+    /// Evalúa operaciones de importes (+ − × ÷) SIN NSExpression (a prueba de crashes).
+    /// Respeta precedencia: primero × ÷, luego + −. Devuelve nil si algo no cuadra
+    /// (operador suelto, división por cero, carácter inválido…).
+    static func evaluateAmount(_ text: String) -> Double? {
+        let s = text
             .replacingOccurrences(of: ",", with: ".")
-            .trimmingCharacters(in: .whitespaces)
-        guard !normalized.isEmpty else { return nil }
-        return Double(normalized)
+            .replacingOccurrences(of: "×", with: "*")
+            .replacingOccurrences(of: "÷", with: "/")
+            .replacingOccurrences(of: " ", with: "")
+        guard !s.isEmpty else { return nil }
+        // Número simple (incluye negativos y decimales) → parse directo, sin recorrer.
+        if let single = Double(s) { return single }
+
+        // 1) Tokeniza en números y operadores. Permite un signo inicial en el 1er término.
+        var numbers: [Double] = []
+        var ops: [Character] = []
+        var term = ""
+        for (i, ch) in s.enumerated() {
+            switch ch {
+            case "0"..."9", ".":
+                term.append(ch)
+            case "+", "-", "*", "/":
+                if term.isEmpty {
+                    // Solo válido como signo del primer término (p.ej. "-1+2").
+                    if i == 0 && (ch == "+" || ch == "-") { term.append(ch); continue }
+                    return nil
+                }
+                guard let value = Double(term) else { return nil }
+                numbers.append(value)
+                ops.append(ch)
+                term = ""
+            default:
+                return nil
+            }
+        }
+        guard !term.isEmpty, let lastValue = Double(term) else { return nil }
+        numbers.append(lastValue)
+        guard numbers.count == ops.count + 1 else { return nil }
+
+        // 2) Resuelve × y ÷ (izquierda a derecha), acumulando + y − para la 2ª pasada.
+        var addTerms = [numbers[0]]
+        var addOps: [Character] = []
+        for (i, op) in ops.enumerated() {
+            let next = numbers[i + 1]
+            switch op {
+            case "*":
+                addTerms[addTerms.count - 1] *= next
+            case "/":
+                guard next != 0 else { return nil }  // división por cero
+                addTerms[addTerms.count - 1] /= next
+            default:  // + o −
+                addOps.append(op)
+                addTerms.append(next)
+            }
+        }
+
+        // 3) Resuelve + y −.
+        var total = addTerms[0]
+        for (i, op) in addOps.enumerated() {
+            let next = addTerms[i + 1]
+            total += (op == "-") ? -next : next
+        }
+        return total.isFinite ? total : nil
     }
 
     // MARK: - Auto-Suggest Logic

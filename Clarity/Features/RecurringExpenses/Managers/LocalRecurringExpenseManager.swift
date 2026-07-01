@@ -51,8 +51,10 @@ final class LocalRecurringExpenseManager {
 
             logger.info("📋 Encontrados \(activeExpenses.count) gastos recurrentes activos")
 
-            // Pre-cargar gastos UNA vez (evita N fetches en loop)
-            let cachedExpenses = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
+            // Pre-cargar SOLO el mes actual (el dedupe es por mes — antes bajaba
+            // todo el historial con .networkFirst en cada arranque).
+            let cachedExpenses = (try? await expenseRepo.getExpenses(
+                from: "\(currentMonth)-01", to: "\(currentMonth)-31")) ?? []
 
             var created = 0
             var skipped = 0
@@ -91,7 +93,14 @@ final class LocalRecurringExpenseManager {
                 // Crear el gasto
                 let amount = max(0, recurring.amount) // Asegurar >= 0
 
+                // Id determinista → write idempotente (multi-dispositivo no duplica).
+                // shouldCreateExpense ya descartó reglas sin id (dedupe trata vacío como existente).
+                let detId = (recurring.id?.isEmpty == false)
+                    ? RecurringScheduler.chargeDocumentId(ruleId: recurring.id!, month: currentMonth)
+                    : nil
+
                 let newExpense = Expense(
+                    id: detId,
                     amount: amount,
                     name: recurring.name,
                     category: recurring.category,
@@ -143,8 +152,11 @@ final class LocalRecurringExpenseManager {
             let recurringExpenses = try await recurringRepo.fetchAll()
             let activeAll = recurringExpenses.filter { $0.active }
 
-            // Pre-cargar gastos UNA vez
-            let cachedExpenses = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
+            // Pre-cargar SOLO la ventana de recovery (12 meses) en vez de todo el historial.
+            let windowStart = Calendar.current.date(byAdding: .month, value: -11, to: today) ?? today
+            let windowStartMonth = String(Formatters.isoString(from: windowStart).prefix(7))
+            let cachedExpenses = (try? await expenseRepo.getExpenses(
+                from: "\(windowStartMonth)-01", to: "\(currentMonth)-31")) ?? []
 
             var recovered = 0
 
@@ -180,7 +192,14 @@ final class LocalRecurringExpenseManager {
                     let expenseDate = "\(expectedMonth)-\(dayStr)"
                     let amount = max(0, recurring.amount)
 
+                    // Id determinista codifica el MES DE COBRO (expectedMonth), no el de
+                    // creación — recuperar 3 trimestres perdidos da 3 ids distintos.
+                    let detId = (recurring.id?.isEmpty == false)
+                        ? RecurringScheduler.chargeDocumentId(ruleId: recurring.id!, month: expectedMonth)
+                        : nil
+
                     let newExpense = Expense(
+                        id: detId,
                         amount: amount,
                         name: recurring.name,
                         category: recurring.category,
@@ -220,7 +239,9 @@ final class LocalRecurringExpenseManager {
         guard RecurringScheduler.isCurrentPeriodChargeDue(for: rule, today: today) else { return }
 
         do {
-            let existing = (try? await expenseRepo.getExpenses(policy: .networkFirst)) ?? []
+            // Solo el mes actual: el dedupe es por mes, no hace falta el historial entero.
+            let existing = (try? await expenseRepo.getExpenses(
+                from: "\(currentMonth)-01", to: "\(currentMonth)-31")) ?? []
             guard !RecurringScheduler.expenseExists(in: existing, recurringId: ruleId, month: currentMonth) else { return }
 
             let newExpense = RecurringScheduler.currentPeriodExpense(for: rule, today: today)

@@ -21,12 +21,17 @@ enum CachePolicy: Sendable {
 protocol ExpenseRepositoryProtocol: Sendable {
     func getExpenses(policy: CachePolicy) async throws -> [Expense]
     // Convenience overload for default behavior
-    func getExpenses() async throws -> [Expense] 
-    
+    func getExpenses() async throws -> [Expense]
+
+    /// Fetch acotado por rango de fechas inclusive ("yyyy-MM-dd").
+    /// Remote-first con fallback a cache filtrada; NO muta la cache local
+    /// (el sync/orphan-cleanup global sigue siendo cosa de getExpenses(policy:)).
+    func getExpenses(from startDate: String, to endDate: String) async throws -> [Expense]
+
     func addExpense(_ expense: Expense) async throws -> String
     func deleteExpense(id: String) async throws
     func updateExpense(_ expense: Expense) async throws
-    
+
     // Pagination
     func getExpensesPaginated(page: Int, filter: ExpenseFilter?) async throws -> PageResult
 }

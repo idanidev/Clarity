@@ -1,86 +1,22 @@
 // FirebaseExpenseDataSource.swift
-// Remote data source for Expenses with pagination support
+// Remote data source for Expenses
 
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
 
-import FirebaseFirestore
-import FirebaseAuth
-
-// PageResult is now defined in ExpenseRepositoryProtocol.swift
-
 actor FirebaseExpenseDataSource {
     private let db = Firestore.firestore()
-    private let pageSize = 50
-    
-    // Pagination state
-    private var lastDocument: DocumentSnapshot?
-    private var hasMorePages = true
-    
+
     private var userId: String? {
         Auth.auth().currentUser?.uid
     }
-    
+
     private var expensesCollection: CollectionReference? {
         guard let userId = userId else { return nil }
         return db.collection("users").document(userId).collection("expenses")
     }
-    
-    // MARK: - Paginated Fetch
-    
-    /// Fetches the first page and resets pagination state
-    func getFirstPage(filter: ExpenseFilter?) async throws -> PageResult {
-        lastDocument = nil
-        hasMorePages = true
-        return try await getNextPage(filter: filter)
-    }
-    
-    /// Fetches the next page using cursor
-    func getNextPage(filter: ExpenseFilter? = nil) async throws -> PageResult {
-        guard hasMorePages else {
-            return PageResult(expenses: [], hasMore: false)
-        }
-        
-        guard let collection = expensesCollection else {
-            throw URLError(.userAuthenticationRequired)
-        }
-        
-        // Base Query
-        var query: Query = collection
-        
-        // Apply Date Filter Server-Side (Crucial for Pagination)
-        if let filter = filter, filter.dateRange != .allTime {
-            // "All Time" (default order) doesn't need 'where' clause, just order by date desc.
-            // Other ranges need strict bounds.
-            let (start, end) = ExpenseFilter.queryRange(for: filter.dateRange, customStart: filter.customStartDate, customEnd: filter.customEndDate)
-            // Important: Firestore strings must match format. stored as "yyyy-MM-dd"
-            query = query
-                .whereField("date", isGreaterThanOrEqualTo: start)
-                .whereField("date", isLessThanOrEqualTo: end)
-        }
-        
-        // Always order by date descending
-        query = query.order(by: "date", descending: true)
-            .limit(to: pageSize)
-        
-        if let lastDoc = lastDocument {
-            query = query.start(afterDocument: lastDoc)
-        }
-        
-        let snapshot = try await query.getDocuments()
-        
-        lastDocument = snapshot.documents.last
-        hasMorePages = snapshot.documents.count == pageSize
-        
-        let expenses = snapshot.documents.compactMap { doc -> Expense? in
-            guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
-            return dto.toDomain(id: doc.documentID)
-        }
-        
-        return PageResult(expenses: expenses, hasMore: hasMorePages)
-    }
-    
+
     /// Legacy method - fetches ALL expenses (for backwards compatibility)
     func getExpenses() async throws -> [Expense] {
         guard let collection = expensesCollection else {
@@ -127,20 +63,39 @@ actor FirebaseExpenseDataSource {
         }
     }
     
-    /// Resets pagination state
-    func resetPagination() {
-        lastDocument = nil
-        hasMorePages = true
+    /// Fetch acotado por rango de fechas ("yyyy-MM-dd" inclusive). Rango sobre un solo
+    /// campo + orderBy el mismo campo → NO requiere índice compuesto en Firestore.
+    /// Pensado para dedupe de recurrentes y vistas de mes (evita bajar todo el historial).
+    func getExpenses(from startDate: String, to endDate: String) async throws -> [Expense] {
+        guard let collection = expensesCollection else {
+            throw URLError(.userAuthenticationRequired)
+        }
+
+        let snapshot = try await collection
+            .whereField("date", isGreaterThanOrEqualTo: startDate)
+            .whereField("date", isLessThanOrEqualTo: endDate)
+            .order(by: "date", descending: true)
+            .getDocuments()
+
+        return snapshot.documents.compactMap { doc in
+            guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
+            return dto.toDomain(id: doc.documentID)
+        }
     }
-    
+
     // MARK: - Write Operations
-    
+
     func addExpense(_ expense: Expense) async throws -> String {
         guard let collection = expensesCollection else {
             throw URLError(.userAuthenticationRequired)
         }
-        
-        let docRef = collection.document()
+
+        // Si el caller trae id propio NO vacío (p.ej. id determinista
+        // "rec_<regla>_<YYYY-MM>" de cargos recurrentes → write idempotente
+        // multi-dispositivo), se respeta. Con id nil o "" (flujos manuales/voz),
+        // auto-id de Firestore — `document("")` lanzaría excepción de Firestore.
+        let customId = expense.id.flatMap { $0.isEmpty ? nil : $0 }
+        let docRef = customId.map { collection.document($0) } ?? collection.document()
         let dto = ExpenseDTO(from: expense)
         try await docRef.setData(from: dto)
         return docRef.documentID

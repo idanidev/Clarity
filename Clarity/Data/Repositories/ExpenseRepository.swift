@@ -9,42 +9,13 @@ import OSLog
 final class ExpenseRepository: ExpenseRepositoryProtocol {
     private let remoteDataSource: FirebaseExpenseDataSource
     private let swiftDataSource: SwiftDataExpenseDataSource
-    private let legacyDataSource: LocalExpenseDataSource? // Optional for migration
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "ExpenseRepo")
-    
-    init(remote: FirebaseExpenseDataSource, swiftData: SwiftDataExpenseDataSource, legacy: LocalExpenseDataSource? = nil) {
+
+    init(remote: FirebaseExpenseDataSource, swiftData: SwiftDataExpenseDataSource) {
         self.remoteDataSource = remote
         self.swiftDataSource = swiftData
-        self.legacyDataSource = legacy
-        
-        Task { await checkMigration() }
     }
-    
-    // MARK: - Migration
-    
-    private func checkMigration() async {
-        let key = "didMigrateToSwiftData_v1"
-        guard !UserDefaults.standard.bool(forKey: key), let legacy = legacyDataSource else { return }
-        
-        logger.info("Starting migration from JSON to SwiftData...")
-        
-        let legacyExpenses = await legacy.getExpenses()
-        guard !legacyExpenses.isEmpty else {
-            UserDefaults.standard.set(true, forKey: key)
-            return
-        }
-        
-        do {
-            for expense in legacyExpenses {
-                try swiftDataSource.upsertExpense(expense)
-            }
-            UserDefaults.standard.set(true, forKey: key)
-            logger.info("Migration successful. Moved \(legacyExpenses.count) items.")
-        } catch {
-            logger.error("Migration failed: \(error.localizedDescription)")
-        }
-    }
-    
+
     // MARK: - Read
     
     func getExpenses(policy: CachePolicy) async throws -> [Expense] {
@@ -90,6 +61,18 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     func getExpenses() async throws -> [Expense] {
         try await getExpenses(policy: .cacheFirst(maxAge: 300))
     }
+
+    func getExpenses(from startDate: String, to endDate: String) async throws -> [Expense] {
+        do {
+            return try await remoteDataSource.getExpenses(from: startDate, to: endDate)
+        } catch {
+            // Offline: filtra la cache local por el mismo rango (comparación
+            // lexicográfica válida porque date es "yyyy-MM-dd").
+            logger.warning("Range fetch failed, falling back to cache: \(error.localizedDescription)")
+            let cached = try swiftDataSource.fetchExpenses()
+            return cached.filter { $0.date >= startDate && $0.date <= endDate }
+        }
+    }
     
     // MARK: - Paginated Fetch
     
@@ -111,10 +94,6 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
         } else {
             return PageResult(expenses: [], hasMore: false)
         }
-    }
-    
-    func resetPagination() async {
-        await remoteDataSource.resetPagination()
     }
     
     // MARK: - Write

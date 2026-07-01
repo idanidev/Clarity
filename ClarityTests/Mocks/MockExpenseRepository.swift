@@ -18,6 +18,11 @@ final class MockExpenseRepository: ExpenseRepositoryProtocol, @unchecked Sendabl
         return expenses
     }
 
+    func getExpenses(from startDate: String, to endDate: String) async throws -> [Expense] {
+        if shouldFail { throw failureError }
+        return expenses.filter { $0.date >= startDate && $0.date <= endDate }
+    }
+
     func addExpense(_ expense: Expense) async throws -> String {
         if shouldFail { throw failureError }
         let id = UUID().uuidString

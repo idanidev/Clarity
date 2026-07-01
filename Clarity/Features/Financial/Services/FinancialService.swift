@@ -91,6 +91,26 @@ class FinancialService {
         logger.info("✅ Saved budget for \(budget.year)-\(budget.month)")
     }
 
+    /// Persiste la lista completa de ingresos extra del mes. updateData targeted —
+    /// NO usa saveMonthlyBudget (setData del doc entero) para no pisar
+    /// savingsAllocated, que se actualiza con FieldValue.increment concurrentes.
+    /// Requiere que el budget del mes exista (el VM lo garantiza tras load()).
+    func updateExtraIncomes(_ entries: [IncomeEntry], year: Int, month: Int) async throws {
+        guard let userId = userId else {
+            throw FinancialServiceError.notAuthenticated
+        }
+
+        let documentId = MonthlyBudget.generateDocumentId(userId: userId, year: year, month: month)
+        let dicts = try entries.map { try Firestore.Encoder().encode($0) }
+
+        try await budgetsCollection(userId).document(documentId).updateData([
+            "extraIncomes": dicts,
+            "updatedAt": FieldValue.serverTimestamp(),
+        ])
+
+        logger.info("💵 Updated extraIncomes (\(entries.count) entradas)")
+    }
+
     /// Update only the savingsAllocated field (for feeding piggy banks)
     func updateSavingsAllocated(year: Int, month: Int, amount: Double) async throws {
         guard let userId = userId else {

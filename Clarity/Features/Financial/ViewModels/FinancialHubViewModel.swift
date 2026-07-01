@@ -78,9 +78,19 @@ class FinancialHubViewModel {
         Formatters.fullMonthName(currentMonth)
     }
 
-    /// The "Energy" available for spending
+    /// The "Energy" available for spending — nómina del mes + ingresos extra.
     var income: Double {
+        currentBudget?.totalIncome ?? 0
+    }
+
+    /// Nómina base del mes (sin extras) — para mostrar el desglose.
+    var baseSalary: Double {
         currentBudget?.income ?? 0
+    }
+
+    /// Ingresos extra del mes en curso.
+    var extraIncomes: [IncomeEntry] {
+        currentBudget?.extraIncomes ?? []
     }
 
     /// Total allocated to Piggy Banks this month
@@ -233,6 +243,79 @@ class FinancialHubViewModel {
             currentBudget = budget
         } catch {
             self.error = error.safeUserMessage
+        }
+    }
+
+    // MARK: - Ingresos extra (vinculados a la nómina del mes)
+
+    /// Añade un ingreso extra al mes en curso. Optimista con revert en fallo.
+    func addExtraIncome(name: String, amount: Double) async {
+        guard amount > 0, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard var budget = currentBudget else {
+            // Sin budget no hay doc al que colgar el ingreso (wizard pendiente).
+            self.error = "Configura primero la nómina de este mes"
+            return
+        }
+
+        let entry = IncomeEntry(
+            name: name.trimmingCharacters(in: .whitespaces),
+            amount: amount,
+            date: Formatters.isoString(from: Date())
+        )
+        budget.extraIncomes.append(entry)
+        currentBudget = budget  // optimista — income/freeCash se recalculan solos
+
+        do {
+            try await service.updateExtraIncomes(budget.extraIncomes, year: currentYear, month: currentMonth)
+            // Notifica al resto de pantallas (Home → recalcula ahorro con el nuevo total).
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            HapticManager.shared.playSuccess()
+            FeedbackManager.shared.show(
+                .success,
+                title: "Ingreso añadido",
+                message: "\(entry.name) — +\(Formatters.currency(amount)) este mes"
+            )
+        } catch {
+            currentBudget?.extraIncomes.removeAll { $0.id == entry.id }
+            self.error = "Error al guardar el ingreso: \(error.safeUserMessage)"
+        }
+    }
+
+    /// Edita un ingreso extra existente (concepto/importe). Optimista con revert en fallo.
+    func updateExtraIncome(_ updated: IncomeEntry) async {
+        guard var budget = currentBudget,
+              let idx = budget.extraIncomes.firstIndex(where: { $0.id == updated.id }) else { return }
+        let previous = budget.extraIncomes[idx]
+        budget.extraIncomes[idx] = updated
+        currentBudget = budget
+
+        do {
+            try await service.updateExtraIncomes(budget.extraIncomes, year: currentYear, month: currentMonth)
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            HapticManager.shared.selection()
+        } catch {
+            if let i = currentBudget?.extraIncomes.firstIndex(where: { $0.id == updated.id }) {
+                currentBudget?.extraIncomes[i] = previous
+            }
+            self.error = "Error al actualizar el ingreso: \(error.safeUserMessage)"
+        }
+    }
+
+    /// Elimina un ingreso extra del mes en curso. Optimista con revert en fallo.
+    func removeExtraIncome(_ entry: IncomeEntry) async {
+        guard var budget = currentBudget,
+              budget.extraIncomes.contains(where: { $0.id == entry.id }) else { return }
+
+        budget.extraIncomes.removeAll { $0.id == entry.id }
+        currentBudget = budget
+
+        do {
+            try await service.updateExtraIncomes(budget.extraIncomes, year: currentYear, month: currentMonth)
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            HapticManager.shared.selection()
+        } catch {
+            currentBudget?.extraIncomes.append(entry)
+            self.error = "Error al eliminar el ingreso: \(error.safeUserMessage)"
         }
     }
 

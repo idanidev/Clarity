@@ -201,9 +201,15 @@ struct BudgetMonthRow: View {
                     Image(systemName: "eurosign.circle.fill")
                         .font(.caption)
                         .foregroundColor(.green)
-                    Text("€\(Int(budget.income))")
+                    Text("€\(Int(budget.totalIncome))")
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(.primary)
+                    if !budget.extraIncomes.isEmpty {
+                        // Badge: parte del total que viene de ingresos extra
+                        Text("+\(Formatters.currency(budget.extraIncomeTotal)) extra")
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(Color.clarityPrimary)
+                    }
                 }
             }
 

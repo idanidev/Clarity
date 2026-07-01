@@ -91,6 +91,10 @@ enum DefaultCategory: String, CaseIterable, Sendable {
 }
 
 // MARK: - Payment Methods
+// Recortado a los 5 que se usan de verdad (feedback Dani jun 2026). Los gastos
+// guardan paymentMethod como String → datos históricos con "PayPal"/"Apple Pay"
+// se muestran igual, y loadPaymentMethods los cosecha del historial al picker
+// de UserDataManager.paymentMethods (union defaults + históricos).
 enum PaymentMethod: String, CaseIterable, Identifiable {
     case efectivo = "Efectivo"
     case tarjeta = "Tarjeta"
@@ -102,8 +106,15 @@ enum PaymentMethod: String, CaseIterable, Identifiable {
     case applePay = "Apple Pay"
     case googlePay = "Google Pay"
     case otro = "Otro"
-    
-    var id: String { rawValue }
-    
 
+    var id: String { rawValue }
+
+    /// Opciones mostradas en los pickers de alta de gasto (feedback Dani jun 2026:
+    /// "la gente solo usa 4 o 5"). Los demás casos SE CONSERVAN en el enum para que
+    /// los gastos históricos guardados con "PayPal"/"Apple Pay"/etc. sigan decodificando
+    /// y mostrándose con su icono/color — NUNCA borrar casos: paymentMethod se guarda
+    /// como String y un caso ausente reescribiría el dato histórico a "Otro" al editar.
+    static let pickerOptions: [PaymentMethod] = [
+        .efectivo, .tarjeta, .transferencia, .bizum, .otro,
+    ]
 }

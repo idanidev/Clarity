@@ -57,7 +57,7 @@ extension PaymentMethod {
         case .otro: return "ellipsis.circle"
         }
     }
-    
+
     var color: Color {
         switch self {
         case .efectivo: return .green

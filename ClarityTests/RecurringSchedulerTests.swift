@@ -253,7 +253,7 @@ struct RecurringSchedulerTests {
         #expect(!RecurringScheduler.isCurrentPeriodChargeDue(for: rule, today: date(2026, 6, 11), calendar: utc))
     }
 
-    @Test("currentPeriodExpense: gasto correcto con día y recurringId")
+    @Test("currentPeriodExpense: gasto correcto con día, recurringId e id determinista")
     func currentExpenseBuilt() {
         let rule = makeRule(frequency: .monthly, dayOfMonth: 9)
         let expense = RecurringScheduler.currentPeriodExpense(for: rule, today: date(2026, 6, 11), calendar: utc)
@@ -261,6 +261,13 @@ struct RecurringSchedulerTests {
         #expect(expense.recurringId == "rule-1")
         #expect(expense.isRecurring == true)
         #expect(expense.amount == 10)
+        // Id determinista "rec_<regla>_<mes>" → write idempotente multi-dispositivo.
+        #expect(expense.id == "rec_rule-1_2026-06")
+    }
+
+    @Test("chargeDocumentId: formato estable rec_<ruleId>_<YYYY-MM>")
+    func chargeDocumentIdFormat() {
+        #expect(RecurringScheduler.chargeDocumentId(ruleId: "abc123", month: "2026-02") == "rec_abc123_2026-02")
     }
 
     @Test("currentPeriodExpense: clamp día 31 en junio → 2026-06-30")
