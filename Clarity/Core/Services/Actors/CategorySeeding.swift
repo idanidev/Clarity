@@ -14,7 +14,9 @@
 
 import Foundation
 
-enum CategorySeeding {
+// `nonisolated`: lógica pura sin estado. Se llama desde el actor UserDataService
+// (aislamiento no-main); con @MainActor por defecto daría warnings de Swift 6.
+nonisolated enum CategorySeeding {
 
     /// Caracteres prohibidos por Firestore en un id usado como segmento de field-path.
     static let forbiddenCharacters: Set<Character> = ["/", "~", "*", "[", "]"]
