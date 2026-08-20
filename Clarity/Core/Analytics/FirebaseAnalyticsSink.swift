@@ -1,14 +1,12 @@
 // FirebaseAnalyticsSink.swift
-// Adaptador de AnalyticsSink a Firebase Analytics.
+// Adaptador de AnalyticsSink a Firebase Analytics (#41).
 //
-// Se compila SOLO si el producto `FirebaseAnalytics` está añadido al target
-// (Xcode → Package Dependencies → firebase-ios-sdk → FirebaseAnalytics).
-// Se deja así a propósito: enlazar Analytics recoge identificadores del
-// dispositivo, y eso obliga a declararlo en la ficha de privacidad de App Store
-// y en PrivacyInfo.xcprivacy — una declaración que tiene que hacer el
-// desarrollador, no el código.
+// Se eligió Firebase por tener las métricas en la misma consola que la base de
+// datos. A cambio recoge más que una herramienta anónima: identificador de
+// dispositivo, ubicación aproximada por IP y datos de diagnóstico. Eso hay que
+// declararlo en el cuestionario de privacidad de App Store Connect — ver
+// docs/ASO-y-lanzamiento.md.
 
-#if canImport(FirebaseAnalytics)
 import FirebaseAnalytics
 import Foundation
 
@@ -21,9 +19,6 @@ struct FirebaseAnalyticsSink: AnalyticsSink {
         Analytics.setUserProperty(value, forName: name)
     }
 }
-#endif
-
-import Foundation
 
 enum AnalyticsBootstrap {
     /// Engancha los destinos disponibles. Llamar una vez al arrancar.
@@ -31,14 +26,7 @@ enum AnalyticsBootstrap {
     static func configure() {
         AnalyticsService.shared.registerFirstOpenIfNeeded()
 
-        // TelemetryDeck es el destino principal: anónimo por diseño (#41).
-        if TelemetryDeckConfig.start() {
-            AnalyticsService.shared.register(sink: TelemetryDeckSink())
-        }
-
-        #if canImport(FirebaseAnalytics)
         AnalyticsService.shared.register(sink: FirebaseAnalyticsSink())
-        #endif
 
         AnalyticsService.shared.startSession()
         AnalyticsService.shared.syncUserProperties()

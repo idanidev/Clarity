@@ -181,7 +181,7 @@ final class AnalyticsService {
     }
 
     /// Días distintos con al menos una apertura. Base local de DAU/MAU: el
-    /// agregado real lo da TelemetryDeck, esto sirve para verlo sin salir de la app.
+    /// agregado real lo da Firebase, esto sirve para verlo sin salir de la app.
     var sessionDays: [String] {
         defaults.stringArray(forKey: Key.sessionDays) ?? []
     }

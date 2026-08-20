@@ -91,14 +91,14 @@ Edit Scheme → Run → Options → StoreKit Configuration.
 
 ## 5. Analytics (issue #41)
 
-**TelemetryDeck ya está integrado** (SwiftSDK 2.14.2, añadido al target). Falta
-una sola cosa para que empiece a medir: crear la app en
-[telemetrydeck.com](https://telemetrydeck.com), copiar el App ID y pegarlo en
-`Clarity/Info.plist` → clave `TelemetryDeckAppID`, que ahora mismo está vacía.
-Sin App ID el SDK no arranca y no se envía nada; la app funciona igual.
+**Firebase Analytics**, ya enlazado al target. Se eligió sobre una herramienta
+anónima (TelemetryDeck) por tener las métricas en la misma consola que la base
+de datos, y porque es gratis e ilimitado y exporta a BigQuery.
 
-En builds de Debug las señales van marcadas como `testMode`, así que probar en
-el simulador no ensucia las métricas reales.
+No hay que configurar nada: `FirebaseApp.configure()` ya se llama al arrancar y
+Analytics se engancha solo. Los datos aparecen en la consola de Firebase →
+proyecto `clarity-gastos` → Analytics, con unas horas de retraso la primera vez
+(DebugView es inmediato si lanzas con `-FIRAnalyticsDebugEnabled`).
 
 Qué se emite:
 
@@ -115,33 +115,33 @@ Qué se emite:
 | `ingreso_extra_registrado` | Ingreso extra guardado |
 | `paywall_shown`, `purchase_completed`, `review_prompted`, `debt_settled` | — |
 
-Ningún evento lleva conceptos, importes ni nada escrito por el usuario: solo
-nombres de categoría y contadores.
-
-DAU/MAU, retención y embudo de onboarding salen del panel de TelemetryDeck.
+DAU/MAU, retención y embudo de onboarding salen de la consola de Firebase.
 `AnalyticsService` además calcula en local retención D1/D7/D30, días activos de
-los últimos 30 y la métrica norte (`isHabitualUser`), para poder consultarlo sin
-salir de la app.
+los últimos 30 y la métrica norte (`isHabitualUser`), para consultarlo sin salir
+de la app.
 
-### Firebase Analytics (alternativa, no usada)
+Ningún evento propio lleva conceptos, importes ni nada escrito por el usuario:
+solo nombres de categoría y contadores.
 
-`AnalyticsService` emite los eventos (`onboarding_completed`, `expense_added`
-con `method`, `paywall_shown`, `purchase_completed`, `review_prompted`,
-`debt_settled`) y calcula en local la retención D1/D7/D30 y la métrica norte
-(`isHabitualUser` = 3+ días con gasto en los últimos 7).
+### ⚠️ Privacidad: esto sí hay que declararlo
 
-Por defecto solo escribe en la consola unificada de Apple: **no sale ni un dato
-del dispositivo**. Para mandarlos a Firebase:
+Firebase Analytics recoge por su cuenta bastante más que nuestros eventos. Antes
+de subir la build hay que actualizar el cuestionario de privacidad en App Store
+Connect. Lo habitual con Analytics es declarar, todo **sin usar para
+seguimiento**:
 
-1. Xcode → Package Dependencies → `firebase-ios-sdk` → añade el producto
-   **FirebaseAnalytics** al target Clarity.
-2. Ya está: `FirebaseAnalyticsSink` está detrás de
-   `#if canImport(FirebaseAnalytics)` y se engancha solo al arrancar.
+- **Identifiers → Device ID** (IDFV): recogido, vinculado a identidad
+- **Usage Data → Product Interaction**: recogido, vinculado a identidad
+- **Diagnostics → Crash Data / Performance Data**: si activas Crashlytics
+- **Location → Coarse Location**: Analytics deriva país/región de la IP
 
-**Antes de subir una build con Analytics enlazado** hay que declarar la recogida
-de datos en la ficha de privacidad de App Store Connect y añadir las entradas
-correspondientes a `PrivacyInfo.xcprivacy`. Esa declaración la tienes que firmar
-tú; por eso el enlace del paquete se ha dejado sin hacer.
+Se declara vinculado porque la app tiene cuentas de usuario y Firebase asocia el
+`user_id` de Auth. Si prefieres el mínimo, en `AppDelegate` puedes desactivar la
+recogida de IDFV con `Analytics.setAnalyticsCollectionEnabled` por consentimiento,
+o quitar la señal de ubicación.
+
+`PrivacyInfo.xcprivacy` no hay que tocarlo: el SDK trae el suyo y Xcode lo suma
+al informe de privacidad al archivar.
 
 ## 6. Distribución (nada de esto es código)
 

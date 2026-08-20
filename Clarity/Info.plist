@@ -41,7 +41,5 @@
 	<string>Usamos el micrófono para añadir gastos por voz</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Necesitamos reconocer tu voz para detectar gastos automáticamente</string>
-	<key>TelemetryDeckAppID</key>
-	<string></string>
 </dict>
 </plist>
