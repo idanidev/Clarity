@@ -77,6 +77,7 @@ platform :ios do
   desc "Pre-submit audit: precheck sobre metadata del App Store"
   lane :audit do
     precheck(
+      api_key_path: "fastlane/api_key.json",
       default_rule_level: :error,
       include_in_app_purchases: false
     )
