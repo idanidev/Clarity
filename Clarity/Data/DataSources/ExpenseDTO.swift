@@ -16,6 +16,8 @@ struct ExpenseDTO: Codable, Sendable {
     let isRecurring: Bool?
     let recurringId: String?
     let goalId: String?
+    let isShared: Bool?
+    let debtors: [Debtor]?
     let createdAt: Date?
     let updatedAt: Date?
     
@@ -35,6 +37,8 @@ struct ExpenseDTO: Codable, Sendable {
             isRecurring: isRecurring,
             recurringId: recurringId,
             goalId: goalId,
+            isShared: isShared,
+            debtors: debtors,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -53,6 +57,8 @@ struct ExpenseDTO: Codable, Sendable {
         self.isRecurring = domain.isRecurring
         self.recurringId = domain.recurringId
         self.goalId = domain.goalId
+        self.isShared = domain.isShared
+        self.debtors = domain.debtors
         self.createdAt = domain.createdAt
         self.updatedAt = domain.updatedAt
     }
@@ -62,6 +68,7 @@ struct ExpenseDTO: Codable, Sendable {
     enum CodingKeys: String, CodingKey {
         case amount, name, category, subcategory, date, paymentMethod, notes
         case isDeductible, recurring, isRecurring, recurringId, goalId
+        case isShared, debtors
         case createdAt, updatedAt
     }
     
@@ -80,6 +87,8 @@ struct ExpenseDTO: Codable, Sendable {
         isRecurring = try container.decodeIfPresent(Bool.self, forKey: .isRecurring)
         recurringId = try container.decodeIfPresent(String.self, forKey: .recurringId)
         goalId = try container.decodeIfPresent(String.self, forKey: .goalId)
+        isShared = try container.decodeIfPresent(Bool.self, forKey: .isShared)
+        debtors = try container.decodeIfPresent([Debtor].self, forKey: .debtors)
 
         createdAt = Self.decodeDate(from: container, forKey: .createdAt)
         updatedAt = Self.decodeDate(from: container, forKey: .updatedAt)
@@ -100,6 +109,8 @@ struct ExpenseDTO: Codable, Sendable {
         try container.encodeIfPresent(isRecurring, forKey: .isRecurring)
         try container.encodeIfPresent(recurringId, forKey: .recurringId)
         try container.encodeIfPresent(goalId, forKey: .goalId)
+        try container.encodeIfPresent(isShared, forKey: .isShared)
+        try container.encodeIfPresent(debtors, forKey: .debtors)
         try container.encodeIfPresent(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }

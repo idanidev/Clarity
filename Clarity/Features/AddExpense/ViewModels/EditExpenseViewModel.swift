@@ -15,7 +15,11 @@ class EditExpenseViewModel {
     var date: Date = Date()
     var paymentMethod: PaymentMethod = .tarjeta
     var notes: String = ""
-    
+
+    // MARK: - Modo regalo (#37)
+    var isShared: Bool = false
+    var debtors: [Debtor] = []
+
     // Original Expense ID
     private let expenseId: String
     
@@ -49,6 +53,8 @@ class EditExpenseViewModel {
         }
         
         self.notes = expense.notes ?? ""
+        self.isShared = expense.isShared ?? false
+        self.debtors = expense.debtors ?? []
     }
     
     // MARK: - Validation
@@ -57,6 +63,11 @@ class EditExpenseViewModel {
         return !name.isEmpty && !category.isEmpty
     }
     
+    /// Descarta filas en blanco creadas con el stepper y nunca rellenadas.
+    private var cleanedDebtors: [Debtor] {
+        debtors.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty || $0.amount > 0 }
+    }
+
     // MARK: - Methods
     func save() async {
         guard isValid, let amount = amount else { return }
@@ -74,7 +85,9 @@ class EditExpenseViewModel {
             date: dateString,
             paymentMethod: paymentMethod.rawValue,
             notes: notes.isEmpty ? nil : notes,
-            isDeductible: false // Preserved or default
+            isDeductible: false, // Preserved or default
+            isShared: isShared ? true : nil,
+            debtors: isShared ? cleanedDebtors : nil
         )
         
         do {
