@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		33098D862F074B03007C66E5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 33098D852F074B03007C66E5 /* FirebaseAuth */; };
+		33TD00032F1100000000TD03 /* TelemetryDeck in Frameworks */ = {isa = PBXBuildFile; productRef = 33TD00022F1100000000TD02 /* TelemetryDeck */; };
 		33098D882F074B1E007C66E5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 33098D872F074B1E007C66E5 /* FirebaseFirestore */; };
 		33098D8A2F074B42007C66E5 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 33098D892F074B42007C66E5 /* FirebaseFunctions */; };
 		33A0001B2F1000000000GS01 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 33A0001A2F1000000000GS01 /* GoogleSignIn */; };
@@ -121,6 +122,7 @@
 				33098D882F074B1E007C66E5 /* FirebaseFirestore in Frameworks */,
 				33A0001B2F1000000000GS01 /* GoogleSignIn in Frameworks */,
 				33A0001D2F1000000000GS02 /* GoogleSignInSwift in Frameworks */,
+				33TD00032F1100000000TD03 /* TelemetryDeck in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,6 +211,7 @@
 				33098D892F074B42007C66E5 /* FirebaseFunctions */,
 				33A0001A2F1000000000GS01 /* GoogleSignIn */,
 				33A0001C2F1000000000GS02 /* GoogleSignInSwift */,
+				33TD00022F1100000000TD02 /* TelemetryDeck */,
 			);
 			productName = Clarity;
 			productReference = 33098CE82F074631007C66E5 /* Clarity.app */;
@@ -322,6 +325,7 @@
 			packageReferences = (
 				33098D812F074796007C66E5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				335686232F085B5B00573F41 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				33TD00012F1100000000TD01 /* XCRemoteSwiftPackageReference "SwiftSDK" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 33098CE92F074631007C66E5 /* Products */;
@@ -833,9 +837,22 @@
 				minimumVersion = 9.0.0;
 			};
 		};
+		33TD00012F1100000000TD01 /* XCRemoteSwiftPackageReference "SwiftSDK" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/TelemetryDeck/SwiftSDK";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		33TD00022F1100000000TD02 /* TelemetryDeck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 33TD00012F1100000000TD01 /* XCRemoteSwiftPackageReference "SwiftSDK" */;
+			productName = TelemetryDeck;
+		};
 		33098D852F074B03007C66E5 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 33098D812F074796007C66E5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

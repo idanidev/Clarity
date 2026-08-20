@@ -8,6 +8,7 @@
 
 import Foundation
 import OSLog
+import UIKit
 
 /// Eventos que la app emite. Nombres en snake_case (convención de Firebase).
 enum AnalyticsEvent: Sendable {
@@ -19,6 +20,13 @@ enum AnalyticsEvent: Sendable {
     case purchaseCompleted(productId: String)
     case reviewPrompted
     case debtSettled
+    case sessionStarted(deviceModel: String, systemVersion: String)
+    case sessionEnded(seconds: Int)
+    case screenViewed(name: String)
+    case aiCategoryCorrected(from: String, to: String)
+    case budgetConfigured(source: String)
+    case budgetLimitReached(percent: Int)
+    case extraIncomeLogged
 
     var name: String {
         switch self {
@@ -30,6 +38,13 @@ enum AnalyticsEvent: Sendable {
         case .purchaseCompleted: return "purchase_completed"
         case .reviewPrompted: return "review_prompted"
         case .debtSettled: return "debt_settled"
+        case .sessionStarted: return "session_started"
+        case .sessionEnded: return "session_ended"
+        case .screenViewed: return "screen_viewed"
+        case .aiCategoryCorrected: return "categoria_ia_corregida"
+        case .budgetConfigured: return "presupuesto_configurado"
+        case .budgetLimitReached: return "limite_alcanzado"
+        case .extraIncomeLogged: return "ingreso_extra_registrado"
         }
     }
 
@@ -43,6 +58,19 @@ enum AnalyticsEvent: Sendable {
             return ["reason": reason]
         case .purchaseCompleted(let productId):
             return ["product_id": productId]
+        case .sessionStarted(let deviceModel, let systemVersion):
+            return ["device": deviceModel, "os_version": systemVersion]
+        case .sessionEnded(let seconds):
+            return ["duration_seconds": String(seconds)]
+        case .screenViewed(let name):
+            return ["screen": name]
+        case .aiCategoryCorrected(let from, let to):
+            // Solo nombres de categoría: nunca el concepto ni el importe.
+            return ["from": from, "to": to]
+        case .budgetConfigured(let source):
+            return ["source": source]
+        case .budgetLimitReached(let percent):
+            return ["percent": String(percent)]
         default:
             return [:]
         }
@@ -90,7 +118,12 @@ final class AnalyticsService {
         static let firstOpen = "analytics.firstOpenDate"
         static let activeDays = "analytics.activeDays"       // ["yyyy-MM-dd"]
         static let expenseCount = "analytics.expenseCount"
+        static let sessionDays = "analytics.sessionDays"     // ["yyyy-MM-dd"] → DAU/MAU
+        static let sessionCount = "analytics.sessionCount"
     }
+
+    /// Inicio de la sesión en curso, para poder medir su duración.
+    @ObservationIgnored private var sessionStart: Date?
 
     private init() {}
 
@@ -107,6 +140,96 @@ final class AnalyticsService {
         if case .expenseAdded = event {
             recordActiveDay()
             defaults.set(defaults.integer(forKey: Key.expenseCount) + 1, forKey: Key.expenseCount)
+        }
+    }
+
+    // MARK: - Sesiones
+
+    /// Arranca la sesión: emite el evento con dispositivo y versión de iOS (lo
+    /// que hace falta para decidir qué soportar) y anota el día como activo.
+    func startSession() {
+        sessionStart = Date()
+        defaults.set(defaults.integer(forKey: Key.sessionCount) + 1, forKey: Key.sessionCount)
+        recordSessionDay()
+
+        let device = UIDevice.current
+        track(.sessionStarted(
+            deviceModel: Self.hardwareIdentifier,
+            systemVersion: device.systemVersion
+        ))
+    }
+
+    /// Cierra la sesión al pasar a background.
+    func endSession() {
+        guard let sessionStart else { return }
+        let seconds = Int(Date().timeIntervalSince(sessionStart))
+        self.sessionStart = nil
+        guard seconds > 0 else { return }
+        track(.sessionEnded(seconds: seconds))
+    }
+
+    /// Vuelta desde background: si la sesión se cerró, empieza otra. La primera
+    /// activación tras el lanzamiento no cuenta doble porque `startSession` ya
+    /// dejó `sessionStart` puesto.
+    func resumeSessionIfNeeded() {
+        guard sessionStart == nil else { return }
+        startSession()
+    }
+
+    var totalSessions: Int {
+        defaults.integer(forKey: Key.sessionCount)
+    }
+
+    /// Días distintos con al menos una apertura. Base local de DAU/MAU: el
+    /// agregado real lo da TelemetryDeck, esto sirve para verlo sin salir de la app.
+    var sessionDays: [String] {
+        defaults.stringArray(forKey: Key.sessionDays) ?? []
+    }
+
+    var monthlyActiveDays: Int {
+        let cutoff = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
+        return sessionDays.filter { day in
+            guard let date = Formatters.date(from: day) else { return false }
+            return date >= cutoff
+        }.count
+    }
+
+    /// Identificador de hardware ("iPhone16,1"). No identifica a la persona.
+    private nonisolated static var hardwareIdentifier: String {
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let mirror = Mirror(reflecting: systemInfo.machine)
+        let identifier = mirror.children.reduce(into: "") { partial, element in
+            guard let value = element.value as? Int8, value != 0 else { return }
+            partial.append(Character(UnicodeScalar(UInt8(value))))
+        }
+        return identifier.isEmpty ? "unknown" : identifier
+    }
+
+    private func recordSessionDay() {
+        let today = Formatters.localDayString(from: Date())
+        var days = sessionDays
+        guard !days.contains(today) else { return }
+        days.append(today)
+        defaults.set(Array(days.suffix(90)), forKey: Key.sessionDays)
+    }
+
+    // MARK: - Umbrales de presupuesto
+
+    /// Emite `limite_alcanzado` la primera vez que el gasto del mes cruza el 80 %
+    /// y el 100 % del presupuesto. Una vez por umbral y mes: si no, saltaría en
+    /// cada refresco de la Home.
+    func trackBudgetThresholdIfCrossed(spent: Double, budget: Double?) {
+        guard let budget, budget > 0 else { return }
+        let percent = spent / budget
+        let month = Formatters.currentMonthString()
+
+        for threshold in [100, 80] where percent >= Double(threshold) / 100 {
+            let key = "analytics.budgetThreshold.\(month).\(threshold)"
+            guard !defaults.bool(forKey: key) else { continue }
+            defaults.set(true, forKey: key)
+            track(.budgetLimitReached(percent: threshold))
+            return  // solo el umbral más alto alcanzado
         }
     }
 
@@ -164,6 +287,7 @@ final class AnalyticsService {
         for sink in sinks {
             sink.setUserProperty(isHabitualUser ? "habitual" : "casual", for: "usage_tier")
             sink.setUserProperty(String(totalExpensesLogged), for: "expenses_logged")
+            sink.setUserProperty(String(monthlyActiveDays), for: "active_days_30")
         }
     }
 

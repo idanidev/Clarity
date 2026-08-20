@@ -26,6 +26,7 @@ struct FinancialDashboardView: View {
                     scrollContent
                 }
             }
+            .trackScreen("metas")
             .navigationTitle(String(localized: "financial.navigationTitle", defaultValue: "Metas"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

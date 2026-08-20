@@ -30,6 +30,7 @@ struct DebtsView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .trackScreen("te_deben")
         .navigationTitle("Te deben")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

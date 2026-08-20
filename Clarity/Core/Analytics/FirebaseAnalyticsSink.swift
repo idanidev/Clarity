@@ -31,10 +31,16 @@ enum AnalyticsBootstrap {
     static func configure() {
         AnalyticsService.shared.registerFirstOpenIfNeeded()
 
+        // TelemetryDeck es el destino principal: anónimo por diseño (#41).
+        if TelemetryDeckConfig.start() {
+            AnalyticsService.shared.register(sink: TelemetryDeckSink())
+        }
+
         #if canImport(FirebaseAnalytics)
         AnalyticsService.shared.register(sink: FirebaseAnalyticsSink())
         #endif
 
+        AnalyticsService.shared.startSession()
         AnalyticsService.shared.syncUserProperties()
     }
 }

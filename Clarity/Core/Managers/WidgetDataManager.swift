@@ -105,6 +105,11 @@ final class WidgetDataManager {
 
         save(data)
         logger.debug("✅ [Widget] Updated — Hoy: \(todayTotal)€, Mes: \(monthTotal)€")
+
+        // Único punto donde coinciden gasto del mes y presupuesto, así que es
+        // aquí donde se detecta que el usuario se pasa del límite (#41).
+        AnalyticsService.shared.trackBudgetThresholdIfCrossed(
+            spent: monthTotal, budget: monthBudget)
     }
 
     // MARK: - Read (for debugging)

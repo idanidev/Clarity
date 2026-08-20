@@ -155,6 +155,7 @@ class AddExpenseViewModel {
                 self.category = pref.category
                 self.subcategory = pref.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
                 return
             }
 
@@ -164,6 +165,7 @@ class AddExpenseViewModel {
                 self.category = subMatch.category
                 self.subcategory = subMatch.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
                 return
             }
 
@@ -173,6 +175,7 @@ class AddExpenseViewModel {
                 self.category = historyMatch.category
                 self.subcategory = historyMatch.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
                 return
             }
 
@@ -185,6 +188,7 @@ class AddExpenseViewModel {
                 self.category = resolved.category
                 self.subcategory = resolved.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
             }
         }
     }
@@ -274,6 +278,25 @@ class AddExpenseViewModel {
         return nil
     }
 
+    /// Categoría que puso el autocategorizador, para saber si el usuario la
+    /// corrige (#41). Si corrige mucho, es que no acierta.
+    @ObservationIgnored private var suggestedCategory: String?
+
+    /// Llamar cuando el usuario elige categoría a mano en el formulario.
+    /// No mira `wasAutoCategorized`: el picker lo pone a false al abrirse, así
+    /// que para entonces ya se habría perdido la señal.
+    func categoryPickedByUser(_ newCategory: String) {
+        guard let suggested = suggestedCategory,
+              !suggested.isEmpty,
+              !newCategory.isEmpty,
+              suggested != newCategory
+        else { return }
+
+        AnalyticsService.shared.track(
+            .aiCategoryCorrected(from: suggested, to: newCategory))
+        suggestedCategory = nil
+    }
+
     // MARK: - State
     var isLoading = false
     var showError = false
@@ -351,5 +374,6 @@ class AddExpenseViewModel {
         isShared = false
         debtors = []
         wasAutoCategorized = false
+        suggestedCategory = nil
     }
 }

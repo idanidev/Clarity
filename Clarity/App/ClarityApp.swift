@@ -81,10 +81,12 @@ struct ClarityApp: App {
                 switch newPhase {
                 case .background:
                     lockManager.sceneDidEnterBackground()
+                    AnalyticsService.shared.endSession()
                 case .inactive:
                     break
                 case .active:
                     lockManager.sceneWillEnterForeground()
+                    AnalyticsService.shared.resumeSessionIfNeeded()
                     UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                     Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
                     removeStaleNotifications()

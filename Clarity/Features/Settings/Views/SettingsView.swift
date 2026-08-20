@@ -215,6 +215,7 @@ struct SettingsView: View {
                     Text("Esta acción es permanente. Se borrarán todos tus gastos, presupuestos y datos asociados.")
                 }
             }
+            .trackScreen("ajustes")
             .navigationTitle(String(localized: "settings.navigationTitle", defaultValue: "Ajustes"))
             .sheet(isPresented: $showPaywall) {
                 ProPaywallView(reason: paywallReason)

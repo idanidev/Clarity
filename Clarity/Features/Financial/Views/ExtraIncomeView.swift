@@ -148,6 +148,7 @@ struct ExtraIncomeView: View {
         .sheet(item: $editingEntry) { entry in
             ExtraIncomeEditSheet(entry: entry, viewModel: viewModel)
         }
+        .trackScreen("ingresos_extra")
         .navigationTitle("Ingresos extra")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -77,6 +77,7 @@ struct ChartsView: View {
                     .scrollIndicators(.hidden)
                 }
             }
+            .trackScreen("analisis")
             .navigationTitle("Análisis")
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)

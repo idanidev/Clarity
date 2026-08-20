@@ -183,6 +183,9 @@ private struct AddExpCategorySection: View {
                 .onAppear {
                     viewModel.wasAutoCategorized = false
                 }
+                .onChange(of: viewModel.category) { _, newValue in
+                    viewModel.categoryPickedByUser(newValue)
+                }
             } label: {
                 HStack {
                     if viewModel.category.isEmpty {

@@ -30,6 +30,7 @@ struct HomeView: View {
     var body: some View {
         mainContent
             .background(DesignTokens.Colors.background)
+            .trackScreen("home")
             .navigationTitle("")
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await viewModel.refresh() }

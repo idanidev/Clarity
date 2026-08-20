@@ -2,22 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>CFBundleDisplayName</key>
-	<string>Clarity</string>
 	<key>CFBundleAllowMixedLocalizations</key>
 	<true/>
-	<key>CFBundleName</key>
-	<string>Clarity</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>es</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Clarity usa Face ID para bloquear automáticamente la app y proteger tus datos financieros</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Usamos el micrófono para añadir gastos por voz</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Necesitamos reconocer tu voz para detectar gastos automáticamente</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
+	<key>CFBundleDisplayName</key>
+	<string>Clarity</string>
+	<key>CFBundleName</key>
+	<string>Clarity</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -41,5 +33,15 @@
 			</array>
 		</dict>
 	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Clarity usa Face ID para bloquear automáticamente la app y proteger tus datos financieros</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Usamos el micrófono para añadir gastos por voz</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Necesitamos reconocer tu voz para detectar gastos automáticamente</string>
+	<key>TelemetryDeckAppID</key>
+	<string></string>
 </dict>
 </plist>

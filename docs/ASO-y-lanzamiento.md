@@ -89,7 +89,41 @@ Para probar sin App Store Connect: `Clarity.storekit` está en la raíz con los
 tres productos y una semana de prueba en el anual. Actívalo en Xcode →
 Edit Scheme → Run → Options → StoreKit Configuration.
 
-## 5. Analytics
+## 5. Analytics (issue #41)
+
+**TelemetryDeck ya está integrado** (SwiftSDK 2.14.2, añadido al target). Falta
+una sola cosa para que empiece a medir: crear la app en
+[telemetrydeck.com](https://telemetrydeck.com), copiar el App ID y pegarlo en
+`Clarity/Info.plist` → clave `TelemetryDeckAppID`, que ahora mismo está vacía.
+Sin App ID el SDK no arranca y no se envía nada; la app funciona igual.
+
+En builds de Debug las señales van marcadas como `testMode`, así que probar en
+el simulador no ensucia las métricas reales.
+
+Qué se emite:
+
+| Evento | Cuándo |
+|---|---|
+| `session_started` | Cada arranque o vuelta desde background. Lleva modelo e iOS |
+| `session_ended` | Al pasar a background, con la duración |
+| `screen_viewed` | Home, análisis, metas, ajustes, te deben, ingresos extra |
+| `onboarding_started` / `onboarding_completed` | Alta del usuario |
+| `expense_added` | Con `method`: voice / manual / recurring / widget / import |
+| `categoria_ia_corregida` | El usuario cambia la categoría que se autoasignó |
+| `presupuesto_configurado` | Nómina actualizada o mes creado |
+| `limite_alcanzado` | Al cruzar el 80 % y el 100 % del presupuesto, una vez por mes |
+| `ingreso_extra_registrado` | Ingreso extra guardado |
+| `paywall_shown`, `purchase_completed`, `review_prompted`, `debt_settled` | — |
+
+Ningún evento lleva conceptos, importes ni nada escrito por el usuario: solo
+nombres de categoría y contadores.
+
+DAU/MAU, retención y embudo de onboarding salen del panel de TelemetryDeck.
+`AnalyticsService` además calcula en local retención D1/D7/D30, días activos de
+los últimos 30 y la métrica norte (`isHabitualUser`), para poder consultarlo sin
+salir de la app.
+
+### Firebase Analytics (alternativa, no usada)
 
 `AnalyticsService` emite los eventos (`onboarding_completed`, `expense_added`
 con `method`, `paywall_shown`, `purchase_completed`, `review_prompted`,
