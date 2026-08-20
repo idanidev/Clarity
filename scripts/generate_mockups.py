@@ -96,9 +96,11 @@ MOCKUPS = [
     {
         "input": "1_home.png",
         "output": "mockup_01_home.png",
-        "headline": "Controla tus gastos\nal instante",
-        "accent": "gastos",
-        "subtitle": "Todo tu dinero, en un vistazo",
+        # Primera captura = el diferenciador (voz + Siri). Ninguna de las apps
+        # grandes de gastos lo ofrece y es el motivo nº1 de abandono (#39).
+        "headline": "Di lo que gastas\ny queda apuntado",
+        "accent": "Di",
+        "subtitle": "Por voz o con Siri, en 5 segundos",
         "bg_base": (28, 12, 52),
         "blobs": [
             (0.18, 0.18, 900, (155, 80, 255), 160),
@@ -107,14 +109,14 @@ MOCKUPS = [
         ],
         "accent_color": (210, 170, 255),
         "shadow_tint": (120, 60, 230),
-        "chip": {"emoji": "💸", "text": "Gasto añadido", "side": "left"},
+        "chip": {"emoji": "🎙️", "text": "\"20 € en gasolina\"", "side": "left"},
     },
     {
         "input": "2_chart.png",
         "output": "mockup_02_chart.png",
-        "headline": "Visualiza en qué\ngastas más",
-        "accent": "más",
-        "subtitle": "Gráficos claros e intuitivos",
+        "headline": "Mira en qué\nse te va el mes",
+        "accent": "mes",
+        "subtitle": "Pincha una categoría y ve el detalle",
         "bg_base": (8, 18, 55),
         "blobs": [
             (0.22, 0.20, 900, (60, 140, 255), 160),
@@ -144,9 +146,9 @@ MOCKUPS = [
     {
         "input": "4_ai.png",
         "output": "mockup_04_ai.png",
-        "headline": "Tu asesora\nfinanciera con IA",
-        "accent": "IA",
-        "subtitle": "Clara analiza tus datos reales",
+        "headline": "Tus gastos fijos,\nen piloto automático",
+        "accent": "automático",
+        "subtitle": "Suscripciones y recibos, sin olvidos",
         "bg_base": (30, 10, 60),
         "blobs": [
             (0.20, 0.18, 900, (190, 100, 255), 160),
@@ -155,7 +157,7 @@ MOCKUPS = [
         ],
         "accent_color": (220, 175, 255),
         "shadow_tint": (150, 70, 240),
-        "chip": {"emoji": "✨", "text": "Clara IA", "side": "left"},
+        "chip": {"emoji": "🔁", "text": "Cada mes solo", "side": "left"},
     },
 ]
 
