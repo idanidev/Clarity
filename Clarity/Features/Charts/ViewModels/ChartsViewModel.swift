@@ -60,6 +60,13 @@ final class ChartsViewModel {
         didSet { invalidateCache() }
     }
     var selectedCategoryName: String?
+
+    /// Stat de la categoría seleccionada en el donut / grid, si sigue existiendo
+    /// en el periodo actual.
+    var selectedCategoryStat: CategoryStat? {
+        guard let selectedCategoryName else { return nil }
+        return categoryStats.first { $0.name == selectedCategoryName }
+    }
     var isLoading: Bool = false
 
     // MARK: - Cache (invalidado en didSet de expenses/selectedPeriod)

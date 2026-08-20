@@ -53,9 +53,10 @@ struct DonutChartView: View {
                 // Category grid cards
                 categoryGrid
 
-                // Drill-down detail
+                // Drill-down detail: tabla con métricas, subcategorías y gastos (#38)
                 if let selected = selectedCategory {
-                    categoryDrillDown(for: selected)
+                    CategoryBreakdownTable(category: selected, expenses: expenses)
+                        .id(selected.id)
                 }
             }
             .padding(.bottom, Spacing.xxl)
@@ -282,72 +283,6 @@ struct DonutChartView: View {
             }
         }
         .padding(.horizontal, Spacing.md)
-    }
-
-    @ViewBuilder
-    private func categoryDrillDown(for category: CategoryChartData) -> some View {
-        let filtered = expenses.filter { $0.category == category.name }
-            .sorted { $0.amount > $1.amount }
-
-        if !filtered.isEmpty {
-            GlassCard.light {
-                VStack(alignment: .leading, spacing: Spacing.xs) {
-                    HStack {
-                        Circle()
-                            .fill(category.color.gradient)
-                            .frame(width: 8, height: 8)
-                        Text(category.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        Text("\(filtered.count) gastos")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, Spacing.sm)
-
-                    VStack(spacing: 4) {
-                        ForEach(filtered.prefix(5)) { expense in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(expense.name)
-                                        .font(.subheadline)
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    if let sub = expense.subcategory {
-                                        Text(sub)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                Spacer()
-                                Text(Formatters.currency(expense.amount))
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundStyle(category.color)
-                            }
-                            .padding(.horizontal, Spacing.sm)
-                            .padding(.vertical, 6)
-                            .background(Color.glassBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.small))
-                        }
-
-                        if filtered.count > 5 {
-                            Text("+ \(filtered.count - 5) mas")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
-                        }
-                    }
-                }
-                .padding(Spacing.sm)
-            }
-            .padding(.horizontal, Spacing.md)
-            .transition(.asymmetric(
-                insertion: .move(edge: .bottom).combined(with: .opacity),
-                removal: .opacity
-            ))
-        }
     }
 
     private func updateCachedSegments() {
