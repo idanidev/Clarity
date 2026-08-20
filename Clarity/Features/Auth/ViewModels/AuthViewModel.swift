@@ -56,6 +56,12 @@ final class AuthViewModel {
                     }
                     UserDefaults.standard.set(user.uid, forKey: "auth.lastUserId")
 
+                    // Sin cobertura, el documento de usuario y la carga inicial
+                    // pueden tardar o no llegar. La UI no debe quedarse en la
+                    // pantalla de carga por eso: se libera ya y los datos entran
+                    // cuando estén (issue #32).
+                    self?.isLoading = false
+
                     await self?.fetchUserDocument(userId: user.uid)
                     if let doc = self?.userDocument {
                         UserDataManager.shared.setUserDocument(doc)
@@ -83,15 +89,27 @@ final class AuthViewModel {
     }
 
     private func fetchUserDocument(userId: String) async {
+        let ref = db.collection("users").document(userId)
         do {
-            let document = try await db.collection("users").document(userId).getDocument()
+            let document = try await withTimeout(Self.remoteReadTimeout) {
+                try await ref.getDocument()
+            }
             if document.exists {
                 userDocument = try document.data(as: UserDocument.self)
             }
         } catch {
             logger.error("Error fetching user document: \(error)")
+            // Offline / red degradada: la cache persistente de Firestore tiene la
+            // última copia buena. Sin esto, `hasCompletedOnboarding` volvía a
+            // false y la app mostraba el onboarding a un usuario ya registrado.
+            if let cached = try? await ref.getDocument(source: .cache), cached.exists {
+                userDocument = try? cached.data(as: UserDocument.self)
+            }
         }
     }
+
+    /// Margen antes de dar por perdida la lectura del documento de usuario.
+    private static let remoteReadTimeout: TimeInterval = 6
     
     // MARK: - Auth Methods
     

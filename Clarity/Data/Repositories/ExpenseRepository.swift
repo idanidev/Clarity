@@ -11,6 +11,9 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     private let swiftDataSource: SwiftDataExpenseDataSource
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "ExpenseRepo")
 
+    /// Margen antes de dar la lectura remota por perdida y servir cache local.
+    private static let remoteReadTimeout: TimeInterval = 8
+
     init(remote: FirebaseExpenseDataSource, swiftData: SwiftDataExpenseDataSource) {
         self.remoteDataSource = remote
         self.swiftDataSource = swiftData
@@ -64,7 +67,10 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
 
     func getExpenses(from startDate: String, to endDate: String) async throws -> [Expense] {
         do {
-            return try await remoteDataSource.getExpenses(from: startDate, to: endDate)
+            let remote = remoteDataSource
+            return try await withTimeout(Self.remoteReadTimeout) {
+                try await remote.getExpenses(from: startDate, to: endDate)
+            }
         } catch {
             // Offline: filtra la cache local por el mismo rango (comparación
             // lexicográfica válida porque date es "yyyy-MM-dd").
@@ -82,17 +88,30 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
         // Actually, let's use the new getExpenses(filter:) logic for "page 0" and return all.
         // Infinite scroll will just receive empty on page 1.
         
-        if page == 0 {
-            let expenses = try await remoteDataSource.getExpenses(filter: filter)
-            
+        guard page == 0 else {
+            return PageResult(expenses: [], hasMore: false)
+        }
+
+        do {
+            // Timeout: sin cobertura Firestore puede no resolver nunca y la Home
+            // se quedaba en blanco en vez de caer a la cache local (issue #32).
+            let remote = remoteDataSource
+            let expenses = try await withTimeout(Self.remoteReadTimeout) {
+                try await remote.getExpenses(filter: filter)
+            }
+
             if !expenses.isEmpty {
                 // Bulk save to local cache (might be heavy if >1000, but simplest path)
                 Task { try? await saveToLocal(expenses) }
             }
-            
+
             return PageResult(expenses: expenses, hasMore: false) // No more pages, we fetched all.
-        } else {
-            return PageResult(expenses: [], hasMore: false)
+        } catch {
+            logger.warning("Paginated fetch failed, falling back to cache: \(error.localizedDescription)")
+            let cached = try swiftDataSource.fetchExpenses()
+            let filtered = filter?.apply(to: cached) ?? cached
+            guard !filtered.isEmpty || !cached.isEmpty else { throw error }
+            return PageResult(expenses: filtered, hasMore: false)
         }
     }
     
