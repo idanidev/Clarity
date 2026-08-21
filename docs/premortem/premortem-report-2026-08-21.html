@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Premortem — Clarity</title>
+<style>
+  :root{
+    --bg:#0a0e1a; --panel:#121828; --panel2:#161d31; --line:#243049;
+    --tx:#e8ecf5; --tx2:#a3aec6; --tx3:#6b7793;
+    --hot:#ff5c6c; --warm:#ffa53a; --cool:#4fd1c5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);
+       font:16px/1.65 -apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;
+       padding:48px 24px 80px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  h1{font-size:34px;margin:0 0 6px;letter-spacing:-.02em}
+  .sub{color:var(--tx2);font-size:15px}
+  .premise{margin-top:22px;padding:16px 20px;background:rgba(255,92,108,.08);
+           border-left:3px solid var(--hot);border-radius:0 8px 8px 0;color:#ffd9dd;font-size:15px}
+  h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--tx3);
+     margin:44px 0 16px;font-weight:600}
+  .synth{display:grid;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px 24px}
+  .card h3{margin:0 0 10px;font-size:17px;letter-spacing:-.01em}
+  .card p{margin:0 0 10px;color:var(--tx2);font-size:15px}
+  .card p:last-child{margin-bottom:0}
+  .tag{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+       padding:4px 10px;border-radius:20px;margin-bottom:12px;font-weight:600}
+  .t-hot{background:rgba(255,92,108,.16);color:var(--hot)}
+  .t-warm{background:rgba(255,165,58,.16);color:var(--warm)}
+  .t-cool{background:rgba(79,209,197,.14);color:var(--cool)}
+  ol,ul{margin:0;padding-left:20px;color:var(--tx2)}
+  li{margin-bottom:9px}
+  li strong{color:var(--tx)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .fail{background:var(--panel2);border:1px solid var(--line);border-radius:14px;
+        padding:20px 22px;border-top:3px solid var(--ac)}
+  .fail h3{font-size:16px;margin:0 0 12px;color:var(--ac);letter-spacing:-.01em}
+  .meter{display:flex;gap:14px;margin-bottom:14px;font-size:11px;color:var(--tx3);
+         text-transform:uppercase;letter-spacing:.06em}
+  .dots{letter-spacing:2px;color:var(--ac)}
+  .story{font-size:14px;color:var(--tx2);margin-bottom:14px}
+  .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--tx3);
+       margin:14px 0 5px;font-weight:600}
+  .assume{font-size:14px;color:var(--tx);font-style:italic;
+          border-left:2px solid var(--ac);padding-left:12px}
+  .signals{font-size:13.5px;color:var(--tx2);padding-left:18px;margin-top:5px}
+  .verified{margin-top:14px;padding:14px 18px;background:rgba(255,92,108,.07);
+            border:1px solid rgba(255,92,108,.25);border-radius:10px;font-size:14px;color:#ffc9cf}
+  .verified b{color:#fff}
+  .runs{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0}
+  .chip{font-size:12px;padding:6px 12px;border-radius:20px;background:var(--panel);
+        border:1px solid var(--line);color:var(--tx2)}
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);
+         color:var(--tx3);font-size:13px}
+  code{background:#0d1322;padding:2px 6px;border-radius:5px;font-size:13px;color:#9fd0ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Premortem — Clarity</h1>
+  <div class="sub">App iOS de control de gastos · v2.0.9 · 21 de agosto de 2026 · 8 análisis en paralelo</div>
+  <div class="premise">
+    <strong>Premisa:</strong> han pasado 6 meses. Es febrero de 2027. Clarity ha fracasado: no existe
+    un grupo real de usuarios registrando gastos varios días por semana. Los que se la bajaron
+    dejaron de abrirla. Esto es la reconstrucción de por qué murió.
+  </div>
+  <div class="runs">
+    <span class="chip">16 descargas / 30 días</span>
+    <span class="chip">⭐ 5,0 · 1 voto</span>
+    <span class="chip">Competidores: 2.329 – 5.001 votos</span>
+    <span class="chip">0 datos históricos de uso</span>
+    <span class="chip">1 usuario diario conocido</span>
+  </div>
+</header>
+
+<h2>Síntesis</h2>
+<div class="synth">
+
+  <div class="card">
+    <span class="tag t-hot">El fallo más probable</span>
+    <h3>No hay motor de captación, y la aritmética no da</h3>
+    <p>16 descargas al mes. Aunque retuvieras al <strong>100 %</strong> —algo que no ocurre en
+    ninguna app de gastos— en seis meses tendrías ~100 personas. El objetivo no es alcanzable
+    trabajando sobre el producto: está bloqueado aguas arriba, en la entrada.</p>
+    <p>El ASO redistribuye el tráfico que ya existe en la App Store; no lo crea. Y el algoritmo
+    ordena por señal social: con 1 voto frente a 5.001, la ficha aparece en un puesto al que
+    nadie baja. Cada iteración de capturas devuelve dos o tres descargas más y consume una tarde.</p>
+  </div>
+
+  <div class="card">
+    <span class="tag t-warm">El fallo más peligroso</span>
+    <h3>Seis meses de decisiones tomadas sobre ruido</h3>
+    <p>Menos probable de detectar, mucho más caro: los paneles de Firebase van a mostrar números
+    con aspecto de dato. Con cohortes de 16 personas, D30 son 0-3 usuarios. La diferencia entre
+    1 y 3 no distingue nada, pero se lee como «+200 % de retención».</p>
+    <p>Y hay un agravante <strong>verificado en el código</strong>: nada excluye tu propio usuario
+    de las métricas. Eres el único usuario diario conocido, así que tus gastos van a dominar
+    <code>expense_added</code> y vas a confirmar tus propias hipótesis con tus propios datos.</p>
+  </div>
+
+  <div class="card">
+    <span class="tag t-cool">El supuesto oculto</span>
+    <h3>«A la app todavía le falta algo»</h3>
+    <p>Es el hilo que atraviesa los ocho análisis. Todo el esfuerzo de los últimos meses asume
+    que el problema es de producto: más funciones, mejor ficha, mejor onboarding, traducción,
+    Pro, IA. Pero Clarity no tiene usuarios porque <strong>nadie sabe que existe</strong>, no
+    porque le falte una función.</p>
+    <p>El supuesto es cómodo porque construir es lo que sabes hacer y da resultado visible el
+    mismo día. Buscar usuarios no da nada durante semanas. Por eso el patrón se refuerza solo.</p>
+  </div>
+
+</div>
+
+<h2>El plan revisado</h2>
+<div class="card">
+  <ol>
+    <li><strong>Excluye tu usuario de analytics esta semana.</strong> Es una línea. Sin eso, los
+    datos de los próximos seis meses son inservibles y no lo sabrás.</li>
+    <li><strong>Quita el muro de registro.</strong> Que se pueda apuntar el primer gasto sin cuenta,
+    y pedir el registro después, cuando ya haya algo que guardar. Monefy se abre y ya estás
+    apuntando; tú pides email antes de enseñar una sola pantalla.</li>
+    <li><strong>Saca la nómina del onboarding.</strong> Preguntar el sueldo en la pantalla cuatro,
+    con 1 valoración de respaldo, es la peor petición en el peor momento. Que sea opcional y
+    llegue cuando el usuario quiera un presupuesto.</li>
+    <li><strong>Pon un canal de contacto.</strong> Un email visible en Ajustes y en la ficha. Hoy
+    no hay forma de que nadie te cuente por qué se fue.</li>
+    <li><strong>Un solo experimento de captación, cuatro semanas.</strong> El vídeo de «20 euros en
+    gasolina» publicado tres veces por semana en TikTok/Reels. Métrica: impresiones de ficha en
+    App Store Connect. Si no se mueven, el canal no es ese y pruebas otro.</li>
+    <li><strong>Congela funciones nuevas hasta pasar de 100 descargas/mes.</strong> Y decide sobre
+    lo apagado: enciende Pro e IA o bórralos. La superficie muerta cuesta mantenimiento y no
+    aporta nada.</li>
+  </ol>
+</div>
+
+<h2>Lista de verificación</h2>
+<div class="card">
+  <ul>
+    <li><strong>Excluir tu <code>user_id</code></strong> de los agregados de Firebase. Verificado: hoy no existe.</li>
+    <li><strong>Instrumentar el embudo de entrada</strong>: instalación → cuenta creada → primer gasto guardado. Sin eso no sabes en cuál de los tres escalones pierdes a la gente.</li>
+    <li><strong>Medir la voz por usuario y por hora del día</strong>, no en global. Si se concentra por la noche en casa y desaparece a mediodía, tu diferenciador es una demo, no un hábito.</li>
+    <li><strong>Emitir evento de racha rota y de apertura desde recordatorio.</strong> Verificado: hoy no se miden, así que no podrás saber si los avisos ayudan o echan gente.</li>
+    <li><strong>Elegir el número semanal que duele</strong> —descargas nuevas— y mirarlo cada lunes. Si ninguna métrica te incomoda, no estás midiendo nada.</li>
+  </ul>
+</div>
+
+<h2>Los ocho modos de fallo</h2>
+<div class="grid">
+
+  <div class="fail" style="--ac:#ff5c6c">
+    <h3>1 · No hay motor de captación</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●●</span></span><span>Daño <span class="dots">●●●●●</span></span></div>
+    <div class="story">Septiembre: analytics confirma lo bueno —los que entran se quedan— pero la
+    cohorte son 16 personas. El producto funcionaba; el embudo tenía un solo grifo y goteaba. La
+    respuesta fue la única palanca conocida: más ASO. Otra ronda de capturas, otro reordenado del
+    set. Cada iteración, una tarde de simulador y dos o tres descargas más. En noviembre quedó
+    claro: el algoritmo ordena por señal social, y esa señal se construye con volumen de usuarios,
+    no con texto de ficha. Febrero de 2027: ~95 instalaciones acumuladas, unos 25 activos.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que la distribución era un problema de optimizar la ficha y no un canal que
+    hay que construir a mano, fuera de la App Store.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Descargas planas (12-20/mes) después de publicar capturas nuevas.</li>
+      <li>Impresiones de ficha que no suben aunque suba la conversión.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#ff8a4c">
+    <h3>2 · La app cobra por adelantado: cuenta y sueldo</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●●</span></span><span>Daño <span class="dots">●●●●○</span></span></div>
+    <div class="story">Un usuario buscó «gastos», vio una app con 1 valoración y se encontró un
+    formulario de registro antes de una sola pantalla de producto. La mitad no pasó de ahí. Los que
+    se registraron cayeron en tres pantallas de promesa y cero gastos reales, y luego en la pregunta
+    del sueldo. Peor: el «Saltar» de la primera pantalla no salta al final, salta exactamente a la
+    pantalla de la nómina. El primer gasto ocurría, de media, en la pantalla siete.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que la cuenta y el presupuesto son requisitos técnicos del producto y no una
+    factura que el usuario paga antes de recibir nada.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Ratio cuentas creadas / instalaciones por debajo del 60 %.</li>
+      <li>Más de 90 segundos de mediana hasta el primer gasto guardado.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#c77dff">
+    <h3>3 · El diferenciador es socialmente incómodo</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●○</span></span><span>Daño <span class="dots">●●●●●</span></span></div>
+    <div class="story">La ficha nueva funciona y entra gente por la voz. Pero el histograma horario
+    lo enseña sin ambigüedad: los eventos de voz se concentran entre las 21:00 y las 00:00, en casa.
+    En la franja donde de verdad se gasta —mediodía, tarde, caja del súper, barra, gasolinera— la voz
+    es casi cero. Nadie dice «veinte euros en gasolina» delante de la cola. La mayoría dispara un
+    único gasto por voz, el de prueba en el sofá, y nunca más. Sin voz, Clarity compite tecleando
+    contra Monefy y sus 3.680 valoraciones.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que la voz es cómoda porque es rápida, sin comprobar que el momento de
+    registrar un gasto es casi siempre un momento con gente delante.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Más del 60 % de usuarios con una sola sesión de voz y ninguna más en 7 días.</li>
+      <li>Voz concentrada en franja nocturna y ausente a mediodía.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#ffd166">
+    <h3>4 · Círculo cerrado de reseñas</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●●</span></span><span>Daño <span class="dots">●●●○○</span></span></div>
+    <div class="story">La petición de reseña hace exactamente lo que promete, y por eso se ve el
+    techo: con ~96 instalaciones en seis meses, quizá 20-25 usuarios llegan a la tercera apertura y
+    guardan un gasto; de esos, dos o tres pulsan las estrellas. Febrero de 2027: cuatro valoraciones.
+    En finanzas personales eso no se lee como «app nueva», se lee como «app que nadie usa con su
+    dinero de verdad»: sin web, sin soporte, pidiendo la nómina, con cuatro votos.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que el problema de las reseñas era no estar pidiéndolas, cuando en realidad
+    era no tener a quién pedírselas.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Menos de 30 peticiones de reseña disparadas en 60 días.</li>
+      <li>Impresiones estancadas tras reescribir la ficha.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#4fd1c5">
+    <h3>5 · Instrumentar no es aprender</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●●</span></span><span>Daño <span class="dots">●●●●●</span></span></div>
+    <div class="story">Cohorte de agosto: 16 instalaciones, D7 = 4, D30 = 1. En octubre D30 = 3, leído
+    como «+200 % de retención» y atribuido a la racha. La diferencia entre 1 y 3 sobre 16 no distingue
+    nada. En noviembre, el 71 % de los gastos eran por voz: confirmación del diferenciador, salvo que
+    ese 71 % eran gastos propios, porque nunca se separó el <code>user_id</code> del desarrollador. Tres
+    semanas afinando el parser por doce eventos de dos personas. La métrica norte marcaba dos usuarios
+    habituales; uno era él.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que instrumentar la app equivale a poder aprender de ella, cuando con 16
+    descargas al mes lo único instrumentado es el ruido.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Tu <code>user_id</code> no está excluido de los agregados. <strong>Verificado hoy: no lo está.</strong></li>
+      <li>Cualquier decisión tomada sobre un evento con menos de 30 usuarios únicos detrás.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#5ba8ff">
+    <h3>6 · El banco ya hizo el trabajo</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●○</span></span><span>Daño <span class="dots">●●●●○</span></span></div>
+    <div class="story">Semana 1, cuatro o cinco gastos al día. Semana 3, la mitad vuelven al teclado.
+    El momento exacto de la ruptura no ocurre dentro de Clarity: el usuario abre Revolut o BBVA para
+    mirar el saldo y ve la misma tarta de categorías que llevaba seis semanas construyendo a mano. No
+    es que Clarity sea peor: es que ese trabajo ya estaba hecho. La importación de CSV —lo único capaz
+    de competir contra la automatización— siguió comentada todo el periodo.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que apuntar gastos es una tarea inevitable y gana quien la haga más rápido;
+    cuando el banco ya la eliminó, ser rápido no compite con no existir.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Gastos por usuario y semana cayendo de ~15 a menos de 4 entre la semana 1 y la 4.</li>
+      <li>Uso de voz por debajo del 40 % pasado el día 10.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#f78fb3">
+    <h3>7 · Construir como evasión</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●●</span></span><span>Daño <span class="dots">●●●●○</span></span></div>
+    <div class="story">En una sola jornada entraron al repo: arreglo de offline, tabla por categoría,
+    modo regalo, recordatorio, racha, reseña, Pro con StoreKit y analytics… incluida una instrumentación
+    construida y reemplazada por otra el mismo día. Siete funciones y cero conversaciones con usuarios,
+    sobre 16 descargas. Pro nunca se encendió. La traducción real llegó en noviembre —tres fines de
+    semana— para una ficha inglesa que llevaba publicada desde agosto sin traer descargas.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que la app no tenía usuarios porque todavía le faltaba algo, y no porque nadie
+    sabía que existía.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Cualquier semana con commits y cero contactos con usuarios reales.</li>
+      <li>Funciones apagadas que siguen apagadas dos releases después.</li>
+    </ul>
+  </div>
+
+  <div class="fail" style="--ac:#9ae66e">
+    <h3>8 · El trato que el usuario no acepta</h3>
+    <div class="meter"><span>Probabilidad <span class="dots">●●●●○</span></span><span>Daño <span class="dots">●●●●○</span></span></div>
+    <div class="story">Al tercer día la app le dice que lleva 47 € en comida. El usuario ya lo sabía.
+    El coste es hoy, el beneficio es un informe a fin de mes. Día 9 se salta uno, la racha se pone a
+    cero y el «🔥 8 días seguidos» desaparece sin aviso: el único refuerzo se retira exactamente en el
+    momento de duda. Después, la maquinaria sigue disparando sobre quien ya se fue —diario, semanal,
+    inactividad a los 7, 14, 21 días—: cinco mensajes al mes recordándole que no ha apuntado nada.</div>
+    <div class="lbl">Supuesto</div>
+    <div class="assume">Que el problema era que la gente se olvida de apuntar, y no que apuntar no le
+    devuelve nada en el mismo segundo en que apunta.</div>
+    <div class="lbl">Señales tempranas</div>
+    <ul class="signals">
+      <li>Menos del 30 % de los que apuntan los tres primeros días siguen apuntando en la segunda semana.</li>
+      <li>Distribución de la mejor racha con moda en 1-2 días: decora, no engancha.</li>
+    </ul>
+  </div>
+
+</div>
+
+<div class="verified">
+  <b>Verificado en el código durante este premortem:</b> no existe exclusión del usuario desarrollador
+  en analytics · no se emite evento de racha rota ni de apertura desde recordatorio · no hay email de
+  contacto en ninguna pantalla · la importación de CSV sigue comentada en <code>SettingsView.swift:144</code>.
+</div>
+
+<footer>
+  Premortem sobre Clarity (app iOS de control de gastos, v2.0.9) · 21 de agosto de 2026 ·
+  8 análisis independientes en paralelo · Criterio de éxito evaluado: un grupo real de usuarios
+  registrando gastos varios días por semana, con retención a 30 días.
+</footer>
+
+</div>
+</body>
+</html>
