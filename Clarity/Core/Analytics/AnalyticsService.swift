@@ -90,6 +90,13 @@ enum ExpenseInputMethod: String, Sendable {
 protocol AnalyticsSink: Sendable {
     func send(name: String, parameters: [String: String])
     func setUserProperty(_ value: String?, for name: String)
+    /// Corta de raíz la recogida del destino, no solo el envío de eventos
+    /// propios (sesiones, pantallas y demás automatismos del SDK incluidos).
+    func setCollectionEnabled(_ enabled: Bool)
+}
+
+extension AnalyticsSink {
+    func setCollectionEnabled(_ enabled: Bool) {}
 }
 
 /// Sink por defecto: deja rastro en la consola unificada de Apple. No sale nada
@@ -112,6 +119,9 @@ final class AnalyticsService {
     static let shared = AnalyticsService()
 
     private var sinks: [any AnalyticsSink] = [OSLogAnalyticsSink()]
+    /// Destinos que envían datos fuera del dispositivo. Se separan del resto
+    /// para poder callarlos sin perder el rastro en la consola local.
+    private var remoteSinks: [any AnalyticsSink] = []
     private let defaults = UserDefaults.standard
 
     private enum Key {
@@ -120,6 +130,7 @@ final class AnalyticsService {
         static let expenseCount = "analytics.expenseCount"
         static let sessionDays = "analytics.sessionDays"     // ["yyyy-MM-dd"] → DAU/MAU
         static let sessionCount = "analytics.sessionCount"
+        static let excludeDevice = "analytics.excludeDevice"
     }
 
     /// Inicio de la sesión en curso, para poder medir su duración.
@@ -130,13 +141,60 @@ final class AnalyticsService {
     /// Añade un destino adicional (p. ej. Firebase Analytics) en el arranque.
     func register(sink: any AnalyticsSink) {
         sinks.append(sink)
+        remoteSinks.append(sink)
+    }
+
+    // MARK: - Exclusión de dispositivos propios
+
+    /// Este dispositivo no cuenta para las métricas.
+    ///
+    /// Con ~16 descargas al mes, el uso diario del propio desarrollador domina
+    /// cualquier agregado: sin esto, los datos confirman las hipótesis de quien
+    /// las escribió. En DEBUG está excluido siempre; en la build de la App Store
+    /// se activa a mano desde Ajustes, que es lo que permite excluir también el
+    /// móvil de uso diario y el de cualquier tester.
+    var isDeviceExcluded: Bool {
+        #if DEBUG
+        return true
+        #else
+        return defaults.bool(forKey: Key.excludeDevice)
+        #endif
+    }
+
+    func setDeviceExcluded(_ excluded: Bool) {
+        defaults.set(excluded, forKey: Key.excludeDevice)
+        applyExclusionToRemoteSinks()
+    }
+
+    /// Corta la recogida en los destinos remotos. Llamar al arrancar y al
+    /// cambiar el ajuste.
+    func applyExclusionToRemoteSinks() {
+        for sink in remoteSinks {
+            sink.setCollectionEnabled(!isDeviceExcluded)
+        }
     }
 
     func track(_ event: AnalyticsEvent) {
+        // El sink local sigue registrando siempre: sirve para depurar sin
+        // ensuciar las métricas de producto.
+        guard !isDeviceExcluded else {
+            for sink in sinks where !(sink is FirebaseAnalyticsSink) {
+                sink.send(name: event.name, parameters: event.parameters)
+            }
+            recordLocalCounters(for: event)
+            return
+        }
+
         for sink in sinks {
             sink.send(name: event.name, parameters: event.parameters)
         }
 
+        recordLocalCounters(for: event)
+    }
+
+    /// Contadores locales (racha de días activos, total de gastos). Se llevan
+    /// aunque el dispositivo esté excluido: son para la propia app, no salen fuera.
+    private func recordLocalCounters(for event: AnalyticsEvent) {
         if case .expenseAdded = event {
             recordActiveDay()
             defaults.set(defaults.integer(forKey: Key.expenseCount) + 1, forKey: Key.expenseCount)

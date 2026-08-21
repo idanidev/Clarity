@@ -80,7 +80,10 @@ struct OnboardingView: View {
                 // Secondary action
                 if page == 0 {
                     Button("Saltar") {
-                        withAnimation { page = totalFeaturePages + 1 }
+                        // A la pantalla final, NO a la de la nómina: quien salta
+                        // el tutorial es justo quien menos ganas tiene de que le
+                        // pregunten cuánto cobra (#47).
+                        withAnimation { page = totalFeaturePages + 2 }
                     }
                     .font(.subheadline)
                     .foregroundStyle(Color.white.opacity(0.5))

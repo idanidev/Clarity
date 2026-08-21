@@ -18,6 +18,12 @@ struct FirebaseAnalyticsSink: AnalyticsSink {
     func setUserProperty(_ value: String?, for name: String) {
         Analytics.setUserProperty(value, forName: name)
     }
+
+    /// Firebase recoge sesiones y pantallas por su cuenta, así que no basta con
+    /// dejar de mandar eventos propios: hay que apagar el SDK entero.
+    func setCollectionEnabled(_ enabled: Bool) {
+        Analytics.setAnalyticsCollectionEnabled(enabled)
+    }
 }
 
 enum AnalyticsBootstrap {
@@ -27,6 +33,9 @@ enum AnalyticsBootstrap {
         AnalyticsService.shared.registerFirstOpenIfNeeded()
 
         AnalyticsService.shared.register(sink: FirebaseAnalyticsSink())
+        // Antes de emitir nada: si este dispositivo está excluido, Firebase se
+        // apaga aquí y no llega a registrar ni la primera sesión.
+        AnalyticsService.shared.applyExclusionToRemoteSinks()
 
         AnalyticsService.shared.startSession()
         AnalyticsService.shared.syncUserProperties()

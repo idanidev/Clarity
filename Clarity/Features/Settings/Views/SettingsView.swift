@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var deleteError: String?
     @AppStorage("app.theme") private var selectedTheme: String = "system"
     @State private var subscriptions = SubscriptionManager.shared
+    @State private var analytics = AnalyticsService.shared
     @State private var showPaywall = false
     @State private var paywallReason: ProPaywallView.PaywallReason = .general
 
@@ -112,6 +113,29 @@ struct SettingsView: View {
                     .onChange(of: selectedTheme) { _, newTheme in
                         saveThemeToFirebase(newTheme)
                     }
+                }
+
+                // Exclusión de métricas — fuera de #if DEBUG a propósito: hay que
+                // poder excluir el iPhone de uso diario, que corre la build de
+                // la App Store (#46).
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { analytics.isDeviceExcluded },
+                        set: { analytics.setDeviceExcluded($0) }
+                    )) {
+                        Label("No contar este dispositivo", systemImage: "chart.bar.xaxis")
+                    }
+                    #if DEBUG
+                    .disabled(true)
+                    #endif
+                } header: {
+                    Text("Estadísticas")
+                } footer: {
+                    #if DEBUG
+                    Text("Las builds de desarrollo quedan excluidas siempre.")
+                    #else
+                    Text("Actívalo en tus propios dispositivos para que tu uso no se mezcle con el de los demás en las estadísticas.")
+                    #endif
                 }
 
                 // Data Section
