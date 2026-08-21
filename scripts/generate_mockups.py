@@ -144,11 +144,12 @@ MOCKUPS = [
         "chip": {"emoji": "🐖", "text": "+200 €", "side": "right"},
     },
     {
-        "input": "4_ai.png",
-        "output": "mockup_04_ai.png",
-        "headline": "Tus gastos fijos,\nen piloto automático",
-        "accent": "automático",
-        "subtitle": "Suscripciones y recibos, sin olvidos",
+        "input": "4_voice.png",
+        "output": "mockup_04_voice.png",
+        # La prueba visual del diferenciador: la app escuchando y parseando.
+        "headline": "\"20 euros\nen gasolina\"",
+        "accent": "gasolina",
+        "subtitle": "Habla y el gasto se apunta solo",
         "bg_base": (30, 10, 60),
         "blobs": [
             (0.20, 0.18, 900, (190, 100, 255), 160),
@@ -157,7 +158,23 @@ MOCKUPS = [
         ],
         "accent_color": (220, 175, 255),
         "shadow_tint": (150, 70, 240),
-        "chip": {"emoji": "🔁", "text": "Cada mes solo", "side": "left"},
+        "chip": {"emoji": "🎙️", "text": "Escuchando…", "side": "left"},
+    },
+    {
+        "input": "5_siri.png",
+        "output": "mockup_05_siri.png",
+        "headline": "Sin abrir\nla app",
+        "accent": "Sin abrir",
+        "subtitle": "Díselo a Siri y listo",
+        "bg_base": (10, 20, 48),
+        "blobs": [
+            (0.22, 0.20, 900, (80, 150, 255), 160),
+            (0.82, 0.30, 780, (40, 90, 220), 140),
+            (0.50, 0.78, 1100, (15, 45, 110), 110),
+        ],
+        "accent_color": (150, 200, 255),
+        "shadow_tint": (60, 130, 240),
+        "chip": {"emoji": "✨", "text": "Oye Siri…", "side": "right"},
     },
 ]
 
@@ -585,13 +602,19 @@ TRANSLATIONS = {
             "headline": "Save with\nclear goals",
             "accent": "goals",
             "subtitle": "Goals, pots and budgets",
-            "chip_text": "+£200",
+            "chip_text": "+$200",
         },
-        "mockup_04_ai.png": {
-            "headline": "Fixed costs,\non autopilot",
-            "accent": "autopilot",
-            "subtitle": "Subscriptions and bills, never missed",
-            "chip_text": "Every month",
+        "mockup_04_voice.png": {
+            "headline": '"20 dollars\non gas"',
+            "accent": "gas",
+            "subtitle": "Say it and the expense logs itself",
+            "chip_text": "Listening…",
+        },
+        "mockup_05_siri.png": {
+            "headline": "Without\nopening the app",
+            "accent": "Without",
+            "subtitle": "Just tell Siri",
+            "chip_text": "Hey Siri…",
         },
     }
 }
