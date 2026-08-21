@@ -27,6 +27,7 @@ enum AnalyticsEvent: Sendable {
     case budgetConfigured(source: String)
     case budgetLimitReached(percent: Int)
     case extraIncomeLogged
+    case supportContacted(reason: String)
 
     var name: String {
         switch self {
@@ -45,6 +46,7 @@ enum AnalyticsEvent: Sendable {
         case .budgetConfigured: return "presupuesto_configurado"
         case .budgetLimitReached: return "limite_alcanzado"
         case .extraIncomeLogged: return "ingreso_extra_registrado"
+        case .supportContacted: return "contacto_soporte"
         }
     }
 
@@ -71,6 +73,8 @@ enum AnalyticsEvent: Sendable {
             return ["source": source]
         case .budgetLimitReached(let percent):
             return ["percent": String(percent)]
+        case .supportContacted(let reason):
+            return ["reason": reason]
         default:
             return [:]
         }

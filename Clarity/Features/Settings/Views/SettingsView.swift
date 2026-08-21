@@ -14,6 +14,7 @@ struct SettingsView: View {
     @AppStorage("app.theme") private var selectedTheme: String = "system"
     @State private var subscriptions = SubscriptionManager.shared
     @State private var analytics = AnalyticsService.shared
+    @Environment(\.openURL) private var openURL
     @State private var showPaywall = false
     @State private var paywallReason: ProPaywallView.PaywallReason = .general
 
@@ -179,6 +180,23 @@ struct SettingsView: View {
                 }
 
                 // About Section
+                // Contacto — la única vía para saber por qué la gente se va (#50)
+                Section {
+                    ForEach(SupportContact.Reason.allCases) { reason in
+                        Button {
+                            guard let url = SupportContact.mailURL(for: reason) else { return }
+                            AnalyticsService.shared.track(.supportContacted(reason: reason.rawValue))
+                            openURL(url)
+                        } label: {
+                            Label(reason.label, systemImage: reason.icon)
+                        }
+                    }
+                } header: {
+                    Text("Escríbeme")
+                } footer: {
+                    Text("Lo lee una persona: yo. Cuéntame lo que sea, aunque solo te haya molestado un botón.")
+                }
+
                 Section(String(localized: "settings.info.title", defaultValue: "Información")) {
                     LabeledContent(String(localized: "settings.info.version", defaultValue: "Versión"), value: appVersion)
 
