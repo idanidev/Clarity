@@ -95,12 +95,34 @@ def load_font(size: int, weight: str = "Bold", rounded: bool = False) -> ImageFo
 MOCKUPS = [
     {
         "input": "1_home.png",
-        "output": "mockup_01_home.png",
+        "output": "mockup_01_voice.png",
+        # La prueba visual del diferenciador: la app escuchando y parseando.
+        "headline": "\"20 euros\nen gasolina\"",
+        "accent": "gasolina",
+        "subtitle": "Por voz o con Siri, sin escribir nada",
+        "bg_base": (30, 10, 60),
+        "blobs": [
+            (0.20, 0.18, 900, (190, 100, 255), 160),
+            (0.85, 0.35, 780, (130, 50, 230), 140),
+            (0.50, 0.78, 1100, (55, 15, 110), 110),
+        ],
+        "accent_color": (220, 175, 255),
+        "shadow_tint": (150, 70, 240),
+        "voice_overlay": {
+            "phrase": "\"20 euros en gasolina\"",
+            "result_name": "Gasolina",
+            "result_amount": "20,00 €",
+            "result_emoji": "⛽",
+        },
+    },
+    {
+        "input": "1_home.png",
+        "output": "mockup_04_home.png",
         # Primera captura = el diferenciador (voz + Siri). Ninguna de las apps
         # grandes de gastos lo ofrece y es el motivo nº1 de abandono (#39).
-        "headline": "Di lo que gastas\ny queda apuntado",
-        "accent": "Di",
-        "subtitle": "Por voz o con Siri, en 5 segundos",
+        "headline": "Controla tus gastos\nal instante",
+        "accent": "gastos",
+        "subtitle": "Todo tu dinero, en un vistazo",
         "bg_base": (28, 12, 52),
         "blobs": [
             (0.18, 0.18, 900, (155, 80, 255), 160),
@@ -142,23 +164,6 @@ MOCKUPS = [
         "accent_color": (150, 245, 200),
         "shadow_tint": (50, 200, 140),
         "chip": {"emoji": "🐖", "text": "+200 €", "side": "right"},
-    },
-    {
-        "input": "4_voice.png",
-        "output": "mockup_04_voice.png",
-        # La prueba visual del diferenciador: la app escuchando y parseando.
-        "headline": "\"20 euros\nen gasolina\"",
-        "accent": "gasolina",
-        "subtitle": "Habla y el gasto se apunta solo",
-        "bg_base": (30, 10, 60),
-        "blobs": [
-            (0.20, 0.18, 900, (190, 100, 255), 160),
-            (0.85, 0.35, 780, (130, 50, 230), 140),
-            (0.50, 0.78, 1100, (55, 15, 110), 110),
-        ],
-        "accent_color": (220, 175, 255),
-        "shadow_tint": (150, 70, 240),
-        "chip": {"emoji": "🎙️", "text": "Escuchando…", "side": "left"},
     },
     {
         "input": "5_siri.png",
@@ -550,6 +555,103 @@ def draw_chip(canvas: Image.Image, chip: dict, accent_color: tuple):
     ImageDraw.Draw(canvas).text((tx, ty), text, fill=(255, 255, 255), font=font_chip)
 
 
+def draw_voice_overlay(canvas: Image.Image, overlay: dict, accent_color: tuple):
+    """Panel de escucha dibujado DENTRO de la pantalla del móvil.
+
+    Capturar el momento exacto en que la app escucha sale mal en una foto
+    estática: se ve una pantalla normal con un botón pulsado. Componerlo aquí
+    permite enseñar a la vez lo que se dice, la onda de audio y el gasto que
+    queda registrado, que es lo que hay que entender de un vistazo (#39).
+    """
+    phrase = overlay.get("phrase", "")
+    result_name = overlay.get("result_name", "")
+    result_amount = overlay.get("result_amount", "")
+    result_emoji = overlay.get("result_emoji", "⛽")
+
+    panel_margin = 28
+    panel_w = DEVICE_SCREEN_W - panel_margin * 2
+    panel_h = 470
+    panel_x = SCREEN_X + panel_margin
+    panel_y = SCREEN_Y + DEVICE_SCREEN_H - panel_h - 60
+
+    # Oscurece la captura de debajo para que el panel destaque
+    dim = Image.new("RGBA", (DEVICE_SCREEN_W, DEVICE_SCREEN_H), (0, 0, 0, 0))
+    ImageDraw.Draw(dim).rectangle(
+        [(0, DEVICE_SCREEN_H - panel_h - 200), (DEVICE_SCREEN_W, DEVICE_SCREEN_H)],
+        fill=(8, 4, 18, 190),
+    )
+    dim = dim.filter(ImageFilter.GaussianBlur(radius=30))
+    canvas.alpha_composite(dim, dest=(SCREEN_X, SCREEN_Y))
+
+    # Cuerpo del panel
+    panel = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    pd = ImageDraw.Draw(panel)
+    pd.rounded_rectangle(
+        [(panel_x, panel_y), (panel_x + panel_w, panel_y + panel_h)],
+        radius=44, fill=(22, 12, 42, 235),
+        outline=(255, 255, 255, 46), width=2,
+    )
+    canvas.alpha_composite(panel)
+
+    # Onda de audio: alturas fijas (no aleatorias) para que el resultado sea
+    # reproducible entre ejecuciones.
+    wave_heights = [22, 46, 78, 120, 158, 190, 150, 96, 132, 176, 205, 168,
+                    124, 88, 142, 184, 146, 102, 64, 38, 92, 138, 84, 44, 26]
+    bar_w = 9
+    gap = 13
+    total_w = len(wave_heights) * bar_w + (len(wave_heights) - 1) * gap
+    wave_cx = panel_x + (panel_w - total_w) // 2
+    wave_mid = panel_y + 118
+
+    wd = ImageDraw.Draw(canvas)
+    for i, h in enumerate(wave_heights):
+        x = wave_cx + i * (bar_w + gap)
+        # Las barras del centro más opacas: simula el foco de la voz
+        distance = abs(i - len(wave_heights) / 2) / (len(wave_heights) / 2)
+        alpha = int(255 - distance * 120)
+        wd.rounded_rectangle(
+            [(x, wave_mid - h // 2), (x + bar_w, wave_mid + h // 2)],
+            radius=bar_w // 2,
+            fill=accent_color + (alpha,),
+        )
+
+    # Frase transcrita
+    font_phrase = load_font(50, "Semibold", rounded=True)
+    bb = font_phrase.getbbox(phrase)
+    px = panel_x + (panel_w - (bb[2] - bb[0])) // 2
+    py = panel_y + 196
+    wd.text((px, py), phrase, fill=(255, 255, 255), font=font_phrase)
+
+    # Tarjeta del gasto ya registrado
+    card_h = 128
+    card_x = panel_x + 34
+    card_y = panel_y + panel_h - card_h - 36
+    card_w = panel_w - 68
+
+    card = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    cd = ImageDraw.Draw(card)
+    cd.rounded_rectangle(
+        [(card_x, card_y), (card_x + card_w, card_y + card_h)],
+        radius=30, fill=(255, 255, 255, 26),
+        outline=(255, 255, 255, 60), width=2,
+    )
+    canvas.alpha_composite(card)
+
+    emoji_img = render_emoji(result_emoji, 64)
+    canvas.alpha_composite(emoji_img, dest=(card_x + 30, card_y + (card_h - 64) // 2))
+
+    font_name = load_font(42, "Semibold")
+    font_amount = load_font(46, "Bold", rounded=True)
+    cdraw = ImageDraw.Draw(canvas)
+    cdraw.text((card_x + 118, card_y + 40), result_name, fill=(255, 255, 255), font=font_name)
+
+    amount_bb = font_amount.getbbox(result_amount)
+    cdraw.text(
+        (card_x + card_w - (amount_bb[2] - amount_bb[0]) - 34, card_y + 38),
+        result_amount, fill=accent_color, font=font_amount,
+    )
+
+
 # ─── Pipeline ─────────────────────────────────────────────────────────
 
 def generate_mockup(config: dict, input_dir: Path, output_dir: Path) -> bool:
@@ -566,6 +668,9 @@ def generate_mockup(config: dict, input_dir: Path, output_dir: Path) -> bool:
     add_grain(canvas, amount=7)
 
     canvas = draw_device(canvas, screenshot, config["shadow_tint"])
+
+    if config.get("voice_overlay"):
+        draw_voice_overlay(canvas, config["voice_overlay"], config["accent_color"])
 
     draw_headline_with_accent(
         canvas,
@@ -586,10 +691,10 @@ def generate_mockup(config: dict, input_dir: Path, output_dir: Path) -> bool:
 # ilegible justo donde más cuenta (#39).
 TRANSLATIONS = {
     "en-US": {
-        "mockup_01_home.png": {
-            "headline": "Just say it\nand it's logged",
-            "accent": "say",
-            "subtitle": "By voice or with Siri, in 5 seconds",
+        "mockup_04_home.png": {
+            "headline": "Your money,\nunder control",
+            "accent": "control",
+            "subtitle": "Everything at a glance",
             "chip_text": '"20 on petrol"',
         },
         "mockup_02_chart.png": {
@@ -604,11 +709,16 @@ TRANSLATIONS = {
             "subtitle": "Goals, pots and budgets",
             "chip_text": "+$200",
         },
-        "mockup_04_voice.png": {
+        "mockup_01_voice.png": {
             "headline": '"20 dollars\non gas"',
             "accent": "gas",
-            "subtitle": "Say it and the expense logs itself",
-            "chip_text": "Listening…",
+            "subtitle": "By voice or with Siri, nothing to type",
+            "voice_overlay": {
+                "phrase": '"20 dollars on gas"',
+                "result_name": "Gas",
+                "result_amount": "$20.00",
+                "result_emoji": "⛽",
+            },
         },
         "mockup_05_siri.png": {
             "headline": "Without\nopening the app",
@@ -634,6 +744,8 @@ def localized(config: dict, locale: str) -> dict:
         chip = dict(config["chip"])
         chip["text"] = strings["chip_text"]
         localized_config["chip"] = chip
+    if "voice_overlay" in strings:
+        localized_config["voice_overlay"] = strings["voice_overlay"]
     return localized_config
 
 
