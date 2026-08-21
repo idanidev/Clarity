@@ -3,7 +3,12 @@
 
 import Foundation
 
-enum Formatters {
+/// `nonisolated` a propósito: son utilidades puras que también se usan al
+/// decodificar en contextos que no son el main actor (documentos de Firestore,
+/// App Intents, el widget). Los formatters se configuran una vez y nunca se
+/// mutan, que es la condición bajo la que Apple los da por seguros en uso
+/// concurrente.
+nonisolated enum Formatters {
     
     // MARK: - Currency
     

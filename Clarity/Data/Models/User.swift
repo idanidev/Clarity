@@ -4,7 +4,7 @@
 import FirebaseFirestore
 import Foundation
 
-struct UserDocument: Codable, Sendable {
+nonisolated struct UserDocument: Codable, Sendable {
     // Core fields
     var email: String?
     var displayName: String?
@@ -122,13 +122,13 @@ struct UserDocument: Codable, Sendable {
 }
 
 // MARK: - Goals (from your Firebase)
-struct Goals: Codable, Sendable {
+nonisolated struct Goals: Codable, Sendable {
     var monthlySavingsGoal: Double?
     var totalSavingsGoal: Double?
     var categoryGoals: [String: Double]?
 }
 
-struct UserSettings: Codable, Sendable {
+nonisolated struct UserSettings: Codable, Sendable {
     var language: String?  // "es" | "en"
     var theme: String?  // "dark" | "light" | "system"
     var currency: String?  // "EUR" | "USD"
@@ -144,7 +144,7 @@ struct UserSettings: Codable, Sendable {
         isSalaryRecurring: false)
 }
 
-struct AIQuotas: Codable, Sendable {
+nonisolated struct AIQuotas: Codable, Sendable {
     var monthly: Int  // 3 (free), 50 (pro), 999999 (premium/admin)
     var used: Int
     var remaining: Int
@@ -154,7 +154,7 @@ struct AIQuotas: Codable, Sendable {
     static let free = AIQuotas(monthly: 3, used: 0, remaining: 3, unlimited: false, resetDate: "")
 }
 
-struct Subscription: Codable, Sendable {
+nonisolated struct Subscription: Codable, Sendable {
     let plan: String  // "free" | "pro" | "premium"
     let status: String  // "active" | "canceled" | "past_due"
     let stripeCustomerId: String?
@@ -206,6 +206,6 @@ enum SubscriptionPlan: String, CaseIterable {
 }
 
 // Helper para skip-decode en arrays tolerantes (decode-or-discard).
-private struct EmptyDecodable: Decodable {
+private nonisolated struct EmptyDecodable: Decodable {
     init(from decoder: Decoder) throws {}
 }

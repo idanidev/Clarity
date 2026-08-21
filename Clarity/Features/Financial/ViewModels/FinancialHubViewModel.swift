@@ -37,6 +37,9 @@ class FinancialHubViewModel {
     private let getExpensesUseCase: GetExpensesUseCase
     private let recurringRepository: RecurringExpenseRepository
 
+    // El deinit es nonisolated y necesita leerlo para dar de baja el observer.
+    // El compilador sugiere quitar el (unsafe), pero sin él no compila: `nonisolated`
+    // no se admite en propiedades almacenadas mutables.
     nonisolated(unsafe) private var expenseObserver: Any?
 
     init() {

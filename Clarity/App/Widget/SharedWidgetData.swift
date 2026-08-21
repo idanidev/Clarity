@@ -7,7 +7,7 @@ import Foundation
 
 // MARK: - Shared Widget Data Model
 
-struct SharedWidgetData: Codable, Sendable {
+nonisolated struct SharedWidgetData: Codable, Sendable {
     let todayTotal: Double
     let weekTotal: Double
     let monthTotal: Double
@@ -68,7 +68,7 @@ struct SharedWidgetData: Codable, Sendable {
 
 // MARK: - Widget Expense
 
-struct WidgetExpense: Codable, Identifiable, Sendable {
+nonisolated struct WidgetExpense: Codable, Identifiable, Sendable {
     let id: UUID
     let name: String
     let amount: Double
@@ -92,7 +92,7 @@ struct WidgetExpense: Codable, Identifiable, Sendable {
 
 // MARK: - Widget Category Stat
 
-struct WidgetCategoryStat: Codable, Identifiable, Sendable, Hashable {
+nonisolated struct WidgetCategoryStat: Codable, Identifiable, Sendable, Hashable {
     let id: String
     let name: String
     let emoji: String

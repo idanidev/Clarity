@@ -3,7 +3,7 @@
 
 import Foundation
 
-struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
+nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
     var id: UUID = UUID()
     var name: String?
     var createdAt: Date? = Date()
