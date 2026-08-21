@@ -11,14 +11,9 @@ struct OnboardingView: View {
     let onComplete: () -> Void
 
     @State private var page = 0
-    @State private var income: String = ""
-    @State private var isRecurring: Bool = true
     @State private var isSaving = false
 
     private let totalFeaturePages = 2 // welcome + voice + add-expense tutorial
-    private var parsedIncome: Double {
-        Double(income.replacingOccurrences(of: ",", with: ".")) ?? 0
-    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -30,8 +25,7 @@ struct OnboardingView: View {
                 WelcomePage().tag(0)
                 VoiceSiriPage().tag(1)
                 AddExpenseTutorialPage().tag(2)
-                IncomePage(income: $income, isRecurring: $isRecurring).tag(3)
-                DonePage(income: parsedIncome, isRecurring: isRecurring).tag(4)
+                DonePage().tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .task { trackOnboardingStart() }
@@ -80,22 +74,12 @@ struct OnboardingView: View {
                 // Secondary action
                 if page == 0 {
                     Button("Saltar") {
-                        // A la pantalla final, NO a la de la nómina: quien salta
-                        // el tutorial es justo quien menos ganas tiene de que le
-                        // pregunten cuánto cobra (#47).
-                        withAnimation { page = totalFeaturePages + 2 }
+                        withAnimation { page = totalFeaturePages + 1 }
                     }
                     .font(.subheadline)
                     .foregroundStyle(Color.white.opacity(0.5))
                     .padding(.top, 14)
-                } else if page == totalFeaturePages + 1 {
-                    // income page: skip
-                    Button("Configurar después") {
-                        withAnimation { page += 1 }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(Color.white.opacity(0.5))
-                    .padding(.top, 14)
+
                 } else {
                     Color.clear.frame(height: 14 + 20) // consistent spacing
                 }
@@ -111,9 +95,8 @@ struct OnboardingView: View {
     private var ctaLabel: String {
         switch page {
         case 0:           return "Descubrir Clarity"
-        case totalFeaturePages: return "Configurar ahora"
-        case totalFeaturePages + 1: return "Continuar"
-        case totalFeaturePages + 2: return "Empezar"
+        case totalFeaturePages: return "Casi está"
+        case totalFeaturePages + 1: return "Empezar"
         default:          return "Siguiente"
         }
     }
@@ -123,7 +106,7 @@ struct OnboardingView: View {
     }
 
     private func nextPage() {
-        if page == totalFeaturePages + 2 {
+        if page == totalFeaturePages + 1 {
             saveAndComplete()
         } else {
             page += 1
@@ -149,24 +132,13 @@ struct OnboardingView: View {
 
         Task {
             do {
-                var updates: [String: Any] = [
-                    "settings.isSalaryRecurring": isRecurring,
+                // La nómina ya no se pide aquí (#49): el asistente de presupuesto
+                // salta solo al entrar en Metas, que es donde hace falta.
+                try await Firestore.firestore().collection("users").document(userId).updateData([
                     "updatedAt": FieldValue.serverTimestamp()
-                ]
-                if parsedIncome > 0 { updates["income"] = parsedIncome }
-                try await Firestore.firestore().collection("users").document(userId).updateData(updates)
-                if parsedIncome > 0 && isRecurring {
-                    let cal = Calendar.current
-                    let budget = MonthlyBudget(
-                        userId: userId,
-                        year: cal.component(.year, from: Date()),
-                        month: cal.component(.month, from: Date()),
-                        income: parsedIncome
-                    )
-                    try await DependencyContainer.shared.financialService.saveMonthlyBudget(budget)
-                }
+                ])
                 await UserDataManager.shared.loadUserData()
-            } catch { /* configurar después */ }
+            } catch { /* el onboarding se marca igual en local */ }
             await MainActor.run {
                 guard isSaving else { return } // ya completado por safety net
                 isSaving = false
@@ -944,136 +916,7 @@ private struct AIAdvisorPage: View {
 
 // MARK: - Page 5: Income Setup
 
-private struct IncomePage: View {
-    @Binding var income: String
-    @Binding var isRecurring: Bool
-    @State private var appear = false
-
-    private var parsedIncome: Double {
-        Double(income.replacingOccurrences(of: ",", with: ".")) ?? 0
-    }
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#10B981").opacity(0.12))
-                .frame(width: 300)
-                .blur(radius: 80)
-                .offset(x: -50, y: -100)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 80)
-
-                VStack(spacing: 8) {
-                    Text("💰")
-                        .font(.system(size: 52))
-                        .scaleEffect(appear ? 1 : 0.4)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: appear)
-
-                    Text("¿Cuánto ganas\nal mes?")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .offset(y: appear ? 0 : 20)
-                        .opacity(appear ? 1 : 0)
-                        .animation(.spring(response: 0.5).delay(0.1), value: appear)
-
-                    Text("Salario neto. Solo tú lo ves — nunca se comparte.")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.45))
-                        .multilineTextAlignment(.center)
-                        .offset(y: appear ? 0 : 15)
-                        .opacity(appear ? 1 : 0)
-                        .animation(.spring(response: 0.5).delay(0.15), value: appear)
-                }
-                .padding(.horizontal, 28)
-
-                Spacer().frame(height: 40)
-
-                // Income field
-                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                    TextField("0", text: $income)
-                        .font(.system(size: 56, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.5)
-                        .frame(maxWidth: 210)
-                        .tint(Color(hex: "#8B5CF6"))
-                        .keyboardDoneToolbar()
-                    Text("€")
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.5))
-                }
-                .padding(.horizontal, 32)
-                .padding(.vertical, 20)
-                .background(Color.white.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
-                .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(
-                    parsedIncome > 0 ? Color(hex: "#8B5CF6").opacity(0.6) : Color.white.opacity(0.1), lineWidth: 1.5))
-                .padding(.horizontal, 28)
-                .offset(y: appear ? 0 : 20)
-                .opacity(appear ? 1 : 0)
-                .animation(.spring(response: 0.5).delay(0.2), value: appear)
-
-                if parsedIncome > 0 {
-                    Text("≈ \(String(format: "%.0f", parsedIncome / 30))€/día · \(String(format: "%.0f", parsedIncome * 12))€/año")
-                        .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.35))
-                        .padding(.top, 8)
-                        .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                Spacer().frame(height: 28)
-
-                // Recurring toggle
-                Button {
-                    withAnimation(.spring(response: 0.3)) { isRecurring.toggle() }
-                    HapticManager.shared.selection()
-                } label: {
-                    HStack(spacing: 14) {
-                        Image(systemName: isRecurring ? "checkmark.circle.fill" : "circle")
-                            .font(.title3)
-                            .foregroundStyle(isRecurring ? Color(hex: "#8B5CF6") : Color.white.opacity(0.3))
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Cobro fijo mensual")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.white)
-                            Text("Clarity crea el presupuesto solo cada mes")
-                                .font(.caption)
-                                .foregroundStyle(Color.white.opacity(0.45))
-                        }
-                        Spacer()
-                    }
-                    .padding(16)
-                    .background(isRecurring ? Color(hex: "#8B5CF6").opacity(0.1) : Color.white.opacity(0.04))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(
-                        isRecurring ? Color(hex: "#8B5CF6").opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1))
-                }
-                .padding(.horizontal, 28)
-                .opacity(appear ? 1 : 0)
-                .animation(.easeOut(duration: 0.4).delay(0.35), value: appear)
-
-                Spacer()
-                Spacer()
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6)) { appear = true }
-        }
-    }
-}
-
-// MARK: - Page 6: Done
-
 private struct DonePage: View {
-    let income: Double
-    let isRecurring: Bool
     @State private var appear = false
     @State private var showRows = false
 
@@ -1150,22 +993,14 @@ private struct DonePage: View {
                 // Summary
                 if showRows {
                     VStack(spacing: 0) {
-                        if income > 0 {
-                            summaryRow(icon: "eurosign.circle.fill", color: Color(hex: "#10B981"),
-                                       text: "Salario \(String(format: "%.0f", income))€/mes configurado")
-                            Divider().background(Color.white.opacity(0.06))
-                        }
-                        summaryRow(
-                            icon: isRecurring ? "arrow.clockwise.circle.fill" : "hand.tap.fill",
-                            color: Color(hex: "#8B5CF6"),
-                            text: isRecurring ? "Presupuesto automático activo" : "Presupuesto manual"
-                        )
-                        Divider().background(Color.white.opacity(0.06))
                         summaryRow(icon: "waveform.circle.fill", color: Color(hex: "#3B82F6"),
                                    text: "Gastos por voz listos")
                         Divider().background(Color.white.opacity(0.06))
-                        summaryRow(icon: "sparkles", color: Color(hex: "#EC4899"),
-                                   text: "Clara, tu IA financiera, activa")
+                        summaryRow(icon: "arrow.clockwise.circle.fill", color: Color(hex: "#8B5CF6"),
+                                   text: "Gastos fijos en automático")
+                        Divider().background(Color.white.opacity(0.06))
+                        summaryRow(icon: "chart.pie.fill", color: Color(hex: "#10B981"),
+                                   text: "Tu presupuesto, cuando lo necesites")
                     }
                     .background(Color.white.opacity(0.05))
                     .clipShape(RoundedRectangle(cornerRadius: 18))
