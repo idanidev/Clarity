@@ -45,6 +45,8 @@ final class SwiftDataExpenseDataSource {
             model.paymentMethod = expense.paymentMethod
             model.notes = expense.notes
             model.goalId = expense.goalId
+            model.isShared = expense.isShared
+            model.debtorsData = ExpenseModel.encodeDebtors(expense.debtors)
             model.updatedAt = Date()
 
             try context.save()
@@ -70,6 +72,8 @@ final class SwiftDataExpenseDataSource {
              model.paymentMethod = expense.paymentMethod
              model.notes = expense.notes
              model.goalId = expense.goalId
+             model.isShared = expense.isShared
+             model.debtorsData = ExpenseModel.encodeDebtors(expense.debtors)
              model.updatedAt = Date()
          } else {
              // Insert

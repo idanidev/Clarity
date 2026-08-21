@@ -241,6 +241,7 @@ class FinancialHubViewModel {
         do {
             try await service.saveMonthlyBudget(budget)
             currentBudget = budget
+            AnalyticsService.shared.track(.budgetConfigured(source: "income_update"))
         } catch {
             self.error = error.safeUserMessage
         }
@@ -269,6 +270,7 @@ class FinancialHubViewModel {
             try await service.updateExtraIncomes(budget.extraIncomes, year: currentYear, month: currentMonth)
             // Notifica al resto de pantallas (Home → recalcula ahorro con el nuevo total).
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            AnalyticsService.shared.track(.extraIncomeLogged)
             HapticManager.shared.playSuccess()
             FeedbackManager.shared.show(
                 .success,

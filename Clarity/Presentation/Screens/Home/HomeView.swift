@@ -19,6 +19,7 @@ struct HomeView: View {
     @State private var showAddExpense = false  // New state for manual entry
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
     @State private var speechManager = SpeechRecognitionManager.shared
+    @State private var notificationPermissions = NotificationPermissionCoordinator.shared
 
     @MainActor
     init(viewModel: HomeViewModel? = nil) {
@@ -29,10 +30,27 @@ struct HomeView: View {
     var body: some View {
         mainContent
             .background(DesignTokens.Colors.background)
+            .trackScreen("home")
             .navigationTitle("")
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await viewModel.refresh() }
-            .task { await viewModel.loadIfNeeded() }
+            .task {
+                await viewModel.loadIfNeeded()
+                await notificationPermissions.evaluate()
+            }
+            .alert(
+                "¿Te recordamos apuntar los gastos?",
+                isPresented: $notificationPermissions.shouldShowPrompt
+            ) {
+                Button("Sí, avísame") {
+                    Task { await notificationPermissions.acceptAndRequest() }
+                }
+                Button("Ahora no", role: .cancel) {
+                    notificationPermissions.decline()
+                }
+            } message: {
+                Text("Un aviso al día para que no se te acumulen. Puedes cambiar la hora o quitarlo en Ajustes.")
+            }
             // Cambios desde otras pantallas (ingreso extra en Ajustes, nómina, huchas…)
             // → recarga SOLO el budget para que el ahorro quede al día. NO recarga la
             // lista de gastos: borrar un gasto postea esta misma notificación y recargar
@@ -150,6 +168,8 @@ struct HomeView: View {
                 .padding(.horizontal, DesignTokens.Spacing.sm)
                 .padding(.top, 12)  // Espacio limpio desde navigation bar
 
+                StreakBadge()
+
                 // Month Selector — hidden while searching (search spans all months)
                 if viewModel.searchText.isEmpty {
                     MonthSelectorView(currentMonth: $viewModel.selectedMonth) {
@@ -263,7 +283,8 @@ struct HomeView: View {
                     // Donut Chart - Comparativa ahora en tab VS de ExpensesView
                     DonutChartView(
                         categoryData: buildChartData(),
-                        total: filteredTotal
+                        total: filteredTotal,
+                        expenses: viewModel.filteredExpenses
                     )
                 }
             }

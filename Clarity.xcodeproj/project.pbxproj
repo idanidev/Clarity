@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		33098D862F074B03007C66E5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 33098D852F074B03007C66E5 /* FirebaseAuth */; };
+		33FA00022F1100000000FA02 /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 33FA00012F1100000000FA01 /* FirebaseAnalytics */; };
 		33098D882F074B1E007C66E5 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 33098D872F074B1E007C66E5 /* FirebaseFirestore */; };
 		33098D8A2F074B42007C66E5 /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 33098D892F074B42007C66E5 /* FirebaseFunctions */; };
 		33A0001B2F1000000000GS01 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 33A0001A2F1000000000GS01 /* GoogleSignIn */; };
@@ -121,6 +122,7 @@
 				33098D882F074B1E007C66E5 /* FirebaseFirestore in Frameworks */,
 				33A0001B2F1000000000GS01 /* GoogleSignIn in Frameworks */,
 				33A0001D2F1000000000GS02 /* GoogleSignInSwift in Frameworks */,
+				33FA00022F1100000000FA02 /* FirebaseAnalytics in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -209,6 +211,7 @@
 				33098D892F074B42007C66E5 /* FirebaseFunctions */,
 				33A0001A2F1000000000GS01 /* GoogleSignIn */,
 				33A0001C2F1000000000GS02 /* GoogleSignInSwift */,
+				33FA00012F1100000000FA01 /* FirebaseAnalytics */,
 			);
 			productName = Clarity;
 			productReference = 33098CE82F074631007C66E5 /* Clarity.app */;
@@ -549,7 +552,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Clarity/Clarity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -567,7 +570,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.idanidev.clarity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -587,7 +590,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = Clarity/Clarity.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -605,7 +608,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.idanidev.clarity;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -623,11 +626,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = idanidev.ClarityTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -645,11 +648,11 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = idanidev.ClarityTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -666,10 +669,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = idanidev.ClarityUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -686,10 +689,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = idanidev.ClarityUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -709,7 +712,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = ClarityWidget/ClarityWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ClarityWidget/Info.plist;
@@ -721,7 +724,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.idanidev.clarity.ClarityWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -741,7 +744,7 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = ClarityWidget/ClarityWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEVELOPMENT_TEAM = AXK73U74AC;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ClarityWidget/Info.plist;
@@ -753,7 +756,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.0.8;
+				MARKETING_VERSION = 2.0.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.idanidev.clarity.ClarityWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -836,6 +839,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		33FA00012F1100000000FA01 /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 33098D812F074796007C66E5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
 		33098D852F074B03007C66E5 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 33098D812F074796007C66E5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;

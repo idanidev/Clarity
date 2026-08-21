@@ -20,6 +20,10 @@ class AddExpenseViewModel {
     var paymentMethod: PaymentMethod = .tarjeta
     var notes: String = ""
 
+    // MARK: - Modo regalo (#37)
+    var isShared: Bool = false
+    var debtors: [Debtor] = []
+
     /// Importe parseado del texto. Acepta coma o punto como decimal Y sumas/restas
     /// de importes ("1,50 + 2" = una fanta y unas patatas → 3,50).
     var amount: Double? {
@@ -151,6 +155,7 @@ class AddExpenseViewModel {
                 self.category = pref.category
                 self.subcategory = pref.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
                 return
             }
 
@@ -160,6 +165,7 @@ class AddExpenseViewModel {
                 self.category = subMatch.category
                 self.subcategory = subMatch.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
                 return
             }
 
@@ -169,6 +175,7 @@ class AddExpenseViewModel {
                 self.category = historyMatch.category
                 self.subcategory = historyMatch.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
                 return
             }
 
@@ -181,6 +188,7 @@ class AddExpenseViewModel {
                 self.category = resolved.category
                 self.subcategory = resolved.subcategory
                 self.wasAutoCategorized = true
+                self.suggestedCategory = self.category
             }
         }
     }
@@ -270,6 +278,25 @@ class AddExpenseViewModel {
         return nil
     }
 
+    /// Categoría que puso el autocategorizador, para saber si el usuario la
+    /// corrige (#41). Si corrige mucho, es que no acierta.
+    @ObservationIgnored private var suggestedCategory: String?
+
+    /// Llamar cuando el usuario elige categoría a mano en el formulario.
+    /// No mira `wasAutoCategorized`: el picker lo pone a false al abrirse, así
+    /// que para entonces ya se habría perdido la señal.
+    func categoryPickedByUser(_ newCategory: String) {
+        guard let suggested = suggestedCategory,
+              !suggested.isEmpty,
+              !newCategory.isEmpty,
+              suggested != newCategory
+        else { return }
+
+        AnalyticsService.shared.track(
+            .aiCategoryCorrected(from: suggested, to: newCategory))
+        suggestedCategory = nil
+    }
+
     // MARK: - State
     var isLoading = false
     var showError = false
@@ -300,7 +327,9 @@ class AddExpenseViewModel {
             subcategory: subcategory,
             date: dateString,
             paymentMethod: paymentMethod.rawValue,
-            notes: notes.isEmpty ? nil : notes
+            notes: notes.isEmpty ? nil : notes,
+            isShared: isShared ? true : nil,
+            debtors: isShared ? cleanedDebtors : nil
         )
 
         do {
@@ -313,6 +342,12 @@ class AddExpenseViewModel {
             HapticManager.shared.expenseAdded()
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(.success, title: "Gasto añadido", message: "\(name) guardado correctamente")
+
+            // Momento de éxito: cuenta para la racha y es cuando tiene sentido
+            // pedir la reseña (el manager decide si toca o no).
+            StreakManager.shared.registerExpenseLogged()
+            ReviewRequestManager.shared.requestReviewIfAppropriate()
+            AnalyticsService.shared.track(.expenseAdded(method: .manual, category: category))
         } catch {
             errorMessage = error.safeUserMessage
             showError = true
@@ -320,6 +355,12 @@ class AddExpenseViewModel {
         }
 
         isLoading = false
+    }
+
+    /// Descarta filas en blanco (el stepper crea "Persona N" con importe 0 y el
+    /// usuario puede no llegar a rellenarlas).
+    private var cleanedDebtors: [Debtor] {
+        debtors.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty || $0.amount > 0 }
     }
 
     func reset() {
@@ -330,6 +371,9 @@ class AddExpenseViewModel {
         date = Date()
         paymentMethod = .tarjeta
         notes = ""
+        isShared = false
+        debtors = []
         wasAutoCategorized = false
+        suggestedCategory = nil
     }
 }

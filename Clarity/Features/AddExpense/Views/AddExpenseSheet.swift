@@ -6,6 +6,9 @@ import SwiftUI
 
 enum AddExpField: Hashable {
     case amount, name, notes
+    /// Campos del modo regalo, uno por deudor (#37).
+    case debtorName(String)
+    case debtorAmount(String)
 }
 
 struct AddExpenseSheet: View {
@@ -22,6 +25,12 @@ struct AddExpenseSheet: View {
                 AddExpCategorySection(viewModel: viewModel)
                 AddExpDateSection(viewModel: viewModel)
                 AddExpPaymentSection(viewModel: viewModel)
+                GiftModeSection(
+                    isShared: $viewModel.isShared,
+                    debtors: $viewModel.debtors,
+                    totalAmount: viewModel.amount ?? 0,
+                    focused: $focused
+                )
                 AddExpNotesSection(viewModel: viewModel, focused: $focused)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -173,6 +182,9 @@ private struct AddExpCategorySection: View {
                 )
                 .onAppear {
                     viewModel.wasAutoCategorized = false
+                }
+                .onChange(of: viewModel.category) { _, newValue in
+                    viewModel.categoryPickedByUser(newValue)
                 }
             } label: {
                 HStack {

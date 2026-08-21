@@ -80,8 +80,19 @@ class VoiceExpenseCoordinator {
 
     // MARK: - Actions
 
+    /// Se pone a true cuando el plan gratuito agota los registros por voz del
+    /// mes, para que la vista abra el paywall.
+    var showVoicePaywall = false
+
     func startRecording(speechManager: SpeechRecognitionManager) {
         guard state == .idle else { return }
+
+        guard ProLimits.canUseVoice else {
+            showVoicePaywall = true
+            AnalyticsService.shared.track(.paywallShown(reason: "voice_limit"))
+            HapticManager.shared.warning()
+            return
+        }
 
         Task {
             if !speechManager.checkPermissions() {
@@ -236,6 +247,13 @@ class VoiceExpenseCoordinator {
             Task { await viewModel.refresh() }
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             NotificationsView.cancelInactivityReminder()
+
+            // Gasto por voz: también alimenta la racha y puede disparar la reseña.
+            StreakManager.shared.registerExpenseLogged()
+            ReviewRequestManager.shared.requestReviewIfAppropriate()
+            ProLimits.registerVoiceExpense()
+            AnalyticsService.shared.track(
+                .expenseAdded(method: .voice, category: expense.category))
 
             await MainActor.run {
                 state = .success

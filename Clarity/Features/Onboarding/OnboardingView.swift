@@ -34,6 +34,7 @@ struct OnboardingView: View {
                 DonePage(income: parsedIncome, isRecurring: isRecurring).tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
+            .task { trackOnboardingStart() }
             .animation(.easeInOut(duration: 0.35), value: page)
             .ignoresSafeArea()
 
@@ -114,6 +115,10 @@ struct OnboardingView: View {
         }
     }
 
+    private func trackOnboardingStart() {
+        AnalyticsService.shared.track(.onboardingStarted)
+    }
+
     private func nextPage() {
         if page == totalFeaturePages + 2 {
             saveAndComplete()
@@ -123,6 +128,7 @@ struct OnboardingView: View {
     }
 
     private func saveAndComplete() {
+        AnalyticsService.shared.track(.onboardingCompleted)
         guard let userId = Auth.auth().currentUser?.uid else { onComplete(); return }
         isSaving = true
 

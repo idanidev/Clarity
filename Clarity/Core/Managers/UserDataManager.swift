@@ -376,13 +376,29 @@ final class UserDataManager {
     }
     
     // MARK: - Onboarding Sincronization
+
+    /// Espejo local del flag remoto. Sin cobertura el documento de usuario puede
+    /// no llegar y la app enseñaba el onboarding a alguien que ya lo hizo (#32).
+    private static func onboardingCacheKey(_ userId: String) -> String {
+        "onboarding.completed.\(userId)"
+    }
+
     var hasCompletedOnboarding: Bool {
-        userDocument?.settings?.hasCompletedOnboarding ?? false
+        if let remote = userDocument?.settings?.hasCompletedOnboarding {
+            if remote, let userId {
+                UserDefaults.standard.set(true, forKey: Self.onboardingCacheKey(userId))
+            }
+            return remote
+        }
+        guard let userId else { return false }
+        return UserDefaults.standard.bool(forKey: Self.onboardingCacheKey(userId))
     }
     
     func completeOnboarding() {
         guard !hasCompletedOnboarding else { return }
         guard let userId = userId else { return }
+
+        UserDefaults.standard.set(true, forKey: Self.onboardingCacheKey(userId))
 
         // 1. Update Local — crear documento mínimo si no existe (race con fetchUserDocument)
         if var document = userDocument {
@@ -423,6 +439,7 @@ final class UserDataManager {
         guard var document = userDocument, let userId = userId else { return }
         var newSettings = document.settings ?? .default
         newSettings.hasCompletedOnboarding = false
+        UserDefaults.standard.set(false, forKey: Self.onboardingCacheKey(userId))
         document.settings = newSettings
         self.userDocument = document
         Task {

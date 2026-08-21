@@ -119,6 +119,9 @@ struct MainTabView: View {
             .presentationDetents([.large])
             .presentationBackground(.regularMaterial)
         }
+        .sheet(isPresented: $voiceCoordinator.showVoicePaywall) {
+            ProPaywallView(reason: .voiceLimit)
+        }
         .alert(
             "Error de Voz",
             isPresented: Binding(

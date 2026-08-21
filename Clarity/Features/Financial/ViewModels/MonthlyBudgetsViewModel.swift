@@ -101,6 +101,7 @@ class MonthlyBudgetsViewModel {
         )
 
         await saveBudget(budget)
+        AnalyticsService.shared.track(.budgetConfigured(source: "month_created"))
     }
 
     // MARK: - Helpers

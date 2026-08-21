@@ -19,6 +19,11 @@ final class ExpenseModel {
     var isRecurring: Bool?
     var goalId: String?
 
+    /// Modo regalo (#37). Los deudores se guardan serializados en JSON para que
+    /// añadirlos sea una migración ligera sobre el store existente.
+    var isShared: Bool?
+    var debtorsData: Data?
+
     // Audit
     var createdAt: Date
     var updatedAt: Date
@@ -36,6 +41,8 @@ final class ExpenseModel {
         recurringId: String? = nil,
         isRecurring: Bool? = nil,
         goalId: String? = nil,
+        isShared: Bool? = nil,
+        debtorsData: Data? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
     ) {
@@ -51,6 +58,8 @@ final class ExpenseModel {
         self.recurringId = recurringId
         self.isRecurring = isRecurring
         self.goalId = goalId
+        self.isShared = isShared
+        self.debtorsData = debtorsData
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -73,7 +82,9 @@ extension ExpenseModel {
             isDeductible: domain.isDeductible ?? false,
             recurringId: domain.recurringId,
             isRecurring: domain.isRecurring,
-            goalId: domain.goalId
+            goalId: domain.goalId,
+            isShared: domain.isShared,
+            debtorsData: ExpenseModel.encodeDebtors(domain.debtors)
         )
     }
 
@@ -90,7 +101,19 @@ extension ExpenseModel {
             isDeductible: self.isDeductible,
             isRecurring: self.isRecurring,
             recurringId: self.recurringId,
-            goalId: self.goalId
+            goalId: self.goalId,
+            isShared: self.isShared,
+            debtors: ExpenseModel.decodeDebtors(self.debtorsData)
         )
+    }
+
+    static func encodeDebtors(_ debtors: [Debtor]?) -> Data? {
+        guard let debtors, !debtors.isEmpty else { return nil }
+        return try? JSONEncoder().encode(debtors)
+    }
+
+    static func decodeDebtors(_ data: Data?) -> [Debtor]? {
+        guard let data else { return nil }
+        return try? JSONDecoder().decode([Debtor].self, from: data)
     }
 }

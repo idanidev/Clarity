@@ -3,6 +3,7 @@
 
 import Foundation
 import FirebaseFirestore
+import OSLog
 import FirebaseAuth
 
 actor FirebaseExpenseDataSource {
@@ -97,7 +98,14 @@ actor FirebaseExpenseDataSource {
         let customId = expense.id.flatMap { $0.isEmpty ? nil : $0 }
         let docRef = customId.map { collection.document($0) } ?? collection.document()
         let dto = ExpenseDTO(from: expense)
-        try await docRef.setData(from: dto)
+
+        // Escritura optimista: la variante con completion aplica y persiste el
+        // documento en la cache local de Firestore de inmediato y reintenta
+        // contra el servidor cuando vuelve la red. Esperar el ack del servidor
+        // (`try await setData`) dejaba el guardado colgado sin cobertura (#32).
+        try docRef.setData(from: dto) { error in
+            if let error { Self.logRemoteWriteFailure("addExpense", error) }
+        }
         return docRef.documentID
     }
 
@@ -106,13 +114,24 @@ actor FirebaseExpenseDataSource {
             throw URLError(.userAuthenticationRequired)
         }
         let dto = ExpenseDTO(from: expense)
-        try await collection.document(id).setData(from: dto, merge: true)
+        try collection.document(id).setData(from: dto, merge: true) { error in
+            if let error { Self.logRemoteWriteFailure("updateExpense", error) }
+        }
     }
     
     func deleteExpense(id: String) async throws {
         guard let collection = expensesCollection else {
             throw URLError(.userAuthenticationRequired)
         }
-        try await collection.document(id).delete()
+        collection.document(id).delete { error in
+            if let error { Self.logRemoteWriteFailure("deleteExpense", error) }
+        }
+    }
+
+    /// El ack del servidor llega fuera del `await`: los fallos reales (permisos,
+    /// documento inexistente) solo se ven aquí.
+    private nonisolated static func logRemoteWriteFailure(_ operation: String, _ error: Error) {
+        Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "FirebaseExpenseDS")
+            .error("\(operation) no llegó al servidor: \(error.localizedDescription)")
     }
 }

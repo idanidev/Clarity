@@ -12,6 +12,9 @@ struct SettingsView: View {
     @State private var isDeletingAccount = false
     @State private var deleteError: String?
     @AppStorage("app.theme") private var selectedTheme: String = "system"
+    @State private var subscriptions = SubscriptionManager.shared
+    @State private var showPaywall = false
+    @State private var paywallReason: ProPaywallView.PaywallReason = .general
 
     var body: some View {
         NavigationStack {
@@ -29,6 +32,33 @@ struct SettingsView: View {
                 }
 
                 // Ingresos — sueldo + historial + ingresos extra del mes
+                if ProConfig.paywallEnabled {
+                    Section {
+                        Button {
+                            paywallReason = .general
+                            showPaywall = true
+                        } label: {
+                            HStack {
+                                Label(
+                                    subscriptions.isPro ? "Clarity Pro activo" : "Hazte Pro",
+                                    systemImage: subscriptions.isPro ? "checkmark.seal.fill" : "sparkles"
+                                )
+                                .foregroundStyle(subscriptions.isPro ? Color.success : Color.clarityPrimary)
+                                Spacer()
+                                if !subscriptions.isPro {
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption)
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+                    } footer: {
+                        if !subscriptions.isPro {
+                            Text("Voz sin límites, categorías a medida y exportación.")
+                        }
+                    }
+                }
+
                 Section("Ingresos") {
                     NavigationLink {
                         SalarySettingsStandaloneView()
@@ -45,6 +75,12 @@ struct SettingsView: View {
 
                 // Gastos — configuración relacionada con gastos
                 Section("Gastos") {
+                    NavigationLink {
+                        DebtsView()
+                    } label: {
+                        Label("Te deben", systemImage: "gift")
+                    }
+
                     NavigationLink {
                         CategoriesManagementView()
                     } label: {
@@ -87,9 +123,20 @@ struct SettingsView: View {
                     }
 
                     Button {
-                        exportCSV()
+                        if subscriptions.isPro {
+                            exportCSV()
+                        } else {
+                            paywallReason = .export
+                            showPaywall = true
+                        }
                     } label: {
-                        Label("Exportar a CSV", systemImage: "square.and.arrow.up")
+                        HStack {
+                            Label("Exportar a CSV", systemImage: "square.and.arrow.up")
+                            if !subscriptions.isPro {
+                                Spacer()
+                                ProBadge()
+                            }
+                        }
                     }
 
                     // Temporalmente deshabilitado — pendiente para siguientes versiones
@@ -168,7 +215,11 @@ struct SettingsView: View {
                     Text("Esta acción es permanente. Se borrarán todos tus gastos, presupuestos y datos asociados.")
                 }
             }
+            .trackScreen("ajustes")
             .navigationTitle(String(localized: "settings.navigationTitle", defaultValue: "Ajustes"))
+            .sheet(isPresented: $showPaywall) {
+                ProPaywallView(reason: paywallReason)
+            }
             .alert(
                 String(localized: "settings.logout.confirmation", defaultValue: "¿Cerrar sesión?"),
                 isPresented: $showLogoutConfirm

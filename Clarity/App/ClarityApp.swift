@@ -51,6 +51,12 @@ struct ClarityApp: App {
             .task {
                 authViewModel.startListening()
 
+                // Retención: cuenta la sesión (para pedir reseña más adelante) y
+                // recalcula la racha por si se ha saltado algún día.
+                ReviewRequestManager.shared.registerSession()
+                StreakManager.shared.refreshOnLaunch()
+                AnalyticsBootstrap.configure()
+
                 // Integridad del dispositivo (solo en Release)
                 #if !DEBUG
                 let report = DeviceIntegrity.check()
@@ -75,10 +81,12 @@ struct ClarityApp: App {
                 switch newPhase {
                 case .background:
                     lockManager.sceneDidEnterBackground()
+                    AnalyticsService.shared.endSession()
                 case .inactive:
                     break
                 case .active:
                     lockManager.sceneWillEnterForeground()
+                    AnalyticsService.shared.resumeSessionIfNeeded()
                     UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                     Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
                     removeStaleNotifications()
@@ -92,7 +100,15 @@ struct ClarityApp: App {
     /// Elimina notificaciones locales con IDs antiguos (daily reminders, etc.)
     private func removeStaleNotifications() {
         let center = UNUserNotificationCenter.current()
-        let validIDs: Set<String> = ["clarity.weekly.reminder", "clarity.endofmonth.reminder"]
+        // Ojo: cualquier ID que la app programe debe estar aquí, o se borra en el
+        // siguiente foreground (los de inactividad y el diario se perdían así).
+        let validIDs: Set<String> = [
+            "clarity.weekly.reminder",
+            "clarity.endofmonth.reminder",
+            "clarity.daily.reminder",
+            "clarity.inactivity.reminder",
+            "clarity.inactivity.recurring",
+        ]
         center.getPendingNotificationRequests { requests in
             let stale = requests.map(\.identifier).filter { !validIDs.contains($0) }
             if !stale.isEmpty {

@@ -8,6 +8,7 @@ struct EditExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: EditExpenseViewModel
     @State private var speechManager = SpeechRecognitionManager.shared
+    @FocusState private var focused: AddExpField?
     let onSave: () -> Void
 
     init(expense: Expense, onSave: @escaping () -> Void) {
@@ -23,6 +24,12 @@ struct EditExpenseSheet: View {
                 categorySection
                 dateSection
                 paymentSection
+                GiftModeSection(
+                    isShared: $viewModel.isShared,
+                    debtors: $viewModel.debtors,
+                    totalAmount: viewModel.amount ?? 0,
+                    focused: $focused
+                )
                 notesSection
             }
             .navigationTitle("Editar Gasto")

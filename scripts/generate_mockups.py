@@ -96,9 +96,11 @@ MOCKUPS = [
     {
         "input": "1_home.png",
         "output": "mockup_01_home.png",
-        "headline": "Controla tus gastos\nal instante",
-        "accent": "gastos",
-        "subtitle": "Todo tu dinero, en un vistazo",
+        # Primera captura = el diferenciador (voz + Siri). Ninguna de las apps
+        # grandes de gastos lo ofrece y es el motivo nº1 de abandono (#39).
+        "headline": "Di lo que gastas\ny queda apuntado",
+        "accent": "Di",
+        "subtitle": "Por voz o con Siri, en 5 segundos",
         "bg_base": (28, 12, 52),
         "blobs": [
             (0.18, 0.18, 900, (155, 80, 255), 160),
@@ -107,14 +109,14 @@ MOCKUPS = [
         ],
         "accent_color": (210, 170, 255),
         "shadow_tint": (120, 60, 230),
-        "chip": {"emoji": "💸", "text": "Gasto añadido", "side": "left"},
+        "chip": {"emoji": "🎙️", "text": "\"20 € en gasolina\"", "side": "left"},
     },
     {
         "input": "2_chart.png",
         "output": "mockup_02_chart.png",
-        "headline": "Visualiza en qué\ngastas más",
-        "accent": "más",
-        "subtitle": "Gráficos claros e intuitivos",
+        "headline": "Mira en qué\nse te va el mes",
+        "accent": "mes",
+        "subtitle": "Pincha una categoría y ve el detalle",
         "bg_base": (8, 18, 55),
         "blobs": [
             (0.22, 0.20, 900, (60, 140, 255), 160),
@@ -144,9 +146,9 @@ MOCKUPS = [
     {
         "input": "4_ai.png",
         "output": "mockup_04_ai.png",
-        "headline": "Tu asesora\nfinanciera con IA",
-        "accent": "IA",
-        "subtitle": "Clara analiza tus datos reales",
+        "headline": "Tus gastos fijos,\nen piloto automático",
+        "accent": "automático",
+        "subtitle": "Suscripciones y recibos, sin olvidos",
         "bg_base": (30, 10, 60),
         "blobs": [
             (0.20, 0.18, 900, (190, 100, 255), 160),
@@ -155,7 +157,7 @@ MOCKUPS = [
         ],
         "accent_color": (220, 175, 255),
         "shadow_tint": (150, 70, 240),
-        "chip": {"emoji": "✨", "text": "Clara IA", "side": "left"},
+        "chip": {"emoji": "🔁", "text": "Cada mes solo", "side": "left"},
     },
 ]
 
@@ -562,32 +564,88 @@ def generate_mockup(config: dict, input_dir: Path, output_dir: Path) -> bool:
     return True
 
 
+# Traducciones de los textos de cada mockup. La ficha está en ES e EN, así que
+# las capturas también: subir las españolas a la ficha inglesa deja el gancho
+# ilegible justo donde más cuenta (#39).
+TRANSLATIONS = {
+    "en-US": {
+        "mockup_01_home.png": {
+            "headline": "Just say it\nand it's logged",
+            "accent": "say",
+            "subtitle": "By voice or with Siri, in 5 seconds",
+            "chip_text": '"20 on petrol"',
+        },
+        "mockup_02_chart.png": {
+            "headline": "See where\nyour month goes",
+            "accent": "month",
+            "subtitle": "Tap a category for the full breakdown",
+            "chip_text": "Categories",
+        },
+        "mockup_03_goals.png": {
+            "headline": "Save with\nclear goals",
+            "accent": "goals",
+            "subtitle": "Goals, pots and budgets",
+            "chip_text": "+£200",
+        },
+        "mockup_04_ai.png": {
+            "headline": "Fixed costs,\non autopilot",
+            "accent": "autopilot",
+            "subtitle": "Subscriptions and bills, never missed",
+            "chip_text": "Every month",
+        },
+    }
+}
+
+
+def localized(config: dict, locale: str) -> dict:
+    """Config con los textos del idioma pedido. `es-ES` es el original."""
+    strings = TRANSLATIONS.get(locale, {}).get(config["output"])
+    if not strings:
+        return config
+
+    localized_config = dict(config)
+    localized_config["headline"] = strings["headline"]
+    localized_config["accent"] = strings["accent"]
+    localized_config["subtitle"] = strings["subtitle"]
+    if "chip" in config and "chip_text" in strings:
+        chip = dict(config["chip"])
+        chip["text"] = strings["chip_text"]
+        localized_config["chip"] = chip
+    return localized_config
+
+
 def main():
     base = Path(__file__).resolve().parent.parent / "marketing" / "screenshots"
     input_dir = base / "input"
-    output_dir = base / "output"
 
-    input_dir.mkdir(parents=True, exist_ok=True)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    locales = sys.argv[1:] or ["es-ES"]
 
     print("App Store Mockup Generator — Premium v2")
     print(f"  Input:  {input_dir}")
-    print(f"  Output: {output_dir}")
     print(f"  Canvas: {W}x{H} (6.7\")")
+    print(f"  Locales: {', '.join(locales)}")
     print()
 
+    input_dir.mkdir(parents=True, exist_ok=True)
     inputs = list(input_dir.glob("*.png")) + list(input_dir.glob("*.jpg"))
     if not inputs:
         print("No screenshots found. Place them in:")
         print(f"  {input_dir}")
         sys.exit(1)
 
-    generated = 0
-    for config in MOCKUPS:
-        if generate_mockup(config, input_dir, output_dir):
-            generated += 1
+    total = 0
+    for locale in locales:
+        # El español mantiene la carpeta histórica; el resto va a output/<locale>.
+        output_dir = base / "output" if locale == "es-ES" else base / "output" / locale
+        output_dir.mkdir(parents=True, exist_ok=True)
+        print(f"[{locale}] → {output_dir}")
 
-    print(f"\nDone: {generated}/{len(MOCKUPS)} mockups generated")
+        for config in MOCKUPS:
+            if generate_mockup(localized(config, locale), input_dir, output_dir):
+                total += 1
+        print()
+
+    print(f"Done: {total} mockups generated")
 
 
 if __name__ == "__main__":

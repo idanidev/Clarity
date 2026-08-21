@@ -17,6 +17,10 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
     let isRecurring: Bool?
     let recurringId: String?
     let goalId: String?
+    /// Modo regalo: el gasto lo adelantas tú y hay gente que te lo devuelve (#37).
+    let isShared: Bool?
+    /// Quién te debe y cuánto. nil/vacío = gasto normal.
+    let debtors: [Debtor]?
     let createdAt: Date?
     let updatedAt: Date?
     
@@ -34,6 +38,8 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
             && lhs.isRecurring == rhs.isRecurring
             && lhs.recurringId == rhs.recurringId
             && lhs.goalId == rhs.goalId
+            && lhs.isShared == rhs.isShared
+            && lhs.debtors == rhs.debtors
     }
 
     func hash(into hasher: inout Hasher) {
@@ -49,6 +55,23 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
         id ?? "\(name)_\(date)_\(amount)"
     }
     
+    /// Gasto en modo regalo con alguien que aún no ha devuelto su parte.
+    var hasPendingDebt: Bool {
+        (isShared ?? false) && (debtors?.hasPending ?? false)
+    }
+
+    /// Lo que te queda por recuperar de este gasto.
+    var pendingDebtAmount: Double {
+        guard isShared ?? false else { return 0 }
+        return debtors?.pendingAmount ?? 0
+    }
+
+    /// Lo que realmente te cuesta a ti una vez te devuelvan lo pendiente.
+    var netAmount: Double {
+        guard isShared ?? false, let debtors else { return amount }
+        return max(0, amount - debtors.reduce(0) { $0 + $1.amount })
+    }
+
     // Computed property for Date
     var dateAsDate: Date {
         Formatters.date(from: date) ?? Date.distantPast
@@ -68,6 +91,8 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
         isRecurring: Bool? = nil,
         recurringId: String? = nil,
         goalId: String? = nil,
+        isShared: Bool? = nil,
+        debtors: [Debtor]? = nil,
         createdAt: Date? = nil,
         updatedAt: Date? = nil
     ) {
@@ -84,6 +109,8 @@ struct Expense: Identifiable, Hashable, Sendable, Codable {
         self.isRecurring = isRecurring
         self.recurringId = recurringId
         self.goalId = goalId
+        self.isShared = isShared
+        self.debtors = debtors
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }

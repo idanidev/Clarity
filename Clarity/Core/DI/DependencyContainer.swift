@@ -65,4 +65,11 @@ final class DependencyContainer {
             addExpenseUseCase: makeAddExpenseUseCase()
         )
     }
+
+    func makeDebtsViewModel() -> DebtsViewModel {
+        DebtsViewModel(
+            getExpensesUseCase: makeGetExpensesUseCase(),
+            repository: expenseRepository
+        )
+    }
 }

@@ -58,6 +58,16 @@ struct ChartsView: View {
                                     selectedName: $vm.selectedCategoryName
                                 )
                                 .padding(.horizontal, Spacing.md)
+
+                                // Al seleccionar categoría: tabla con métricas,
+                                // subcategorías y todos sus gastos (#38).
+                                if let selected = vm.selectedCategoryStat {
+                                    CategoryBreakdownTable(
+                                        category: selected.asChartData,
+                                        expenses: vm.filteredExpenses
+                                    )
+                                    .id(selected.id)
+                                }
                             }
 
                             Color.clear.frame(height: 80)
@@ -67,6 +77,7 @@ struct ChartsView: View {
                     .scrollIndicators(.hidden)
                 }
             }
+            .trackScreen("analisis")
             .navigationTitle("Análisis")
             .navigationBarTitleDisplayMode(.large)
             .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
