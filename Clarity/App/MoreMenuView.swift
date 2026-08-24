@@ -14,7 +14,7 @@ struct MoreMenuView: View {
                 }
                 
                 NavigationLink {
-                    AIDisabledView()
+                    ClaraGateView()
                 } label: {
                     Label("IA", systemImage: "sparkles")
                 }
