@@ -485,10 +485,10 @@ struct ExpenseFilterSheet: View {
             }
             
             Button {
-                Task {
-                    UserDataManager.shared.saveDefaultFilter(preset)
-                    await MainActor.run { HapticManager.shared.notification(.success) }
-                }
+                // El haptic era incondicional: sonaba a éxito aunque no se
+                // hubiera guardado nada.
+                let guardado = UserDataManager.shared.saveDefaultFilter(preset)
+                HapticManager.shared.notification(guardado ? .success : .error)
             } label: {
                 Label(isSavedDefault ? "Predeterminado" : "Marcar como predeterminado", systemImage: "star")
             }

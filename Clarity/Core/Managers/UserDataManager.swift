@@ -344,35 +344,70 @@ final class UserDataManager {
         }
     }
     
-    func saveDefaultFilter(_ filter: ExpenseFilter) {
-        guard var document = userDocument, let userId = userId else { return }
-        
-        // 1. Update Local
+    /// Clave del espejo local del filtro predeterminado, por usuario.
+    private static func defaultFilterCacheKey(_ userId: String) -> String {
+        "filters.default.\(userId)"
+    }
+
+    /// Marca un filtro como predeterminado.
+    ///
+    /// Devuelve `false` si no se ha podido guardar en ningún sitio, para que la
+    /// vista no cante un éxito que no ha ocurrido.
+    @discardableResult
+    func saveDefaultFilter(_ filter: ExpenseFilter) -> Bool {
+        guard let userId = userId else { return false }
+
+        // 1. Espejo local, PRIMERO y siempre. Antes esto solo vivía en memoria y
+        //    en Firestore: si el write remoto no llegaba —sin cobertura, o
+        //    cerrando la app al momento— la estrella desaparecía al reabrir.
+        //    Los filtros guardados ya tenían esta red (backup_saved_filters);
+        //    el predeterminado no.
+        if let encoded = try? JSONEncoder().encode(filter) {
+            UserDefaults.standard.set(encoded, forKey: Self.defaultFilterCacheKey(userId))
+        }
+
+        // 2. Estado en memoria. Si el documento aún no ha cargado se crea uno
+        //    mínimo en vez de rendirse: antes el `guard` salía sin guardar nada
+        //    y sin decírselo a nadie.
+        var document = userDocument ?? UserDocument(
+            email: Auth.auth().currentUser?.email ?? "",
+            displayName: Auth.auth().currentUser?.displayName ?? "",
+            role: "user",
+            createdAt: Date(),
+            settings: .default
+        )
         var newSettings = document.settings ?? .default
         newSettings.defaultFilter = filter
         document.settings = newSettings
         self.userDocument = document
-        
-        HapticManager.shared.notification(.success)
-        
-        // 2. Update Remote
+
+        // 3. Remoto. Con `setData(merge:)` sobre la clave anidada, no con
+        //    `updateData(["settings": ...])`: escribir el mapa entero pisa los
+        //    hermanos que no estén en memoria, que es justo cómo se perdieron
+        //    las categorías en su día.
         Task {
             do {
-                // Encode filter to dictionary
-                let data = try Firestore.Encoder().encode(newSettings)
+                let data = try Firestore.Encoder().encode(filter)
                 try await Firestore.firestore()
                     .collection("users")
                     .document(userId)
-                    .updateData(["settings": data]) // Update full settings object to ensure filter structure matches
+                    .setData(["settings": ["defaultFilter": data]], merge: true)
                 logger.info("✅ Default filter saved")
             } catch {
                 logger.error("❌ Error saving default filter: \(error.localizedDescription)")
             }
         }
+        return true
     }
-    
+
+    /// Filtro predeterminado. Si el documento remoto todavía no ha cargado o no
+    /// lo trae, se recupera del espejo local.
     var defaultFilter: ExpenseFilter? {
-        userDocument?.settings?.defaultFilter
+        if let remote = userDocument?.settings?.defaultFilter { return remote }
+        guard let userId,
+              let data = UserDefaults.standard.data(forKey: Self.defaultFilterCacheKey(userId))
+        else { return nil }
+        return try? JSONDecoder().decode(ExpenseFilter.self, from: data)
     }
     
     // MARK: - Onboarding Sincronization
