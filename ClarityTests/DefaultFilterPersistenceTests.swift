@@ -107,3 +107,72 @@ struct DefaultFilterPersistenceTests {
         #expect(sut.defaultFilter?.name == "Remoto")
     }
 }
+
+// MARK: - Regresión: el documento llega después que la Home
+//
+// Al soltar la interfaz antes de leer el documento de usuario (#32), la Home
+// pasó a construirse sin filtros disponibles. Marcar entonces "ya aplicado"
+// dejaba el filtro predeterminado sin aplicar durante toda la sesión, y el
+// usuario lo veía como que se le borraba al cerrar la app.
+
+@Suite("Filtro predeterminado · carga tardía", .serialized)
+@MainActor
+struct DefaultFilterLateLoadTests {
+
+    private static let uid = "test-uid-tardio"
+
+    private func makeManager() -> UserDataManager {
+        UserDefaults.standard.removeObject(forKey: "filters.default.\(Self.uid)")
+        return UserDataManager(service: MockUserDataStore(), userIdProvider: { Self.uid })
+    }
+
+    private func filtroGuardado(_ nombre: String) -> ExpenseFilter {
+        ExpenseFilter(name: nombre, dateRange: .lastMonth)
+    }
+
+    @Test("al llegar el documento se siembra el espejo local")
+    func seedsMirrorWhenDocumentArrives() {
+        let manager = makeManager()
+        #expect(manager.defaultFilter == nil)
+
+        var settings = UserSettings.default
+        settings.defaultFilter = filtroGuardado("Del servidor")
+        manager.setUserDocument(UserDocument(
+            email: "a@b.c", displayName: "Test", role: "user",
+            createdAt: Date(), settings: settings))
+
+        // Una instancia nueva —equivalente a reabrir la app— ya lo tiene sin
+        // depender de que Firestore conteste a tiempo.
+        let trasReiniciar = UserDataManager(
+            service: MockUserDataStore(), userIdProvider: { Self.uid })
+        #expect(trasReiniciar.defaultFilter?.name == "Del servidor")
+    }
+
+    @Test("el espejo local no se pisa con lo que traiga el documento")
+    func doesNotOverwriteExistingMirror() {
+        let manager = makeManager()
+        manager.saveDefaultFilter(filtroGuardado("Elegido hace un momento"))
+
+        var settings = UserSettings.default
+        settings.defaultFilter = filtroGuardado("Versión vieja del servidor")
+        manager.setUserDocument(UserDocument(
+            email: "a@b.c", displayName: "Test", role: "user",
+            createdAt: Date(), settings: settings))
+
+        let trasReiniciar = UserDataManager(
+            service: MockUserDataStore(), userIdProvider: { Self.uid })
+        #expect(trasReiniciar.defaultFilter?.name == "Elegido hace un momento")
+    }
+
+    @Test("sin filtro predeterminado no se siembra nada")
+    func noMirrorWhenNoDefault() {
+        let manager = makeManager()
+        manager.setUserDocument(UserDocument(
+            email: "a@b.c", displayName: "Test", role: "user",
+            createdAt: Date(), settings: .default))
+
+        let trasReiniciar = UserDataManager(
+            service: MockUserDataStore(), userIdProvider: { Self.uid })
+        #expect(trasReiniciar.defaultFilter == nil)
+    }
+}

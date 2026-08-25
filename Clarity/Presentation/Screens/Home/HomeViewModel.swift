@@ -298,6 +298,29 @@ final class HomeViewModel {
 
     /// Called from .task — skips if data already loaded to avoid re-fetching on tab switch.
     /// Use refresh() or loadExpenses() directly for forced reloads.
+    /// Aplica el filtro predeterminado, si lo hay y no se ha aplicado ya.
+    ///
+    /// Ojo con el caso "todavía no lo sé": si el documento del usuario aún no ha
+    /// llegado, no hay filtro que leer, pero tampoco se puede concluir que no
+    /// exista. Darlo por resuelto ahí es lo que hacía que el filtro se perdiera
+    /// en cada arranque desde que la interfaz dejó de esperar a la carga (#32).
+    func applyDefaultFilterIfNeeded() {
+        guard !hasAppliedDefaultFilter else { return }
+
+        if let defaultFilter = UserDataManager.shared.defaultFilter {
+            logger.debug("🏠 ✅ Applying Default Filter: '\(defaultFilter.name ?? "Unnamed")'")
+            self.selectedFilter = defaultFilter
+            self.hasAppliedDefaultFilter = true
+            applyFilters()
+        } else if UserDataManager.shared.userDocument != nil {
+            // Documento cargado y sin filtro predeterminado: no hay nada que
+            // aplicar y no hace falta volver a mirar.
+            logger.debug("🏠 ⚠️ No default filter found, using 'Este mes'")
+            self.hasAppliedDefaultFilter = true
+        }
+        // Sin documento todavía: se deja pendiente y se reintenta cuando llegue.
+    }
+
     func loadIfNeeded() async {
         guard !hasLoaded else { return }
         await loadExpenses()
@@ -315,17 +338,7 @@ final class HomeViewModel {
         // Refresh income
         self.income = UserDataManager.shared.userDocument?.income ?? 0
 
-        // SIEMPRE intentar aplicar filtro predeterminado si existe y aún no se ha aplicado
-        if !hasAppliedDefaultFilter {
-            if let defaultFilter = UserDataManager.shared.defaultFilter {
-                logger.debug("🏠 ✅ Applying Default Filter: '\(defaultFilter.name ?? "Unnamed")'")
-                self.selectedFilter = defaultFilter
-                self.hasAppliedDefaultFilter = true
-            } else {
-                logger.debug("🏠 ⚠️ No default filter found, using 'Este mes'")
-                self.hasAppliedDefaultFilter = true
-            }
-        }
+        applyDefaultFilterIfNeeded()
 
         if !silent && allExpenses.isEmpty {
             state = .loading

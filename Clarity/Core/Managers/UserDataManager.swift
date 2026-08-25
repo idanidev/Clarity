@@ -313,6 +313,18 @@ final class UserDataManager {
     
     func setUserDocument(_ document: UserDocument) {
         self.userDocument = document
+
+        // Siembra el espejo local del filtro predeterminado. Quien lo marcó con
+        // una versión anterior no tenía copia local; a partir de la primera
+        // carga con documento, la tiene, y ya no depende de que Firestore
+        // conteste antes que la Home.
+        if let userId, let filtro = document.settings?.defaultFilter,
+           UserDefaults.standard.data(forKey: Self.defaultFilterCacheKey(userId)) == nil,
+           let encoded = try? JSONEncoder().encode(filtro) {
+            UserDefaults.standard.set(encoded, forKey: Self.defaultFilterCacheKey(userId))
+        }
+
+        NotificationCenter.default.post(name: .userDocumentDidLoad, object: nil)
     }
     
     var privacyMode: Bool {

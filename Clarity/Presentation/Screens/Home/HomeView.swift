@@ -58,6 +58,10 @@ struct HomeView: View {
             .onReceive(NotificationCenter.default.publisher(for: .expenseDidChange)) { _ in
                 Task { await viewModel.reloadBudget() }
             }
+            // El documento puede llegar después de que la Home ya esté montada.
+            .onReceive(NotificationCenter.default.publisher(for: .userDocumentDidLoad)) { _ in
+                viewModel.applyDefaultFilterIfNeeded()
+            }
             .sheet(item: $expenseToEdit) { expense in
                 EditExpenseSheet(expense: expense) {
                     Task { await viewModel.refresh() }

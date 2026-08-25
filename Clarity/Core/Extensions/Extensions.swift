@@ -8,6 +8,12 @@ import SwiftUI
 extension Notification.Name {
     /// Posted whenever an expense is added, edited, or deleted.
     static let expenseDidChange = Notification.Name("expenseDidChange")
+
+    /// El documento del usuario ha llegado de Firestore. Lo que dependa de él
+    /// —filtros guardados, filtro predeterminado, nómina— puede aplicarse ya.
+    /// Desde que la interfaz no espera a la carga para arrancar (#32), la Home
+    /// puede construirse antes de que exista.
+    static let userDocumentDidLoad = Notification.Name("userDocumentDidLoad")
 }
 
 // MARK: - Error Security Extensions
