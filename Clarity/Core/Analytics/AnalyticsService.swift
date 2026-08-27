@@ -28,6 +28,11 @@ enum AnalyticsEvent: Sendable {
     case budgetLimitReached(percent: Int)
     case extraIncomeLogged
     case supportContacted(reason: String)
+    /// Se ha visto la pantalla de "aún no hay gastos". Sin esto no se puede
+    /// saber cuánta gente la ve y cuánta sale de ahí apuntando algo, que es el
+    /// escalón donde hoy se pierden 7 de cada 21 (#40).
+    case emptyStateShown
+    case emptyStateAction(method: String)
 
     var name: String {
         switch self {
@@ -47,6 +52,8 @@ enum AnalyticsEvent: Sendable {
         case .budgetLimitReached: return "limite_alcanzado"
         case .extraIncomeLogged: return "ingreso_extra_registrado"
         case .supportContacted: return "contacto_soporte"
+        case .emptyStateShown: return "sin_gastos_visto"
+        case .emptyStateAction: return "sin_gastos_accion"
         }
     }
 
@@ -75,6 +82,8 @@ enum AnalyticsEvent: Sendable {
             return ["percent": String(percent)]
         case .supportContacted(let reason):
             return ["reason": reason]
+        case .emptyStateAction(let method):
+            return ["method": method]
         default:
             return [:]
         }

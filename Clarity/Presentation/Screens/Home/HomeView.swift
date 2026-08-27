@@ -420,16 +420,54 @@ struct HomeView: View {
         ExpenseListSkeleton()
     }
 
+    /// Qué se encuentra alguien que acaba de terminar el onboarding.
+    ///
+    /// Antes era un cartel sin salida: "Sin gastos · Añade tu primer gasto del
+    /// mes". El usuario venía de que le prometieran que basta con hablar, y
+    /// aterrizaba en una frase que le decía qué hacer pero no cómo: el micro
+    /// está flotando en otra esquina y el `+` en la barra. De 21 que terminaban
+    /// el onboarding, solo 14 llegaban a apuntar algo.
+    ///
+    /// Ahora la promesa y la acción están en el mismo sitio.
     private var emptyStateView: some View {
-        VStack {
+        VStack(spacing: DesignTokens.Spacing.md) {
             Spacer()
-            ContentUnavailableView {
-                Label("Sin gastos", systemImage: "wallet.bifold")
-            } description: {
-                Text("Añade tu primer gasto del mes")
+
+            Image(systemName: "wallet.bifold")
+                .font(.system(size: 52, weight: .light))
+                .foregroundStyle(Color.clarityPrimary.opacity(0.7))
+
+            Text("Aún no has apuntado nada")
+                .scaledFont(size: 20, weight: .semibold)
+
+            Text("Di «20 euros en gasolina» y aparecerá aquí, ya clasificado.")
+                .scaledFont(size: 15)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DesignTokens.Spacing.xl)
+
+            // El mismo gesto que enseña el onboarding, aquí y grande.
+            SimpleVoiceButton(
+                viewModel: viewModel,
+                categories: UserDataManager.shared.categories
+            )
+            .scaleEffect(1.15)
+            .padding(.top, DesignTokens.Spacing.xs)
+
+            Button {
+                AnalyticsService.shared.track(.emptyStateAction(method: "manual"))
+                showAddExpense = true
+                HapticManager.shared.selection()
+            } label: {
+                Text("Prefiero escribirlo")
+                    .scaledFont(size: 14, weight: .medium)
+                    .foregroundStyle(Color.clarityPrimary)
             }
+            .padding(.top, DesignTokens.Spacing.xxs)
+
             Spacer()
         }
+        .task { AnalyticsService.shared.track(.emptyStateShown) }
     }
 
     private func errorView(_ msg: String) -> some View {
