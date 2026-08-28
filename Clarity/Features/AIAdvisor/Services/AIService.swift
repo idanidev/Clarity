@@ -65,8 +65,6 @@ enum AIServiceError: LocalizedError {
     case networkError(String)
     case invalidResponse
     case rateLimited
-    /// El modelo del dispositivo no se puede usar (hardware, ajustes o versión).
-    case modeloNoDisponible(String)
 
     var errorDescription: String? {
         switch self {
@@ -74,7 +72,6 @@ enum AIServiceError: LocalizedError {
         case .networkError(let m): return "Error de red: \(m)"
         case .invalidResponse:     return "Respuesta inválida del servidor"
         case .rateLimited:         return "Límite de uso alcanzado. Cambiando proveedor..."
-        case .modeloNoDisponible(let m): return m
         }
     }
 }
@@ -214,14 +211,6 @@ class AIServiceManager {
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "AIService")
     private let gemini = GeminiProvider()
     private let groq = GroqProvider()
-    private let apple = AppleProvider()
-
-    /// ¿Puede Clara funcionar dentro del iPhone? Es lo que decide si la pestaña
-    /// enseña el asistente o la pantalla de "aquí no".
-    var puedeUsarModeloLocal: Bool { AppleProvider.disponibilidad.esUsable }
-
-    /// Motivo por el que no puede, para contárselo al usuario.
-    var motivoModeloLocal: String { AppleProvider.disponibilidad.mensaje }
 
     /// Preferred provider key stored in UserDefaults ("gemini" | "groq")
     var preferredProviderKey: String {
@@ -229,19 +218,12 @@ class AIServiceManager {
         set { UserDefaults.standard.set(newValue, forKey: "ai_preferred_provider") }
     }
 
-    /// El modelo del dispositivo manda cuando está disponible: no tiene clave
-    /// que caduque ni cuota que se agote, y los datos financieros no salen del
-    /// iPhone. Los remotos quedan para quien haya puesto su propia clave.
     var currentProvider: AIServiceProvider {
-        if AppleProvider.disponibilidad.esUsable { return apple }
-        return preferredProviderKey == "groq" ? groq : gemini
+        preferredProviderKey == "groq" ? groq : gemini
     }
 
     private var fallbackProvider: AIServiceProvider {
-        if AppleProvider.disponibilidad.esUsable {
-            return preferredProviderKey == "groq" ? groq : gemini
-        }
-        return preferredProviderKey == "groq" ? gemini : groq
+        preferredProviderKey == "groq" ? gemini : groq
     }
 
     var currentProviderName: String { currentProvider.name }

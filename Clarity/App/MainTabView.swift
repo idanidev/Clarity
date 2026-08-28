@@ -79,7 +79,7 @@ struct MainTabView: View {
                     .tag(2)
 
                 NavigationStack {
-                    ClaraGateView()
+                    AIDisabledView()
                 }
                 .tabItem {
                     Image(systemName: "sparkles")
