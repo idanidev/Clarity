@@ -1,17 +1,16 @@
 Novedades de esta versión:
 
-MODO REGALO: APUNTA QUIÉN TE DEBE
-¿Pagas tú y luego te devuelven? Marca el gasto como "modo regalo" y apunta a las personas por nombre, o di simplemente cuántas sois y reparte a partes iguales de un toque. En Ajustes → Gastos → "Te deben" ves lo que te queda por cobrar y marcas a cada uno cuando te paga.
+TUS FILTROS SE QUEDAN COMO LOS DEJASTE
+El filtro que marcabas como predeterminado con la estrella se perdía al cerrar la app y volvías a "Este mes". Ya no: se guarda también en el propio iPhone, así que aguanta aunque no haya cobertura al arrancar.
 
-DETALLE DE CATEGORÍA EN TABLA
-Al pinchar una categoría en los gráficos ahora se abre una tabla completa: total, número de gastos, media, desglose por subcategoría y la lista de todos los gastos, ordenable por importe, fecha o concepto.
+EMPEZAR CUESTA MENOS
+El onboarding ya no te pregunta cuánto cobras antes de dejarte usar la app. Si quieres presupuesto, se configura desde Metas, que es donde sirve para algo. Y al terminar ya no aterrizas en una pantalla vacía: tienes el micro delante para apuntar tu primer gasto hablando.
 
-FUNCIONA SIN COBERTURA
-La app ya no se queda colgada al abrirla sin conexión: arranca con los datos que tiene guardados y los gastos que apuntes se sincronizan solos cuando vuelve la red.
-
-EL HÁBITO, RESUELTO
-Recordatorio diario a la hora que elijas (y que no molesta si ya has apuntado algo ese día) y una racha que cuenta los días seguidos que registras gastos.
+AHORA PUEDES ESCRIBIRME
+En Ajustes hay dos botones nuevos, "Algo no funciona" y "Tengo una idea". Escriben directamente a la persona que hace la app, que soy yo. Si algo te chirría, cuéntamelo.
 
 CORRECCIONES
-• Los recordatorios de inactividad ya no se borraban solos al abrir la app.
-• Guardar un gasto sin conexión ya no deja el botón bloqueado.
+• La app ya no se quedaba colgada al abrirla sin conexión.
+• Guardar un gasto sin cobertura ya no dejaba el botón bloqueado.
+• Los recordatorios de inactividad se borraban solos al abrir la app.
+• El botón "Saltar" del onboarding llevaba justo a la pantalla que querías saltarte.

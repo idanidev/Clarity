@@ -1,17 +1,16 @@
 What's new in this version:
 
-GIFT MODE: TRACK WHO OWES YOU
-Fronted the money? Flag the expense as "gift mode" and add people by name, or just say how many of you there are and split it evenly with one tap. Settings → Expenses → "Te deben" shows what you're still owed and lets you tick each person off when they pay.
+YOUR FILTERS STAY PUT
+The filter you starred as your default was lost when you closed the app, and you were back to "This month". Not any more: it's now saved on the phone itself, so it survives even with no signal at launch.
 
-CATEGORY DETAIL AS A TABLE
-Tapping a category in the charts now opens a full table: total, number of expenses, average, breakdown by subcategory and every expense, sortable by amount, date or name.
+GETTING STARTED TAKES LESS
+Onboarding no longer asks what you earn before letting you use the app. If you want a budget, you set it up from Goals, where it actually does something. And when you finish you no longer land on an empty screen: the mic is right there to log your first expense out loud.
 
-WORKS WITHOUT SIGNAL
-The app no longer hangs when you open it offline: it starts with the data it already has, and anything you log syncs on its own once you're back online.
-
-THE HABIT, SOLVED
-A daily reminder at the time you choose (skipped if you already logged something that day) and a streak counting the days in a row you log expenses.
+YOU CAN WRITE TO ME NOW
+Settings has two new buttons, "Something's broken" and "I have an idea". They write straight to the person who makes the app, which is me. If something bothers you, tell me.
 
 FIXES
-• Inactivity reminders were being deleted on app launch.
-• Saving an expense offline no longer leaves the button stuck.
+• The app no longer hung when opened with no connection.
+• Saving an expense offline no longer left the button stuck.
+• Inactivity reminders were deleting themselves on launch.
+• The onboarding "Skip" button led straight to the screen you were skipping.
