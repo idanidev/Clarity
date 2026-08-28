@@ -1,0 +1,1 @@
+Say "20 euros on gas" and it is logged and categorised. No forms, no spreadsheets: the expense app you use by talking.

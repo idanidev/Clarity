@@ -1,0 +1,17 @@
+Novedades de esta versión:
+
+MODO REGALO: APUNTA QUIÉN TE DEBE
+¿Pagas tú y luego te devuelven? Marca el gasto como "modo regalo" y apunta a las personas por nombre, o di simplemente cuántas sois y reparte a partes iguales de un toque. En Ajustes → Gastos → "Te deben" ves lo que te queda por cobrar y marcas a cada uno cuando te paga.
+
+DETALLE DE CATEGORÍA EN TABLA
+Al pinchar una categoría en los gráficos ahora se abre una tabla completa: total, número de gastos, media, desglose por subcategoría y la lista de todos los gastos, ordenable por importe, fecha o concepto.
+
+FUNCIONA SIN COBERTURA
+La app ya no se queda colgada al abrirla sin conexión: arranca con los datos que tiene guardados y los gastos que apuntes se sincronizan solos cuando vuelve la red.
+
+EL HÁBITO, RESUELTO
+Recordatorio diario a la hora que elijas (y que no molesta si ya has apuntado algo ese día) y una racha que cuenta los días seguidos que registras gastos.
+
+CORRECCIONES
+• Los recordatorios de inactividad ya no se borraban solos al abrir la app.
+• Guardar un gasto sin conexión ya no deja el botón bloqueado.

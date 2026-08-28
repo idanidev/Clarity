@@ -16,6 +16,13 @@ xcuserdata/
 # Logs and Build Artifacts
 *.log
 *.txt
+
+# ...pero la ficha de la App Store sí se versiona: los textos, las keywords y
+# las novedades son trabajo, y con `*.txt` a secas quedaban solo en el disco de
+# quien los escribió, sin historial de qué decía la ficha antes.
+!fastlane/metadata/**/*.txt
+# Salvo las credenciales de la cuenta de prueba para la revisión de Apple.
+fastlane/metadata/review_information/
 *.xcactivitylog
 build/
 DerivedData/

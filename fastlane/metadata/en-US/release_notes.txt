@@ -1,0 +1,17 @@
+What's new in this version:
+
+GIFT MODE: TRACK WHO OWES YOU
+Fronted the money? Flag the expense as "gift mode" and add people by name, or just say how many of you there are and split it evenly with one tap. Settings → Expenses → "Te deben" shows what you're still owed and lets you tick each person off when they pay.
+
+CATEGORY DETAIL AS A TABLE
+Tapping a category in the charts now opens a full table: total, number of expenses, average, breakdown by subcategory and every expense, sortable by amount, date or name.
+
+WORKS WITHOUT SIGNAL
+The app no longer hangs when you open it offline: it starts with the data it already has, and anything you log syncs on its own once you're back online.
+
+THE HABIT, SOLVED
+A daily reminder at the time you choose (skipped if you already logged something that day) and a streak counting the days in a row you log expenses.
+
+FIXES
+• Inactivity reminders were being deleted on app launch.
+• Saving an expense offline no longer leaves the button stuck.
