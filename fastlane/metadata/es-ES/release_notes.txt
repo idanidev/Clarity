@@ -3,8 +3,8 @@ Novedades de esta versión:
 TUS FILTROS SE QUEDAN COMO LOS DEJASTE
 El filtro que marcabas como predeterminado con la estrella se perdía al cerrar la app y volvías a "Este mes". Ya no: se guarda también en el propio iPhone, así que aguanta aunque no haya cobertura al arrancar.
 
-EMPEZAR CUESTA MENOS
-El onboarding ya no te pregunta cuánto cobras antes de dejarte usar la app. Si quieres presupuesto, se configura desde Metas, que es donde sirve para algo. Y al terminar ya no aterrizas en una pantalla vacía: tienes el micro delante para apuntar tu primer gasto hablando.
+EMPIEZAS APUNTANDO, NO LEYENDO
+Antes de terminar de configurar ya apuntas tu primer gasto: pulsas el micro, dices "tres euros en un café" y ya está dentro. Y el onboarding ha dejado de preguntarte cuánto cobras para dejarte pasar; si quieres presupuesto, lo configuras desde Metas, que es donde sirve para algo.
 
 AHORA PUEDES ESCRIBIRME
 En Ajustes hay dos botones nuevos, "Algo no funciona" y "Tengo una idea". Escriben directamente a la persona que hace la app, que soy yo. Si algo te chirría, cuéntamelo.

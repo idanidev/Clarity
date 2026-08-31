@@ -3,8 +3,8 @@ What's new in this version:
 YOUR FILTERS STAY PUT
 The filter you starred as your default was lost when you closed the app, and you were back to "This month". Not any more: it's now saved on the phone itself, so it survives even with no signal at launch.
 
-GETTING STARTED TAKES LESS
-Onboarding no longer asks what you earn before letting you use the app. If you want a budget, you set it up from Goals, where it actually does something. And when you finish you no longer land on an empty screen: the mic is right there to log your first expense out loud.
+YOU START BY LOGGING, NOT READING
+You log your first expense before you even finish setting up: tap the mic, say "three euros on a coffee", and it's in. And onboarding no longer asks what you earn before letting you through; if you want a budget, you set it up from Goals, where it actually does something.
 
 YOU CAN WRITE TO ME NOW
 Settings has two new buttons, "Something's broken" and "I have an idea". They write straight to the person who makes the app, which is me. If something bothers you, tell me.
