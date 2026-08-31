@@ -12,6 +12,8 @@ struct OnboardingView: View {
 
     @State private var page = 0
     @State private var isSaving = false
+    /// Si el usuario apuntó su primer gasto sin salir del onboarding.
+    @State private var primerGastoHecho = false
 
     private let totalFeaturePages = 2 // welcome + voice + add-expense tutorial
 
@@ -25,7 +27,8 @@ struct OnboardingView: View {
                 WelcomePage().tag(0)
                 VoiceSiriPage().tag(1)
                 AddExpenseTutorialPage().tag(2)
-                DonePage().tag(3)
+                PrimerGastoPage(yaRegistrado: $primerGastoHecho).tag(3)
+                DonePage(conGasto: primerGastoHecho).tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .task { trackOnboardingStart() }
@@ -74,7 +77,7 @@ struct OnboardingView: View {
                 // Secondary action
                 if page == 0 {
                     Button("Saltar") {
-                        withAnimation { page = totalFeaturePages + 1 }
+                        withAnimation { page = totalFeaturePages + 2 }
                     }
                     .font(.subheadline)
                     .foregroundStyle(Color.white.opacity(0.5))
@@ -95,8 +98,11 @@ struct OnboardingView: View {
     private var ctaLabel: String {
         switch page {
         case 0:           return "Descubrir Clarity"
-        case totalFeaturePages: return "Casi está"
-        case totalFeaturePages + 1: return "Empezar"
+        case totalFeaturePages: return "Vamos a probarlo"
+        // En la página del primer gasto el botón deja de empujar: si ya se
+        // apuntó algo, celebra; si no, permite pasar sin culpabilizar.
+        case totalFeaturePages + 1: return primerGastoHecho ? "Genial, sigue" : "Lo hago luego"
+        case totalFeaturePages + 2: return "Empezar"
         default:          return "Siguiente"
         }
     }
@@ -106,7 +112,7 @@ struct OnboardingView: View {
     }
 
     private func nextPage() {
-        if page == totalFeaturePages + 1 {
+        if page == totalFeaturePages + 2 {
             saveAndComplete()
         } else {
             page += 1
@@ -917,6 +923,8 @@ private struct AIAdvisorPage: View {
 // MARK: - Page 5: Income Setup
 
 private struct DonePage: View {
+    /// El resumen no promete: cuenta lo que el usuario acaba de hacer.
+    var conGasto: Bool = false
     @State private var appear = false
     @State private var showRows = false
 
@@ -993,8 +1001,9 @@ private struct DonePage: View {
                 // Summary
                 if showRows {
                     VStack(spacing: 0) {
-                        summaryRow(icon: "waveform.circle.fill", color: Color(hex: "#3B82F6"),
-                                   text: "Gastos por voz listos")
+                        summaryRow(icon: conGasto ? "checkmark.circle.fill" : "waveform.circle.fill",
+                                   color: Color(hex: "#3B82F6"),
+                                   text: conGasto ? "Tu primer gasto ya está dentro" : "Gastos por voz listos")
                         Divider().background(Color.white.opacity(0.06))
                         summaryRow(icon: "arrow.clockwise.circle.fill", color: Color(hex: "#8B5CF6"),
                                    text: "Gastos fijos en automático")
@@ -1065,4 +1074,107 @@ private func pageText(tag: String, title: String, subtitle: String) -> some View
 
 #Preview {
     OnboardingView { }
+}
+
+// MARK: - Primer gasto, dentro del onboarding
+//
+// De cada 64 personas que instalan, 43 terminan el onboarding y solo 30 llegan
+// a registrar un gasto: más de la mitad se va sin usar la app ni una vez, y en
+// una app de gastos quien no apunta el primero no vuelve (#57).
+//
+// Las tres pantallas anteriores explican que se puede hablar. Ésta lo hace
+// pasar: se apunta un gasto de verdad, aquí, antes de salir. No es una demo —
+// el gasto queda guardado.
+
+private struct PrimerGastoPage: View {
+    @Binding var yaRegistrado: Bool
+
+    @State private var viewModel = DependencyContainer.shared.makeHomeViewModel()
+    @State private var mostrarManual = false
+    @State private var appear = false
+
+    /// Nº de gastos al entrar. Comparar contra esto es lo que dice si el que
+    /// acaba de aparecer lo ha metido el usuario ahora.
+    @State private var gastosAlEmpezar: Int?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            Circle()
+                .fill(Color(hex: "#8B5CF6").opacity(0.18))
+                .frame(width: 420)
+                .blur(radius: 110)
+                .offset(y: -120)
+
+            VStack(spacing: 0) {
+                Spacer().frame(height: 90)
+
+                Text(yaRegistrado ? "¡Ya está!" : "Pruébalo ahora")
+                    .font(.system(size: 34, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(.bottom, 12)
+
+                Text(yaRegistrado
+                     ? "Eso es todo. Así de rápido cada vez."
+                     : "Pulsa el micro y di lo que te has gastado.\nPor ejemplo: «tres euros en un café».")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 36)
+
+                Spacer()
+
+                if yaRegistrado {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 92, weight: .light))
+                        .foregroundStyle(Color(hex: "#10B981"))
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    SimpleVoiceButton(
+                        viewModel: viewModel,
+                        categories: UserDataManager.shared.categories
+                    )
+                    .scaleEffect(1.35)
+
+                    Button {
+                        mostrarManual = true
+                        HapticManager.shared.selection()
+                    } label: {
+                        Text("Prefiero escribirlo")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.75))
+                            .padding(.top, 44)
+                    }
+                }
+
+                Spacer()
+                Spacer()
+            }
+        }
+        .sheet(isPresented: $mostrarManual) {
+            AddExpenseSheet {
+                registrado(metodo: "manual")
+            }
+            .presentationDetents([.large])
+        }
+        .task {
+            await viewModel.loadIfNeeded()
+            if gastosAlEmpezar == nil { gastosAlEmpezar = viewModel.allExpenses.count }
+            withAnimation(.spring(response: 0.6)) { appear = true }
+        }
+        // La voz guarda por su cuenta y no avisa por callback: se detecta
+        // porque la lista crece.
+        .onChange(of: viewModel.allExpenses.count) { _, nuevos in
+            guard let base = gastosAlEmpezar, nuevos > base, !yaRegistrado else { return }
+            registrado(metodo: "voz")
+        }
+    }
+
+    private func registrado(metodo: String) {
+        guard !yaRegistrado else { return }
+        AnalyticsService.shared.track(.onboardingFirstExpense(method: metodo))
+        HapticManager.shared.notification(.success)
+        withAnimation(.spring(response: 0.5)) { yaRegistrado = true }
+    }
 }

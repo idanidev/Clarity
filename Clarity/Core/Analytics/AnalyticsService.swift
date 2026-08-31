@@ -33,6 +33,11 @@ enum AnalyticsEvent: Sendable {
     /// escalón donde hoy se pierden 7 de cada 21 (#40).
     case emptyStateShown
     case emptyStateAction(method: String)
+    /// Permiso de micrófono: sin esto no se sabe si la voz no se usa porque no
+    /// gusta o porque el permiso se deniega en el primer intento (#57).
+    case microphonePermission(granted: Bool)
+    /// Primer gasto registrado durante el onboarding, con el método usado.
+    case onboardingFirstExpense(method: String)
 
     var name: String {
         switch self {
@@ -54,6 +59,8 @@ enum AnalyticsEvent: Sendable {
         case .supportContacted: return "contacto_soporte"
         case .emptyStateShown: return "sin_gastos_visto"
         case .emptyStateAction: return "sin_gastos_accion"
+        case .microphonePermission: return "permiso_microfono"
+        case .onboardingFirstExpense: return "onboarding_primer_gasto"
         }
     }
 
@@ -83,6 +90,10 @@ enum AnalyticsEvent: Sendable {
         case .supportContacted(let reason):
             return ["reason": reason]
         case .emptyStateAction(let method):
+            return ["method": method]
+        case .microphonePermission(let granted):
+            return ["granted": granted ? "true" : "false"]
+        case .onboardingFirstExpense(let method):
             return ["method": method]
         default:
             return [:]

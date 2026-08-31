@@ -339,10 +339,14 @@ class SpeechRecognitionManager {
             }
         }
         guard speechStatus == .authorized else {
+            // Denegar el reconocimiento de voz mata la función igual que
+            // denegar el micro: cuenta como permiso no concedido.
+            AnalyticsService.shared.track(.microphonePermission(granted: false))
             throw RecognitionError.microphoneUnavailable
         }
 
         let audioStatus = await AVAudioApplication.requestRecordPermission()
+        AnalyticsService.shared.track(.microphonePermission(granted: audioStatus))
         guard audioStatus else {
             throw RecognitionError.microphoneUnavailable
         }
