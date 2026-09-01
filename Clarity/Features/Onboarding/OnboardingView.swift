@@ -1092,6 +1092,7 @@ private struct PrimerGastoPage: View {
     @State private var viewModel = DependencyContainer.shared.makeHomeViewModel()
     @State private var mostrarManual = false
     @State private var appear = false
+    @State private var pulso = false
 
     /// Nº de gastos al entrar. Comparar contra esto es lo que dice si el que
     /// acaba de aparecer lo ha metido el usuario ahora.
@@ -1114,6 +1115,9 @@ private struct PrimerGastoPage: View {
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(.white)
                     .padding(.bottom, 12)
+                    .opacity(appear ? 1 : 0)
+                    .offset(y: appear ? 0 : 12)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: appear)
 
                 Text(yaRegistrado
                      ? "Eso es todo. Así de rápido cada vez."
@@ -1122,20 +1126,74 @@ private struct PrimerGastoPage: View {
                     .foregroundStyle(.white.opacity(0.65))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 36)
+                    .opacity(appear ? 1 : 0)
+                    .offset(y: appear ? 0 : 12)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.08), value: appear)
 
                 Spacer()
 
                 if yaRegistrado {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 92, weight: .light))
-                        .foregroundStyle(Color(hex: "#10B981"))
-                        .transition(.scale.combined(with: .opacity))
+                    VStack(spacing: 22) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 88, weight: .light))
+                            .foregroundStyle(Color(hex: "#10B981"))
+                            .shadow(color: Color(hex: "#10B981").opacity(0.5), radius: 26, y: 8)
+
+                        // La prueba de que ha funcionado es el gasto, no un icono.
+                        if let gasto = viewModel.allExpenses.first {
+                            HStack(spacing: 12) {
+                                Text(gasto.category.categoryNameEmoji.emoji ?? "💸")
+                                    .font(.system(size: 22))
+                                Text(gasto.name)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .lineLimit(1)
+                                Spacer(minLength: 12)
+                                Text(Formatters.currency(gasto.amount))
+                                    .font(.system(size: 17, weight: .bold))
+                                    .foregroundStyle(Color(hex: "#C9C3FF"))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 16)
+                            .background(.ultraThinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 18))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 18)
+                                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                            )
+                            .padding(.horizontal, 40)
+                        }
+                    }
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
                 } else {
-                    SimpleVoiceButton(
-                        viewModel: viewModel,
-                        categories: UserDataManager.shared.categories
-                    )
-                    .scaleEffect(1.35)
+                    ZStack {
+                        // Los mismos anillos que la pantalla de la voz: dicen
+                        // "háblale a esto" sin una sola palabra, y hacen que
+                        // esta pantalla no desentone con sus vecinas.
+                        ForEach(0..<3) { i in
+                            Circle()
+                                .strokeBorder(
+                                    Color(hex: "#8B5CF6").opacity(0.16 - Double(i) * 0.04),
+                                    lineWidth: 1.5
+                                )
+                                .frame(width: CGFloat(150 + i * 58), height: CGFloat(150 + i * 58))
+                                .scaleEffect(pulso ? 1.04 : 0.97)
+                                .animation(
+                                    .easeInOut(duration: 2.4).repeatForever(autoreverses: true)
+                                        .delay(Double(i) * 0.18),
+                                    value: pulso
+                                )
+                        }
+
+                        SimpleVoiceButton(
+                            viewModel: viewModel,
+                            categories: UserDataManager.shared.categories
+                        )
+                        .scaleEffect(1.35)
+                    }
+                    .opacity(appear ? 1 : 0)
+                    .scaleEffect(appear ? 1 : 0.7)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.16), value: appear)
 
                     Button {
                         mostrarManual = true
@@ -1144,8 +1202,10 @@ private struct PrimerGastoPage: View {
                         Text("Prefiero escribirlo")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(.white.opacity(0.75))
-                            .padding(.top, 44)
+                            .padding(.top, 56)
                     }
+                    .opacity(appear ? 1 : 0)
+                    .animation(.easeOut(duration: 0.4).delay(0.4), value: appear)
                 }
 
                 Spacer()
@@ -1161,7 +1221,8 @@ private struct PrimerGastoPage: View {
         .task {
             await viewModel.loadIfNeeded()
             if gastosAlEmpezar == nil { gastosAlEmpezar = viewModel.allExpenses.count }
-            withAnimation(.spring(response: 0.6)) { appear = true }
+            appear = true
+            pulso = true
         }
         // La voz guarda por su cuenta y no avisa por callback: se detecta
         // porque la lista crece.

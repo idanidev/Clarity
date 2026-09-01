@@ -1,5 +1,11 @@
 // StreakBadge.swift
 // Refuerzo positivo por registrar gastos varios días seguidos (#40 §1).
+//
+// SIN USAR: estuvo sobre las tarjetas de totales de la Home y ahí desentonaba
+// —un "🔥 3 días seguidos" encima de las cifras del mes no pega con dinero—.
+// Se mantiene por si encuentra un sitio mejor; `StreakManager` sigue contando
+// igual, que es de donde sale que el recordatorio diario no moleste los días
+// en que ya has apuntado algo.
 
 import SwiftUI
 

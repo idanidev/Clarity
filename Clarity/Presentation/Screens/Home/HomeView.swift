@@ -172,8 +172,6 @@ struct HomeView: View {
                 .padding(.horizontal, DesignTokens.Spacing.sm)
                 .padding(.top, 12)  // Espacio limpio desde navigation bar
 
-                StreakBadge()
-
                 // Month Selector — hidden while searching (search spans all months)
                 if viewModel.searchText.isEmpty {
                     MonthSelectorView(currentMonth: $viewModel.selectedMonth) {
