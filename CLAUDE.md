@@ -22,6 +22,25 @@ Clarity is a native iOS expense tracking app built with SwiftUI, targeting iOS 1
 
 ## Build & Deploy
 
+### App Store (fastlane)
+
+```bash
+LANG=en_US.UTF-8 fastlane release
+```
+
+Dos trampas que ya han costado un intento fallido cada una:
+
+- **`LANG` en UTF-8 es obligatorio.** Sin él, `xcodeproj` revienta leyendo el
+  pbxproj con `invalid byte sequence in US-ASCII` (hay acentos dentro). Peta
+  *después* de `increment_build_number`, así que el número queda subido y el
+  binario no: hay que `git checkout Clarity.xcodeproj/project.pbxproj` antes de
+  reintentar o te saltas un build.
+- **No hay Gemfile** — `bundle exec fastlane` falla con "Could not locate
+  Gemfile". Se invoca `fastlane` a pelo.
+
+La lane `release` lleva `submit_for_review: false`: sube binario + metadata y
+deja la versión lista, pero enviar a revisión es siempre manual.
+
 ### Simulador (test + dev rápido)
 ```bash
 # Build
