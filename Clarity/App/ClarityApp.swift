@@ -51,10 +51,8 @@ struct ClarityApp: App {
             .task {
                 authViewModel.startListening()
 
-                // Retención: cuenta la sesión (para pedir reseña más adelante) y
-                // recalcula la racha por si se ha saltado algún día.
+                // Retención: cuenta la sesión, para pedir la reseña más adelante.
                 ReviewRequestManager.shared.registerSession()
-                StreakManager.shared.refreshOnLaunch()
                 AnalyticsBootstrap.configure()
 
                 // Integridad del dispositivo (solo en Release)

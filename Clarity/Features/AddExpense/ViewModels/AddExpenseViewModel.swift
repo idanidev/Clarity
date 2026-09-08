@@ -343,9 +343,8 @@ class AddExpenseViewModel {
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(.success, title: "Gasto añadido", message: "\(name) guardado correctamente")
 
-            // Momento de éxito: cuenta para la racha y es cuando tiene sentido
-            // pedir la reseña (el manager decide si toca o no).
-            StreakManager.shared.registerExpenseLogged()
+            // Momento de éxito: es cuando tiene sentido pedir la reseña
+            // (el manager decide si toca o no).
             ReviewRequestManager.shared.requestReviewIfAppropriate()
             AnalyticsService.shared.track(.expenseAdded(method: .manual, category: category))
         } catch {

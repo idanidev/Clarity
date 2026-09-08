@@ -155,6 +155,16 @@ class VoiceExpenseCoordinator {
         handleTranscript(text, categories: UserDataManager.shared.categories)
     }
 
+    /// De dónde salió la frase que se está procesando. Siri y el micro de la
+    /// app comparten parser y pantalla, así que sin esto los gastos dictados a
+    /// Siri se contaban como voz normal y los atajos quedaban sin medir.
+    private(set) var origen: ExpenseInputMethod = .voice
+
+    /// Marca que la próxima frase viene de Siri. Se consume al guardar.
+    func marcarOrigenSiri() {
+        origen = .siri
+    }
+
     func handleTranscript(_ transcript: String, categories: [Category]) {
         state = .processing
 
@@ -248,12 +258,12 @@ class VoiceExpenseCoordinator {
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             NotificationsView.cancelInactivityReminder()
 
-            // Gasto por voz: también alimenta la racha y puede disparar la reseña.
-            StreakManager.shared.registerExpenseLogged()
+            // Gasto por voz: momento de éxito, puede disparar la reseña.
             ReviewRequestManager.shared.requestReviewIfAppropriate()
             ProLimits.registerVoiceExpense()
             AnalyticsService.shared.track(
-                .expenseAdded(method: .voice, category: expense.category))
+                .expenseAdded(method: origen, category: expense.category))
+            origen = .voice
 
             await MainActor.run {
                 state = .success

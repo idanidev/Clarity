@@ -424,7 +424,6 @@ struct SimpleVoiceButton: View {
             // Silent background sync to reconcile any edge cases (fire-and-forget)
             Task { await viewModel.refresh() }
 
-            StreakManager.shared.registerExpenseLogged()
             ReviewRequestManager.shared.requestReviewIfAppropriate()
             ProLimits.registerVoiceExpense()
             AnalyticsService.shared.track(

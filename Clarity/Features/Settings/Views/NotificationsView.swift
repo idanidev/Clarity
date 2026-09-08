@@ -11,9 +11,6 @@ struct NotificationsView: View {
     @AppStorage("notifications.recurringReminders") private var recurringReminders = true
     @AppStorage("notifications.endOfMonthReminder") private var endOfMonthReminder = false
     // Recordatorio diario: el hábito es lo que sostiene una app de gastos (#40).
-    @AppStorage("notifications.dailyReminder") private var dailyReminder = false
-    @AppStorage("notifications.dailyReminderHour") private var dailyReminderHour = 21
-    @AppStorage("notifications.dailyReminderMinute") private var dailyReminderMinute = 0
 
     // Keys kept as "daily*" for backward-compat; now shared with weekly reminder
     @AppStorage("notifications.dailyHour") private var dailyHour = 20
@@ -32,8 +29,6 @@ struct NotificationsView: View {
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var showTimePicker = false
     @State private var selectedTime = Date()
-    @State private var showDailyTimePicker = false
-    @State private var selectedDailyTime = Date()
 
     var body: some View {
         List {
@@ -63,48 +58,6 @@ struct NotificationsView: View {
                         .foregroundStyle(.red)
                 } else {
                     Text(String(localized: "notifications.push.footer", defaultValue: "Permite que Clarity te envíe recordatorios"))
-                }
-            }
-
-            // Daily Reminder — el recordatorio de hábito
-            Section {
-                Toggle("Recordatorio diario", isOn: $dailyReminder)
-                    .onChange(of: dailyReminder) { _, newValue in
-                        HapticManager.shared.selection()
-                        if newValue && pushEnabled {
-                            scheduleDailyReminder()
-                        } else {
-                            cancelDailyReminder()
-                        }
-                    }
-
-                if dailyReminder {
-                    Button {
-                        var components = DateComponents()
-                        components.hour = dailyReminderHour
-                        components.minute = dailyReminderMinute
-                        selectedDailyTime = Calendar.current.date(from: components) ?? Date()
-                        showDailyTimePicker = true
-                    } label: {
-                        HStack {
-                            Text("Hora")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Text(String(format: "%02d:%02d", dailyReminderHour, dailyReminderMinute))
-                                .foregroundStyle(.secondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                }
-            } header: {
-                Text("Recordatorio diario")
-            } footer: {
-                if dailyReminder {
-                    Text("Cada día a las \(String(format: "%02d:%02d", dailyReminderHour, dailyReminderMinute)) te preguntamos si has tenido algún gasto. Si ya has registrado alguno ese día, no se envía.")
-                } else {
-                    Text("Un toque al día para que no se te acumulen los gastos sin apuntar.")
                 }
             }
 
@@ -205,38 +158,6 @@ struct NotificationsView: View {
         }
         .navigationTitle(String(localized: "notifications.navigationTitle", defaultValue: "Notificaciones"))
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showDailyTimePicker) {
-            NavigationStack {
-                DatePicker(
-                    "Hora del recordatorio diario",
-                    selection: $selectedDailyTime,
-                    displayedComponents: .hourAndMinute
-                )
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-                .padding()
-                .navigationTitle("Seleccionar Hora")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancelar") { showDailyTimePicker = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Guardar") {
-                            let components = Calendar.current.dateComponents(
-                                [.hour, .minute], from: selectedDailyTime)
-                            dailyReminderHour = components.hour ?? 21
-                            dailyReminderMinute = components.minute ?? 0
-                            showDailyTimePicker = false
-
-                            if dailyReminder && pushEnabled { scheduleDailyReminder() }
-                        }
-                        .fontWeight(.semibold)
-                    }
-                }
-            }
-            .presentationDetents([.height(300)])
-        }
         .sheet(isPresented: $showTimePicker) {
             NavigationStack {
                 DatePicker(
@@ -321,7 +242,6 @@ struct NotificationsView: View {
         guard pushEnabled else { return }
         if weeklyReminder { scheduleWeeklyReminder() }
         if endOfMonthReminder { scheduleEndOfMonthReminder() }
-        if dailyReminder { scheduleDailyReminder() }
     }
 
     private func checkNotificationStatus() {
@@ -343,9 +263,6 @@ struct NotificationsView: View {
                     notificationStatus = .authorized
                     if weeklyReminder {
                         scheduleWeeklyReminder()
-                    }
-                    if dailyReminder {
-                        scheduleDailyReminder()
                     }
                 } else {
                     pushEnabled = false
@@ -377,20 +294,6 @@ struct NotificationsView: View {
         )
 
         center.add(request) { _ in }
-    }
-
-    /// El recordatorio diario se reprograma cada arranque desde `refreshOnLaunch`
-    /// para poder saltarse los días en los que ya se ha registrado algún gasto.
-    private func scheduleDailyReminder() {
-        Self.scheduleDailyReminderStatic(
-            hour: dailyReminderHour,
-            minute: dailyReminderMinute
-        )
-    }
-
-    private func cancelDailyReminder() {
-        UNUserNotificationCenter.current()
-            .removePendingNotificationRequests(withIdentifiers: [NotificationID.daily])
     }
 
     private func cancelWeeklyReminder() {
@@ -448,9 +351,16 @@ struct NotificationsView: View {
     /// Recreates active notifications so the body reflects the current month.
     static func refreshOnLaunch() {
         let defaults = UserDefaults.standard
-        guard defaults.bool(forKey: "notifications.pushEnabled") else { return }
-
         let center = UNUserNotificationCenter.current()
+
+        // El recordatorio diario se retiró. Quien lo tuviera activo conserva la
+        // notificación repetitiva ya registrada en el sistema, que sobrevive a
+        // la actualización: hay que cancelarla explícitamente o seguiría sonando
+        // cada día sin nada en Ajustes que la apague. Va antes del guard porque
+        // también hay que limpiarla si entretanto desactivó las push.
+        center.removePendingNotificationRequests(withIdentifiers: [NotificationID.daily])
+
+        guard defaults.bool(forKey: "notifications.pushEnabled") else { return }
 
         if defaults.bool(forKey: "notifications.weeklyReminder") {
             let weeklyDay = defaults.integer(forKey: "notifications.weeklyDay")
@@ -484,48 +394,6 @@ struct NotificationsView: View {
             center.add(UNNotificationRequest(identifier: "clarity.endofmonth.reminder", content: content, trigger: trigger))
         }
 
-        if defaults.bool(forKey: "notifications.dailyReminder") {
-            scheduleDailyReminderStatic(
-                hour: defaults.integer(forKey: "notifications.dailyReminderHour"),
-                minute: defaults.integer(forKey: "notifications.dailyReminderMinute")
-            )
-        }
-    }
-
-    /// Programa el recordatorio diario. Si ya se ha registrado un gasto hoy, la
-    /// primera aparición se salta al día siguiente: molestar a quien ya ha hecho
-    /// los deberes es la vía rápida a que desactive las notificaciones.
-    static func scheduleDailyReminderStatic(hour: Int, minute: Int) {
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: ["clarity.daily.reminder"])
-
-        let content = UNMutableNotificationContent()
-        content.title = "¿Algún gasto hoy?"
-        content.body = "Apúntalo en 5 segundos: pulsa el micro y dilo en voz alta."
-        content.sound = .default
-
-        var dc = DateComponents()
-        dc.hour = hour == 0 ? 21 : hour
-        dc.minute = minute
-
-        let alreadyLoggedToday = UserDefaults.standard.string(forKey: "streak.lastDay")
-            == Formatters.localDayString(from: Date())
-
-        if alreadyLoggedToday {
-            // Salta la de hoy: una sola no repetitiva para mañana y, al abrir la
-            // app, `refreshOnLaunch` vuelve a dejarla como repetitiva.
-            let calendar = Calendar.current
-            let tomorrow = calendar.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-            var next = calendar.dateComponents([.year, .month, .day], from: tomorrow)
-            next.hour = dc.hour
-            next.minute = dc.minute
-            let trigger = UNCalendarNotificationTrigger(dateMatching: next, repeats: false)
-            center.add(UNNotificationRequest(identifier: "clarity.daily.reminder", content: content, trigger: trigger))
-            return
-        }
-
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)
-        center.add(UNNotificationRequest(identifier: "clarity.daily.reminder", content: content, trigger: trigger))
     }
 
     // MARK: - Inactivity Reminder
