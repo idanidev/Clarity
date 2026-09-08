@@ -126,7 +126,7 @@ Apple Swift Testing (`import Testing`). `@Test` + `#expect()`. **No XCTest**. Mo
 | Feature | Path | Estado |
 |---------|------|--------|
 | `Auth` | `Features/Auth/` | Email/password + Apple + Google |
-| `AIAdvisor` | `Features/AIAdvisor/` | **Deshabilitado** (placeholder `AIDisabledView`) |
+| `AIAdvisor` | `Features/AIAdvisor/` | **Deshabilitado** — sin entrada en la UI |
 | `Voice` | `Features/Voice/` | Speech → parser → expense |
 | `Expenses` / `AddExpense` | `Features/Expenses/`, `Features/AddExpense/` | CRUD + paginación |
 | `Budgets` | `Features/Budgets/` | Presupuestos mensuales + metas |
