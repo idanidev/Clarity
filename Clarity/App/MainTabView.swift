@@ -78,15 +78,12 @@ struct MainTabView: View {
                     }
                     .tag(2)
 
-                NavigationStack {
-                    AIDisabledView()
-                }
-                .tabItem {
-                    Image(systemName: "sparkles")
-                    Text("IA")
-                }
-                .tag(3)
-
+                // Aquí vivía la pestaña "IA". Enseñaba un "Próximamente" y
+                // nada más: una función anunciada en la barra que al tocarla no
+                // hace nada es contenido de relleno, motivo habitual de rechazo
+                // en App Review (guideline 2.1), y de paso prometía al usuario
+                // algo que la app no tiene. Cuando la IA vuelva, vuelve la
+                // pestaña con `AIAdvisorView()`.
                 NavigationStack {
                     SettingsView()
                 }
@@ -94,7 +91,7 @@ struct MainTabView: View {
                     Image(systemName: "gearshape.fill")
                     Text("Ajustes")
                 }
-                .tag(4)
+                .tag(3)
             }
             .tint(Color.clarityPrimary)
             .modifier(iPadTabViewModifier())
@@ -226,6 +223,9 @@ struct MainTabView: View {
                    let amountStr, let amount = Double(amountStr) {
                     voiceCoordinator.populateFromApplePay(merchant: merchant, amount: amount)
                 } else if let phrase = inputPhrase, !phrase.isEmpty {
+                    // Solo Siri y los Atajos abren la app con `input`: el micro
+                    // de dentro llama al coordinator directamente.
+                    voiceCoordinator.marcarOrigenSiri()
                     voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
                 } else {
                     showManualExpense = true
