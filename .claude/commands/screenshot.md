@@ -5,7 +5,9 @@ argument-hint: [nombre-pantalla]
 
 Vamos a tomar capturas del simulador para el App Store.
 
-Dispositivo objetivo: iPhone 16 Pro Max (6.9" — 1320x2868px, el requerido por App Store)
+Dispositivo objetivo: **iPhone 16 Plus** — 1290x2796px, que es el tamaño exacto
+que espera `scripts/generate_mockups.py`. Con otro simulador las capturas no
+encajan en el marco del mockup.
 
 !`xcrun simctl list devices available | grep "iPhone 16 Pro Max"`
 
@@ -15,10 +17,14 @@ Pasos:
 3. Toma la captura: `xcrun simctl io booted screenshot ~/Desktop/clarity-screenshot-$ARGUMENTS.png`
 4. Confirma que se guardó
 
-Las 6 pantallas clave para App Store:
-- dashboard → Home con gastos del mes
-- voice → Pantalla de voz activa
-- charts → Gráficos de categorías
-- budgets → Presupuestos del mes
-- ai → Chat con IA Advisor
-- recurring → Lista de gastos recurrentes
+Las capturas que consume el generador de mockups van en
+`marketing/screenshots/input/` con estos nombres exactos:
+
+- `1_home.png` → Home con gastos del mes (se usa en DOS mockups: 01 y 04)
+- `2_chart.png` → vista de gráfico de categorías
+- `3_goals.png` → Metas
+
+Después: `python3 scripts/generate_mockups.py` compone los cuatro mockups en
+`marketing/screenshots/output/`, que es lo que se copia a `fastlane/screenshots/`.
+
+No pidas una captura de IA: esa pantalla ya no existe.
