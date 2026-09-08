@@ -12,6 +12,18 @@ import Foundation
 
 struct FirebaseAnalyticsSink: AnalyticsSink {
     func send(name: String, parameters: [String: String]) {
+        // El informe de Pantallas de Firebase solo se llena con su evento
+        // canónico. Un `screen_viewed` propio queda como un evento suelto y ese
+        // informe sale vacío —o peor, con los controladores del sistema que
+        // registraba el reporte automático—, así que aquí se traduce. Este es el
+        // sitio: el resto del código no sabe ni tiene que saber de Firebase.
+        if name == AnalyticsEvent.screenViewedName,
+           let screen = parameters[AnalyticsEvent.screenParameter] {
+            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
+                AnalyticsParameterScreenName: screen
+            ])
+            return
+        }
         Analytics.logEvent(name, parameters: parameters)
     }
 

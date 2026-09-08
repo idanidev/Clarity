@@ -31,7 +31,13 @@ struct OnboardingView: View {
                 DonePage(conGasto: primerGastoHecho).tag(4)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .task { trackOnboardingStart() }
+            .task {
+                trackOnboardingStart()
+                trackOnboardingPage(page)
+            }
+            .onChange(of: page) { _, nueva in
+                trackOnboardingPage(nueva)
+            }
             .animation(.easeInOut(duration: 0.35), value: page)
             .ignoresSafeArea()
 
@@ -105,6 +111,23 @@ struct OnboardingView: View {
         case totalFeaturePages + 2: return "Empezar"
         default:          return "Siguiente"
         }
+    }
+
+    /// Nombre de cada página del onboarding. Sin esto se sabe cuántos empiezan
+    /// y cuántos acaban, pero no en cuál se caen —que es el dato que dice qué
+    /// pantalla arreglar—. Va por `onChange` y no por `.trackScreen` en cada
+    /// página porque el TabView precarga las vecinas: con `.task` contaría como
+    /// vistas páginas por las que nadie ha pasado.
+    private func trackOnboardingPage(_ index: Int) {
+        let nombre: String
+        switch index {
+        case 0: nombre = "onboarding_bienvenida"
+        case 1: nombre = "onboarding_voz"
+        case 2: nombre = "onboarding_tutorial"
+        case 3: nombre = "onboarding_primer_gasto"
+        default: nombre = "onboarding_listo"
+        }
+        AnalyticsService.shared.track(.screenViewed(name: nombre))
     }
 
     private func trackOnboardingStart() {

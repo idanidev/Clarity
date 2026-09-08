@@ -29,6 +29,7 @@ struct MonthlyBudgetsView: View {
                 budgetsList
             }
         }
+        .trackScreen("nominas")
         .navigationTitle(String(localized: "budgets.history.title", defaultValue: "Historial de Nóminas"))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

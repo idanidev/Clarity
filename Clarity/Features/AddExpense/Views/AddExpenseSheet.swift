@@ -34,6 +34,7 @@ struct AddExpenseSheet: View {
                 AddExpNotesSection(viewModel: viewModel, focused: $focused)
             }
             .scrollDismissesKeyboard(.interactively)
+            .trackScreen("anadir_gasto")
             .navigationTitle("Nuevo Gasto")
             .navigationBarTitleDisplayMode(.large)
             .task {

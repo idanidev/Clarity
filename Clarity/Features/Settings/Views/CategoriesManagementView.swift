@@ -61,6 +61,7 @@ struct CategoriesManagementView: View {
             }
         }
         .listStyle(.insetGrouped)
+        .trackScreen("categorias")
         .navigationTitle(String(localized: "categories.navigationTitle", defaultValue: "Categorías"))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {

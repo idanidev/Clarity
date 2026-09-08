@@ -39,6 +39,12 @@ enum AnalyticsEvent: Sendable {
     /// Primer gasto registrado durante el onboarding, con el método usado.
     case onboardingFirstExpense(method: String)
 
+    /// El sink de Firebase traduce este evento a su evento canónico de pantalla;
+    /// los demás destinos lo mandan tal cual. Los nombres viven aquí para que el
+    /// sink no tenga que repetirlos a mano.
+    static let screenViewedName = "screen_viewed"
+    static let screenParameter = "screen"
+
     var name: String {
         switch self {
         case .onboardingStarted: return "onboarding_started"
@@ -51,7 +57,7 @@ enum AnalyticsEvent: Sendable {
         case .debtSettled: return "debt_settled"
         case .sessionStarted: return "session_started"
         case .sessionEnded: return "session_ended"
-        case .screenViewed: return "screen_viewed"
+        case .screenViewed: return Self.screenViewedName
         case .aiCategoryCorrected: return "categoria_ia_corregida"
         case .budgetConfigured: return "presupuesto_configurado"
         case .budgetLimitReached: return "limite_alcanzado"
@@ -79,7 +85,7 @@ enum AnalyticsEvent: Sendable {
         case .sessionEnded(let seconds):
             return ["duration_seconds": String(seconds)]
         case .screenViewed(let name):
-            return ["screen": name]
+            return [Self.screenParameter: name]
         case .aiCategoryCorrected(let from, let to):
             // Solo nombres de categoría: nunca el concepto ni el importe.
             return ["from": from, "to": to]
@@ -104,6 +110,10 @@ enum AnalyticsEvent: Sendable {
 enum ExpenseInputMethod: String, Sendable {
     case manual
     case voice
+    /// Dictado a Siri desde fuera de la app. Acaba en el mismo parser que la
+    /// voz de dentro, pero cuenta aparte: es la única forma de saber si los
+    /// atajos sirven de algo o nadie los usa.
+    case siri
     case recurring
     case widget
     case importCSV = "import"
