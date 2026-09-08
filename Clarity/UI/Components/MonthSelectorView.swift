@@ -5,7 +5,6 @@ import SwiftUI
 
 struct MonthSelectorView: View {
     @Binding var currentMonth: Date
-    let onMonthChanged: () -> Void
 
     @Environment(\.colorScheme) var colorScheme
 
@@ -24,7 +23,6 @@ struct MonthSelectorView: View {
                     byAdding: .month, value: -1, to: currentMonth)
                 {
                     currentMonth = prevMonth
-                    onMonthChanged()
                 }
                 HapticManager.shared.selection()
             } label: {
@@ -45,7 +43,6 @@ struct MonthSelectorView: View {
                     {
                         Button {
                             currentMonth = month
-                            onMonthChanged()
                         } label: {
                             HStack {
                                 Text(monthFormatter.string(from: month).capitalized)
@@ -81,7 +78,6 @@ struct MonthSelectorView: View {
                     nextMonth <= Date()
                 {
                     currentMonth = nextMonth
-                    onMonthChanged()
                 }
                 HapticManager.shared.selection()
             } label: {
@@ -131,13 +127,13 @@ struct MonthSelectorView: View {
 
 #Preview {
     VStack(spacing: 20) {
-        MonthSelectorView(currentMonth: .constant(Date())) {}
+        MonthSelectorView(currentMonth: .constant(Date()))
             .padding()
 
         MonthSelectorView(
             currentMonth: .constant(
                 Calendar.current.date(byAdding: .month, value: -3, to: Date()) ?? Date())
-        ) {}
+        )
             .padding()
     }
     .background(Color(.systemGroupedBackground))

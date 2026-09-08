@@ -174,9 +174,7 @@ struct HomeView: View {
 
                 // Month Selector — hidden while searching (search spans all months)
                 if viewModel.searchText.isEmpty {
-                    MonthSelectorView(currentMonth: $viewModel.selectedMonth) {
-                        Task { await viewModel.onMonthChanged() }
-                    }
+                    MonthSelectorView(currentMonth: $viewModel.selectedMonth)
                     .padding(.horizontal, DesignTokens.Spacing.sm)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -292,7 +290,9 @@ struct HomeView: View {
             }
             .padding(.bottom, 80)
         }
-        // Swipe horizontal cambia de mes (← anterior / → siguiente, sin futuro)
+        // Swipe horizontal cambia de mes (← anterior / → siguiente, sin futuro).
+        // Asignar el mes ya dispara la carga de sus gastos: lo hace el didSet
+        // de `selectedMonth`.
         .highPriorityGesture(
             DragGesture(minimumDistance: 40)
                 .onEnded { value in

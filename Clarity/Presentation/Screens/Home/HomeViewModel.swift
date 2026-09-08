@@ -31,9 +31,31 @@ final class HomeViewModel {
     private(set) var hasLoaded = false  // Prevents redundant reloads on tab switch
 
     // Month selector state
+    /// Cambiar de mes mueve el filtro Y trae los gastos de ese mes. Las dos
+    /// cosas cuelgan de aquí a propósito: cuando traerlos era responsabilidad
+    /// de quien asignaba el mes, el selector se acordaba de pedirlos y el
+    /// swipe de la gráfica no, así que deslizar dejaba el filtro en un mes
+    /// cuyos gastos no se habían cargado nunca y la gráfica decía "Sin datos"
+    /// teniéndolos. Ahora asignar el mes basta, venga de donde venga.
     var selectedMonth: Date = Date() {
         didSet {
+            // Reasignar el mismo mes (o un día distinto del mismo mes) no
+            // recarga: el filtro ya cubre ese rango.
+            guard !Calendar.current.isDate(
+                selectedMonth, equalTo: oldValue, toGranularity: .month) else { return }
+
             updateFilterForSelectedMonth()
+
+            // Deslizar rápido varios meses deja peticiones en vuelo; sin
+            // cancelar, la del mes que ya abandonaste puede llegar la última
+            // y pisar la buena.
+            monthChangeTask?.cancel()
+            monthChangeTask = Task { [weak self] in
+                guard let self, !Task.isCancelled else { return }
+                await self.loadMonthlyBudget(for: self.selectedMonth)
+                guard !Task.isCancelled else { return }
+                await self.loadExpenses()
+            }
         }
     }
 
@@ -55,6 +77,7 @@ final class HomeViewModel {
     }
 
     private var searchTask: Task<Void, Never>?
+    private var monthChangeTask: Task<Void, Never>?
 
     // Data for View
     var categoryGroups: [CategoryGroup] = []
@@ -545,12 +568,6 @@ final class HomeViewModel {
 
         logger.debug(
             "📅 Month changed to: \(self.monthDateFormatter.string(from: self.selectedMonth))")
-    }
-
-    /// Called when month selector changes (triggers refresh)
-    func onMonthChanged() async {
-        await loadMonthlyBudget(for: selectedMonth)
-        await loadExpenses()
     }
 
     // monthDateFormatter is defined as a private let above
