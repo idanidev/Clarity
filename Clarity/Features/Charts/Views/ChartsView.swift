@@ -89,32 +89,33 @@ struct ChartsView: View {
 
 // MARK: - Background
 
+/// Fondo fijo. Estuvo animado con un TimelineView a 20 fps y hacía que la
+/// pantalla diera tirones al scrollear (#63): encima van la barra de navegación
+/// y todas las tarjetas rellenas de `.ultraThinMaterial` —una por tarjeta de
+/// categoría, así que son muchas—, y un material solo puede cachear su blur
+/// mientras lo que tiene detrás no cambie. Animando el fondo se invalidaban
+/// todas veinte veces por segundo, justo mientras el scroll ya estaba pidiendo
+/// frames. Lo que se pierde es un seno de 40 pt de amplitud y ~37 s de periodo:
+/// invisible salvo mirando fijamente. El scroll sí se nota.
 private struct BackgroundAurora: View {
-    @State private var phase: CGFloat = 0
     var body: some View {
         ZStack {
             Color.bgPrimary
-            TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: false)) { ctx in
-                let t = ctx.date.timeIntervalSinceReferenceDate
-                let a = CGFloat(sin(t / 6) * 40)
-                let b = CGFloat(cos(t / 8) * 40)
-                ZStack {
-                    Circle()
-                        .fill(Color.clarityPrimary.opacity(0.28))
-                        .frame(width: 320, height: 320)
-                        .blur(radius: 80)
-                        .offset(x: -80 + a, y: -180 + b)
-                    Circle()
-                        .fill(Color.clarityAccent.opacity(0.22))
-                        .frame(width: 360, height: 360)
-                        .blur(radius: 90)
-                        .offset(x: 120 - a, y: 220 - b)
-                }
-                // Rasteriza el blur en GPU (1 textura) en vez de recomponer
-                // 2 blurs grandes por frame. Fondo no interactivo → seguro.
-                .drawingGroup()
-                .allowsHitTesting(false)
+            ZStack {
+                Circle()
+                    .fill(Color.clarityPrimary.opacity(0.28))
+                    .frame(width: 320, height: 320)
+                    .blur(radius: 80)
+                    .offset(x: -80, y: -180)
+                Circle()
+                    .fill(Color.clarityAccent.opacity(0.22))
+                    .frame(width: 360, height: 360)
+                    .blur(radius: 90)
+                    .offset(x: 120, y: 220)
             }
+            // Los dos blurs se resuelven a una sola textura en GPU.
+            .drawingGroup()
+            .allowsHitTesting(false)
         }
     }
 }

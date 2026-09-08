@@ -70,16 +70,24 @@ final class ChartsViewModel {
     var isLoading: Bool = false
 
     // MARK: - Cache (invalidado en didSet de expenses/selectedPeriod)
-    private var _filteredCache: [Expense]?
-    private var _previousCache: [Expense]?
-    private var _dailyCache: [DailyPoint]?
-    private var _categoryStatsCache: [CategoryStat]?
+    //
+    // @ObservationIgnored es obligatorio aquí, no cosmético: estos caches se
+    // rellenan DENTRO de los getters de abajo, o sea durante la evaluación del
+    // body. Si @Observable los vigila, ese relleno cuenta como mutación, marca
+    // la vista sucia y provoca otro render — que vuelve a leerlos. Scrollear
+    // pasa a costar el doble de renders y la pantalla da tirones.
+    @ObservationIgnored private var _filteredCache: [Expense]?
+    @ObservationIgnored private var _previousCache: [Expense]?
+    @ObservationIgnored private var _dailyCache: [DailyPoint]?
+    @ObservationIgnored private var _categoryStatsCache: [CategoryStat]?
+    @ObservationIgnored private var _insightsCache: [Insight]?
 
     private func invalidateCache() {
         _filteredCache = nil
         _previousCache = nil
         _dailyCache = nil
         _categoryStatsCache = nil
+        _insightsCache = nil
     }
 
     // MARK: - Derived
@@ -195,6 +203,7 @@ final class ChartsViewModel {
     }
 
     var insights: [Insight] {
+        if let cached = _insightsCache { return cached }
         var out: [Insight] = []
         let stats = categoryStats
 
@@ -249,6 +258,7 @@ final class ChartsViewModel {
             ))
         }
 
+        _insightsCache = out
         return out
     }
 
