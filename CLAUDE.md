@@ -18,7 +18,12 @@ Clarity is a native iOS expense tracking app built with SwiftUI, targeting iOS 1
 - **NUNCA commitear `Secrets.swift`** — está en `.gitignore`. API keys (Gemini, Groq) viven ahí.
 - No hacer cambios que no se han pedido. Si hay varias formas, preguntar antes de elegir.
 - Commits solo cuando se piden explícitamente.
-- IA está **deshabilitada** temporalmente (placeholder `AIDisabledView`). Para reactivar: cambiar `AIDisabledView()` por `AIAdvisorView()` en `MainTabView.swift` y `MoreMenuView.swift`.
+- IA está **deshabilitada**. `AIAdvisorView` y todo el `AIService` siguen en el
+  repo; lo que no hay es forma de llegar a ellos. Para reactivar: devolver la
+  pestaña a `MainTabView.swift` apuntando a `AIAdvisorView()`.
+- No hay placeholder de "Próximamente" en ninguna parte, y no debe volver a
+  haberlo: una función anunciada en la interfaz que al tocarla no hace nada es
+  contenido de relleno, y App Review la rechaza por la guideline 2.1.
 
 ## Build & Deploy
 

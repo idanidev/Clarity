@@ -1,5 +1,5 @@
 // MoreMenuView.swift
-// Menu with Categories, IA, and Settings
+// Menu with Categories and Settings
 
 import SwiftUI
 
@@ -11,12 +11,6 @@ struct MoreMenuView: View {
                     CategoriesManagementView()
                 } label: {
                     Label("Categorías", systemImage: "square.grid.2x2.fill")
-                }
-                
-                NavigationLink {
-                    AIDisabledView()
-                } label: {
-                    Label("IA", systemImage: "sparkles")
                 }
                 
                 NavigationLink {
