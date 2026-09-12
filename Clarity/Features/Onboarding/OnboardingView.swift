@@ -15,7 +15,14 @@ struct OnboardingView: View {
     /// Si el usuario apuntó su primer gasto sin salir del onboarding.
     @State private var primerGastoHecho = false
 
-    private let totalFeaturePages = 2 // welcome + voice + add-expense tutorial
+    /// Las páginas, por nombre. Antes esto era aritmética sobre
+    /// `totalFeaturePages` ("+1", "+2") y había que contar con los dedos para
+    /// saber de qué pantalla hablaba cada rama.
+    private enum Pagina {
+        static let bienvenida = 0
+        static let primerGasto = 1
+        static let listo = 2
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -24,11 +31,9 @@ struct OnboardingView: View {
 
             // Page content
             TabView(selection: $page) {
-                WelcomePage().tag(0)
-                VoiceSiriPage().tag(1)
-                AddExpenseTutorialPage().tag(2)
-                PrimerGastoPage(yaRegistrado: $primerGastoHecho).tag(3)
-                DonePage(conGasto: primerGastoHecho).tag(4)
+                WelcomePage().tag(Pagina.bienvenida)
+                PrimerGastoPage(yaRegistrado: $primerGastoHecho).tag(Pagina.primerGasto)
+                DonePage(conGasto: primerGastoHecho).tag(Pagina.listo)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .task {
@@ -45,10 +50,10 @@ struct OnboardingView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Dot indicators (feature pages only)
-                if page <= totalFeaturePages {
+                // Dot indicators
+                if page <= Pagina.listo {
                     HStack(spacing: 6) {
-                        ForEach(0...totalFeaturePages, id: \.self) { i in
+                        ForEach(Pagina.bienvenida...Pagina.listo, id: \.self) { i in
                             Capsule()
                                 .fill(i == page ? Color.white : Color.white.opacity(0.3))
                                 .frame(width: i == page ? 20 : 6, height: 6)
@@ -83,7 +88,7 @@ struct OnboardingView: View {
                 // Secondary action
                 if page == 0 {
                     Button("Saltar") {
-                        withAnimation { page = totalFeaturePages + 2 }
+                        withAnimation { page = Pagina.listo }
                     }
                     .font(.subheadline)
                     .foregroundStyle(Color.white.opacity(0.5))
@@ -103,13 +108,12 @@ struct OnboardingView: View {
 
     private var ctaLabel: String {
         switch page {
-        case 0:           return "Descubrir Clarity"
-        case totalFeaturePages: return "Vamos a probarlo"
+        case Pagina.bienvenida: return "Vamos a probarlo"
         // En la página del primer gasto el botón deja de empujar: si ya se
         // apuntó algo, celebra; si no, permite pasar sin culpabilizar.
-        case totalFeaturePages + 1: return primerGastoHecho ? "Genial, sigue" : "Lo hago luego"
-        case totalFeaturePages + 2: return "Empezar"
-        default:          return "Siguiente"
+        case Pagina.primerGasto: return primerGastoHecho ? "Genial, sigue" : "Lo hago luego"
+        case Pagina.listo: return "Empezar"
+        default: return "Siguiente"
         }
     }
 
@@ -121,10 +125,8 @@ struct OnboardingView: View {
     private func trackOnboardingPage(_ index: Int) {
         let nombre: String
         switch index {
-        case 0: nombre = "onboarding_bienvenida"
-        case 1: nombre = "onboarding_voz"
-        case 2: nombre = "onboarding_tutorial"
-        case 3: nombre = "onboarding_primer_gasto"
+        case Pagina.bienvenida: nombre = "onboarding_bienvenida"
+        case Pagina.primerGasto: nombre = "onboarding_primer_gasto"
         default: nombre = "onboarding_listo"
         }
         AnalyticsService.shared.track(.screenViewed(name: nombre))
@@ -135,7 +137,7 @@ struct OnboardingView: View {
     }
 
     private func nextPage() {
-        if page == totalFeaturePages + 2 {
+        if page == Pagina.listo {
             saveAndComplete()
         } else {
             page += 1
@@ -232,7 +234,9 @@ private struct WelcomePage: View {
 
                 // Feature badges
                 HStack(spacing: 10) {
-                    ForEach(["mic.fill", "repeat", "chart.pie.fill", "sparkles"], id: \.self) { icon in
+                    // Sin "sparkles": prometía la IA, que está deshabilitada y ya
+                    // no tiene ni entrada en la app.
+                    ForEach(["mic.fill", "repeat", "chart.pie.fill"], id: \.self) { icon in
                         Image(systemName: icon)
                             .font(.system(size: 16, weight: .semibold))
                             .foregroundStyle(Color.white.opacity(0.8))
@@ -254,696 +258,7 @@ private struct WelcomePage: View {
     }
 }
 
-// MARK: - Page 1: Voice & Siri
-
-private struct VoiceSiriPage: View {
-    @State private var appear = false
-    @State private var wavePhase: CGFloat = 0
-    @State private var showCard = false
-    @State private var showSiri = false
-
-    private let bars = 28
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            // Purple glow
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.2))
-                .frame(width: 400)
-                .blur(radius: 100)
-                .offset(y: -80)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 70)
-
-                // Illustration: mic + waveform
-                ZStack {
-                    // Waveform rings
-                    ForEach(0..<3) { i in
-                        Circle()
-                            .strokeBorder(Color(hex: "#8B5CF6").opacity(0.15 - Double(i) * 0.04), lineWidth: 1.5)
-                            .frame(width: CGFloat(100 + i * 50), height: CGFloat(100 + i * 50))
-                            .scaleEffect(appear ? 1 : 0.2)
-                            .animation(.spring(response: 0.6).delay(Double(i) * 0.08 + 0.1), value: appear)
-                    }
-
-                    // Mic circle
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 88, height: 88)
-                        .shadow(color: Color(hex: "#8B5CF6").opacity(0.7), radius: 24, y: 8)
-
-                    Image(systemName: "waveform")
-                        .font(.system(size: 36, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .frame(height: 200)
-                .scaleEffect(appear ? 1 : 0.5)
-                .opacity(appear ? 1 : 0)
-                .animation(.spring(response: 0.6, dampingFraction: 0.7), value: appear)
-
-                Spacer().frame(height: 32)
-
-                // Mock voice transcript
-                if showCard {
-                    VStack(spacing: 10) {
-                        // Transcript bubble
-                        HStack {
-                            Image(systemName: "waveform")
-                                .font(.caption.bold())
-                                .foregroundStyle(Color(hex: "#8B5CF6"))
-                            Text("\"Añade 20 euros en gasolina\"")
-                                .font(.system(size: 14, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.white)
-                            Spacer()
-                        }
-                        .padding(12)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                        // Result card
-                        HStack(spacing: 12) {
-                            Text("⛽")
-                                .font(.title2)
-                                .frame(width: 40, height: 40)
-                                .background(Color(hex: "#F59E0B").opacity(0.15))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Gasolina")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(.white)
-                                Text("Transporte · Hoy")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.white.opacity(0.5))
-                            }
-                            Spacer()
-                            Text("20,00 €")
-                                .font(.system(size: 17, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white)
-                        }
-                        .padding(14)
-                        .background(Color.white.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
-                    }
-                    .padding(.horizontal, 28)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                // Siri trigger card — frase EXACTA destacada
-                if showSiri {
-                    VStack(spacing: 8) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "mic.fill")
-                                .font(.caption2.bold())
-                                .foregroundStyle(Color(hex: "#8B5CF6"))
-                            Text("CON SIRI, DI:")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Color(hex: "#8B5CF6"))
-                                .tracking(1.5)
-                        }
-
-                        Text("\"Oye Siri, Clarity añade un gasto\"")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(hex: "#8B5CF6").opacity(0.18), Color(hex: "#6366F1").opacity(0.12)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(hex: "#8B5CF6").opacity(0.4), lineWidth: 1))
-                    .padding(.top, 12)
-                    .padding(.horizontal, 28)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                Spacer().frame(height: 28)
-
-                pageText(
-                    tag: "GASTOS POR VOZ Y SIRI",
-                    title: "Habla, y queda\nregistrado.",
-                    subtitle: "Empieza siempre por \"Clarity\" para que Siri te entienda al instante: \"Clarity añade un gasto\", \"Clarity cuánto llevo gastado\"."
-                )
-
-                Spacer()
-                Spacer()
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6)) { appear = true }
-            withAnimation(.easeOut(duration: 0.4).delay(0.6)) { showCard = true }
-            withAnimation(.easeOut(duration: 0.3).delay(1.0)) { showSiri = true }
-        }
-    }
-}
-
-// MARK: - Page 2: Add Expense Tutorial
-
-private struct AddExpenseTutorialPage: View {
-    @State private var appear = false
-    @State private var showStep1 = false
-    @State private var showStep2 = false
-    @State private var showStep3 = false
-    @State private var pulseButton = false
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#F59E0B").opacity(0.15))
-                .frame(width: 350)
-                .blur(radius: 100)
-                .offset(x: 40, y: -80)
-
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.1))
-                .frame(width: 250)
-                .blur(radius: 80)
-                .offset(x: -60, y: 60)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 70)
-
-                // Mock "+" button
-                ZStack {
-                    // Pulse rings
-                    ForEach(0..<2) { i in
-                        Circle()
-                            .strokeBorder(Color(hex: "#8B5CF6").opacity(0.2), lineWidth: 1.5)
-                            .frame(width: CGFloat(90 + i * 30), height: CGFloat(90 + i * 30))
-                            .scaleEffect(pulseButton ? 1.15 : 1)
-                            .opacity(pulseButton ? 0 : 0.6)
-                            .animation(
-                                .easeInOut(duration: 1.5)
-                                .repeatForever(autoreverses: false)
-                                .delay(Double(i) * 0.3),
-                                value: pulseButton
-                            )
-                    }
-
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 72, height: 72)
-                        .shadow(color: Color(hex: "#8B5CF6").opacity(0.6), radius: 20, y: 6)
-
-                    Image(systemName: "plus")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .scaleEffect(appear ? 1 : 0.4)
-                .opacity(appear ? 1 : 0)
-                .animation(.spring(response: 0.6, dampingFraction: 0.7), value: appear)
-
-                Spacer().frame(height: 28)
-
-                // Step-by-step visual hints
-                VStack(spacing: 10) {
-                    if showStep1 {
-                        tutorialStep(
-                            number: "1",
-                            icon: "plus.circle.fill",
-                            text: "Pulsa + para crear un gasto",
-                            color: Color(hex: "#8B5CF6")
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-
-                    if showStep2 {
-                        tutorialStep(
-                            number: "2",
-                            icon: "eurosign.circle.fill",
-                            text: "Escribe el monto y elige categoría",
-                            color: Color(hex: "#F59E0B")
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-
-                    if showStep3 {
-                        tutorialStep(
-                            number: "3",
-                            icon: "checkmark.circle.fill",
-                            text: "Confirma y listo — queda registrado",
-                            color: Color(hex: "#10B981")
-                        )
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .padding(.horizontal, 28)
-
-                // Alt hint
-                if showStep3 {
-                    HStack(spacing: 8) {
-                        Image(systemName: "waveform")
-                            .font(.caption.bold())
-                            .foregroundStyle(Color(hex: "#8B5CF6"))
-                        Text("O simplemente dilo por voz")
-                            .font(.caption.bold())
-                            .foregroundStyle(Color.white.opacity(0.6))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(Capsule())
-                    .padding(.top, 14)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                Spacer().frame(height: 28)
-
-                pageText(
-                    tag: "REGISTRA GASTOS",
-                    title: "Añadir un gasto\ntoma 5 segundos.",
-                    subtitle: "Escríbelo a mano, dilo por voz o pídelo a Siri. Clarity categoriza automáticamente cada gasto."
-                )
-
-                Spacer()
-                Spacer()
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6)) { appear = true }
-            pulseButton = true
-            withAnimation(.easeOut(duration: 0.35).delay(0.5)) { showStep1 = true }
-            withAnimation(.easeOut(duration: 0.35).delay(0.9)) { showStep2 = true }
-            withAnimation(.easeOut(duration: 0.35).delay(1.3)) { showStep3 = true }
-        }
-    }
-
-    private func tutorialStep(number: String, icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundStyle(color)
-            }
-
-            Text(text)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.white)
-
-            Spacer()
-
-            Text(number)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.3))
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-    }
-}
-
-// MARK: - (Archived) Recurring Expenses
-
-private struct RecurringPage: View {
-    @State private var appear = false
-
-    private let items: [(emoji: String, name: String, amount: String, color: Color)] = [
-        ("📺", "Netflix", "15,99 €", Color(hex: "#EF4444")),
-        ("🎵", "Spotify", "9,99 €", Color(hex: "#10B981")),
-        ("📦", "Amazon Prime", "4,99 €", Color(hex: "#F59E0B")),
-        ("☁️", "iCloud", "2,99 €", Color(hex: "#3B82F6")),
-        ("🏠", "Alquiler", "750,00 €", Color(hex: "#8B5CF6")),
-    ]
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#10B981").opacity(0.15))
-                .frame(width: 350)
-                .blur(radius: 100)
-                .offset(y: -60)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 70)
-
-                // Stacked cards illustration
-                ZStack {
-                    ForEach(Array(items.prefix(4).enumerated().reversed()), id: \.offset) { i, item in
-                        recurringCard(item: item)
-                            .offset(y: CGFloat(i) * -6)
-                            .scaleEffect(1 - CGFloat(i) * 0.04)
-                            .opacity(appear ? 1 - Double(i) * 0.15 : 0)
-                            .offset(y: appear ? 0 : 40)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(Double(i) * 0.07 + 0.1), value: appear)
-                    }
-                }
-                .frame(height: 190)
-                .padding(.horizontal, 28)
-
-                // Auto badge
-                HStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color(hex: "#10B981"))
-                    Text("Clarity los registra automáticamente cada mes")
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.white.opacity(0.7))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color(hex: "#10B981").opacity(0.1))
-                .clipShape(Capsule())
-                .padding(.top, 20)
-                .opacity(appear ? 1 : 0)
-                .animation(.easeOut(duration: 0.4).delay(0.6), value: appear)
-
-                Spacer().frame(height: 28)
-
-                pageText(
-                    tag: "GASTOS RECURRENTES",
-                    title: "Suscripciones y pagos fijos,\ngestionados solos.",
-                    subtitle: "Define una vez tus gastos recurrentes — Netflix, alquiler, gimnasio — y Clarity los crea automáticamente cada mes en la fecha correcta."
-                )
-
-                Spacer()
-                Spacer()
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6)) { appear = true }
-        }
-    }
-
-    private func recurringCard(item: (emoji: String, name: String, amount: String, color: Color)) -> some View {
-        HStack(spacing: 12) {
-            Text(item.emoji)
-                .font(.title2)
-                .frame(width: 44, height: 44)
-                .background(item.color.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                HStack(spacing: 4) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10))
-                        .foregroundStyle(item.color)
-                    Text("Mensual")
-                        .font(.caption)
-                        .foregroundStyle(Color.white.opacity(0.4))
-                }
-            }
-            Spacer()
-            Text(item.amount)
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(hex: "#111111"))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-    }
-}
-
-// MARK: - Page 3: Charts & Analytics
-
-private struct ChartsPage: View {
-    @State private var appear = false
-    @State private var chartProgress: Double = 0
-
-    private let segments: [(color: Color, fraction: Double, label: String, amount: String)] = [
-        (Color(hex: "#8B5CF6"), 0.32, "Vivienda",      "768 €"),
-        (Color(hex: "#3B82F6"), 0.22, "Alimentación",  "528 €"),
-        (Color(hex: "#10B981"), 0.18, "Ocio",           "432 €"),
-        (Color(hex: "#F59E0B"), 0.14, "Transporte",     "336 €"),
-        (Color(hex: "#EC4899"), 0.14, "Otros",          "336 €"),
-    ]
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#3B82F6").opacity(0.12))
-                .frame(width: 300)
-                .blur(radius: 80)
-                .offset(y: -100)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 60)
-
-                // Donut chart
-                ZStack {
-                    donutChart
-                        .frame(width: 170, height: 170)
-
-                    VStack(spacing: 2) {
-                        Text("2.400 €")
-                            .font(.system(size: 20, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white)
-                        Text("este mes")
-                            .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.4))
-                    }
-                }
-                .opacity(appear ? 1 : 0)
-                .scaleEffect(appear ? 1 : 0.6)
-                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: appear)
-
-                Spacer().frame(height: 20)
-
-                // Legend rows
-                VStack(spacing: 8) {
-                    ForEach(Array(segments.prefix(4).enumerated()), id: \.offset) { i, seg in
-                        HStack(spacing: 10) {
-                            Circle()
-                                .fill(seg.color)
-                                .frame(width: 8, height: 8)
-                            Text(seg.label)
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color.white.opacity(0.7))
-                            Spacer()
-                            // Bar
-                            GeometryReader { geo in
-                                ZStack(alignment: .leading) {
-                                    Capsule().fill(Color.white.opacity(0.07)).frame(height: 4)
-                                    Capsule().fill(seg.color)
-                                        .frame(width: geo.size.width * seg.fraction * (appear ? 1 : 0), height: 4)
-                                        .animation(.spring(response: 0.7).delay(Double(i) * 0.08 + 0.3), value: appear)
-                                }
-                            }
-                            .frame(width: 80, height: 4)
-
-                            Text(seg.amount)
-                                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.white)
-                                .frame(width: 52, alignment: .trailing)
-                        }
-                        .opacity(appear ? 1 : 0)
-                        .offset(x: appear ? 0 : 20)
-                        .animation(.spring(response: 0.4).delay(Double(i) * 0.07 + 0.2), value: appear)
-                    }
-                }
-                .padding(.horizontal, 28)
-
-                Spacer().frame(height: 24)
-
-                pageText(
-                    tag: "GRÁFICOS Y ANÁLISIS",
-                    title: "Ve a dónde va\ncada euro.",
-                    subtitle: "Gráficos de dona por categoría, barras de evolución mensual, y comparativas entre meses — todo actualizado en tiempo real."
-                )
-
-                Spacer()
-                Spacer()
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6)) { appear = true }
-        }
-    }
-
-    private var donutChart: some View {
-        ZStack {
-            Circle().fill(Color(hex: "#111111"))
-
-            ForEach(Array(segments.enumerated()), id: \.offset) { i, seg in
-                let start = segments.prefix(i).reduce(0) { $0 + $1.fraction }
-                Circle()
-                    .trim(from: start, to: start + seg.fraction * chartProgress)
-                    .stroke(seg.color, style: StrokeStyle(lineWidth: 22, lineCap: .butt))
-                    .rotationEffect(.degrees(-90))
-            }
-
-            Circle()
-                .fill(Color.black)
-                .frame(width: 116, height: 116)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).delay(0.3)) { chartProgress = 1 }
-        }
-    }
-}
-
-// MARK: - Page 4: AI Advisor Clara
-
-private struct AIAdvisorPage: View {
-    @State private var showMsg1 = false
-    @State private var showMsg2 = false
-    @State private var showMsg3 = false
-    @State private var showMsg4 = false
-    @State private var appear = false
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#EC4899").opacity(0.15))
-                .frame(width: 300)
-                .blur(radius: 80)
-                .offset(x: 60, y: -80)
-
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.12))
-                .frame(width: 200)
-                .blur(radius: 70)
-                .offset(x: -80, y: 60)
-
-            VStack(spacing: 0) {
-                Spacer().frame(height: 70)
-
-                // Clara avatar + name
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(LinearGradient(
-                                colors: [Color(hex: "#8B5CF6"), Color(hex: "#EC4899")],
-                                startPoint: .topLeading, endPoint: .bottomTrailing))
-                            .frame(width: 44, height: 44)
-                        Text("✦")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundStyle(.white)
-                    }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Clara")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(.white)
-                        Text("Asesora financiera IA")
-                            .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.45))
-                    }
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Circle().fill(Color(hex: "#10B981")).frame(width: 7, height: 7)
-                        Text("En línea")
-                            .font(.caption2)
-                            .foregroundStyle(Color(hex: "#10B981"))
-                    }
-                }
-                .padding(.horizontal, 28)
-                .opacity(appear ? 1 : 0)
-                .animation(.easeOut(duration: 0.3), value: appear)
-
-                Spacer().frame(height: 20)
-
-                // Chat bubbles
-                VStack(spacing: 10) {
-                    if showMsg1 {
-                        userBubble("¿Cómo voy este mes?")
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
-                    }
-                    if showMsg2 {
-                        claraBubble("Llevas **487 €** gastados — el **43%** de tus ingresos. Ocio sube un 28% respecto a febrero. ⚠️")
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
-                    if showMsg3 {
-                        userBubble("¿Qué me recomiendas?")
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
-                    }
-                    if showMsg4 {
-                        claraBubble("Si reduces Ocio 80 €, cierras el mes con 150 € libres. ¿Creo un límite de gasto para esa categoría? 🎯")
-                            .transition(.move(edge: .leading).combined(with: .opacity))
-                    }
-                }
-                .padding(.horizontal, 20)
-
-                Spacer().frame(height: 24)
-
-                pageText(
-                    tag: "ASESORA FINANCIERA IA",
-                    title: "Clara conoce\ntus finanzas.",
-                    subtitle: "Pregúntale lo que quieras: cuánto llevas gastado, dónde puedes ahorrar, cómo van tus metas. Analiza tus datos reales, no respuestas genéricas."
-                )
-
-                Spacer()
-                Spacer()
-            }
-        }
-        .onAppear {
-            withAnimation { appear = true }
-            withAnimation(.easeOut(duration: 0.3).delay(0.4)) { showMsg1 = true }
-            withAnimation(.easeOut(duration: 0.3).delay(1.0)) { showMsg2 = true }
-            withAnimation(.easeOut(duration: 0.3).delay(1.8)) { showMsg3 = true }
-            withAnimation(.easeOut(duration: 0.3).delay(2.4)) { showMsg4 = true }
-        }
-    }
-
-    private func userBubble(_ text: String) -> some View {
-        HStack {
-            Spacer()
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color(hex: "#8B5CF6"))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-        }
-    }
-
-    private func claraBubble(_ text: String) -> some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            Circle()
-                .fill(LinearGradient(colors: [Color(hex: "#8B5CF6"), Color(hex: "#EC4899")], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .frame(width: 26, height: 26)
-                .overlay(Text("✦").font(.system(size: 11, weight: .bold)).foregroundStyle(.white))
-
-            Text(.init(text))  // attributed for **bold**
-                .font(.system(size: 14))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.white.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-            Spacer()
-        }
-    }
-}
-
-// MARK: - Page 5: Income Setup
+// MARK: - Página final
 
 private struct DonePage: View {
     /// El resumen no promete: cuenta lo que el usuario acaba de hacer.
@@ -1028,8 +343,8 @@ private struct DonePage: View {
                                    color: Color(hex: "#3B82F6"),
                                    text: conGasto ? "Tu primer gasto ya está dentro" : "Gastos por voz listos")
                         Divider().background(Color.white.opacity(0.06))
-                        summaryRow(icon: "arrow.clockwise.circle.fill", color: Color(hex: "#8B5CF6"),
-                                   text: "Gastos fijos en automático")
+                        summaryRow(icon: "mic.circle.fill", color: Color(hex: "#8B5CF6"),
+                                   text: "Con Siri: «Clarity, añade un gasto»")
                         Divider().background(Color.white.opacity(0.06))
                         summaryRow(icon: "chart.pie.fill", color: Color(hex: "#10B981"),
                                    text: "Tu presupuesto, cuando lo necesites")
