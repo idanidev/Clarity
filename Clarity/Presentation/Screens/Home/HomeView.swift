@@ -31,7 +31,49 @@ struct HomeView: View {
             .background(DesignTokens.Colors.background)
             .trackScreen("home")
             .navigationTitle("")
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+            // La búsqueda nativa se pliega al desplazar, así que no ocupa sitio
+            // mientras no se usa —que es casi siempre—.
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "Buscar gastos"
+            )
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    MonthSelectorView(currentMonth: $viewModel.selectedMonth)
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: DesignTokens.Spacing.xxs) {
+                        if viewModel.selectedFilter.hasActiveFilters {
+                            Button {
+                                viewModel.selectedFilter = ExpenseFilter()
+                                HapticManager.shared.notification(.success)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                            }
+                            .accessibilityLabel("Limpiar filtros")
+                        }
+
+                        Button {
+                            showFilterSheet = true
+                            HapticManager.shared.selection()
+                        } label: {
+                            Image(
+                                systemName: viewModel.selectedFilter.hasActiveFilters
+                                    ? "line.3.horizontal.decrease.circle.fill"
+                                    : "line.3.horizontal.decrease.circle"
+                            )
+                        }
+                        .accessibilityLabel("Filtros")
+                    }
+                    .tint(
+                        viewModel.selectedFilter.hasActiveFilters
+                            ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary
+                    )
+                }
+            }
             .refreshable { await viewModel.refresh() }
             .task {
                 await viewModel.loadIfNeeded()
@@ -142,98 +184,8 @@ struct HomeView: View {
     // MARK: - Tab 1: List View
     private var listView: some View {
         VStack(spacing: 0) {
-            // Header Content (Cards + Search) - Fixed at top
-            VStack(spacing: DesignTokens.Spacing.sm) {
-                // Summary Cards Modernas
-                SummaryCardsView(
-                    totalExpenses: filteredTotal,
-                    expenseCount: viewModel.filteredExpenses.count,
-                    savings: savings,
-                    savingsPercentage: savings > 0
-                        ? Int((savings / (monthlyIncome > 0 ? monthlyIncome : 1)) * 100)
-                        : 0,
-                    available: savings
-                )
-                .padding(.horizontal, DesignTokens.Spacing.sm)
-                .padding(.top, 12)  // Espacio limpio desde navigation bar
-
-                // Month Selector — hidden while searching (search spans all months)
-                if viewModel.searchText.isEmpty {
-                    MonthSelectorView(currentMonth: $viewModel.selectedMonth)
-                    .padding(.horizontal, DesignTokens.Spacing.sm)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                // Search Bar Moderna + Filter Button
-                HStack(spacing: DesignTokens.Spacing.xs) {
-                    SearchBarView(
-                        searchText: $viewModel.searchText,
-                        filter: $viewModel.selectedFilter,
-                        onFilterChange: {
-                            // Handled automatically by ViewModel bindings
-                        }
-                    )
-
-                    // Clear Filter Button (only if active)
-                    if viewModel.selectedFilter.hasActiveFilters {
-                        Button {
-                            viewModel.selectedFilter = ExpenseFilter()  // Reset
-                            HapticManager.shared.notification(.success)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(DesignTokens.Colors.textSecondary)
-                                .frame(width: 44, height: 44)
-                                .background(DesignTokens.Colors.surface)
-                                .clipShape(Circle())
-                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                        .accessibilityLabel("Limpiar filtros")
-                    }
-
-                    Button {
-                        showFilterSheet = true
-                        HapticManager.shared.selection()
-                    } label: {
-                        // Purple icon if active filters
-                        Image(
-                            systemName: viewModel.selectedFilter.hasActiveFilters
-                                ? "line.3.horizontal.decrease.circle.fill"
-                                : "line.3.horizontal.decrease.circle"
-                        )
-                        .font(.system(size: 22))
-                        .foregroundColor(
-                            viewModel.selectedFilter.hasActiveFilters
-                                ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary
-                        )
-                        .frame(width: 44, height: 44)
-                        .background(DesignTokens.Colors.surface)
-                        .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    }
-                    .accessibilityLabel("Filtros")
-                }
-                .padding(.horizontal, DesignTokens.Spacing.sm)
-                // ActiveFilterPillsView removed as requested
-            }
-            .animation(.easeInOut(duration: 0.2), value: viewModel.searchText.isEmpty)
-            .background(DesignTokens.Colors.background)
-            // Sombra inferior que crea profundidad entre header y lista
-            .overlay(alignment: .bottom) {
-                LinearGradient(
-                    colors: [
-                        DesignTokens.Colors.background,
-                        DesignTokens.Colors.background.opacity(0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 16)
-                .offset(y: 16)
-                .allowsHitTesting(false)
-            }
-
+            // Sin cabecera fija: los totales bajan dentro de la lista y el mes,
+            // la búsqueda y los filtros suben a la barra de navegación.
             // List Content - Scrollable
             if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
                 loadingView
@@ -253,7 +205,17 @@ struct HomeView: View {
                     onLoadMore: {
                         Task { await viewModel.loadMore() }
                     }
-                )
+                ) {
+                    SummaryCardsView(
+                        totalExpenses: filteredTotal,
+                        expenseCount: viewModel.filteredExpenses.count,
+                        savings: savings,
+                        savingsPercentage: savings > 0
+                            ? Int((savings / (monthlyIncome > 0 ? monthlyIncome : 1)) * 100)
+                            : 0,
+                        available: savings
+                    )
+                }
             }
         }
     }

@@ -31,11 +31,16 @@ struct SubcategoryGroup: Identifiable, Equatable {
 }
 
 // MARK: - Main Expandable List
-struct ExpandableExpenseList: View {
+struct ExpandableExpenseList<Header: View>: View {
     let categories: [CategoryGroup]  // Read-only value
     let onExpenseDelete: (Expense) -> Void
     let onExpenseEdit: (Expense) -> Void
     var onLoadMore: (() -> Void)? = nil  // Optional for pagination
+    /// Contenido que va sobre la lista y se desplaza con ella. Las tarjetas de
+    /// totales estaban fijas encima y el primer gasto empezaba muy abajo;
+    /// dentro del List se leen igual y devuelven la pantalla al contenido.
+    @ViewBuilder var header: () -> Header
+
 
     // Persistente entre sesiones (UserDefaults). Default: todo expandido.
     @State private var collapsedCategories: Set<String> = Self.loadSet(key: "expenses.collapsedCategories")
@@ -50,6 +55,11 @@ struct ExpandableExpenseList: View {
 
     var body: some View {
         List {
+            header()
+                .listRowInsets(EdgeInsets(top: 0, leading: 12, bottom: 8, trailing: 12))
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+
             ForEach(categories, id: \.name) { category in
                 CategorySection(
                     category: category,
@@ -382,6 +392,25 @@ struct ExpenseRow: View {
 }
 
 // MARK: - Preview
+
+extension ExpandableExpenseList where Header == EmptyView {
+    /// Sin cabecera, para quien solo quiere la lista.
+    init(
+        categories: [CategoryGroup],
+        onExpenseDelete: @escaping (Expense) -> Void,
+        onExpenseEdit: @escaping (Expense) -> Void,
+        onLoadMore: (() -> Void)? = nil
+    ) {
+        self.init(
+            categories: categories,
+            onExpenseDelete: onExpenseDelete,
+            onExpenseEdit: onExpenseEdit,
+            onLoadMore: onLoadMore,
+            header: { EmptyView() }
+        )
+    }
+}
+
 #Preview {
     let sampleExpenses = [
         Expense(
