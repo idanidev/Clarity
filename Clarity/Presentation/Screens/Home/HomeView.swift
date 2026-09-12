@@ -9,7 +9,7 @@ struct HomeView: View {
     private var userDataManager = UserDataManager.shared
 
     // UI State
-    @State private var selectedView = 0  // 0 = Tabla, 1 = Gráfico, 2 = Calendario, 3 = VS
+    @State private var mostrarCalendario = false
     @State private var evolutionMonths = 6
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
@@ -42,6 +42,18 @@ struct HomeView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     MonthSelectorView(currentMonth: $viewModel.selectedMonth)
+                }
+
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            mostrarCalendario.toggle()
+                        }
+                        HapticManager.shared.selection()
+                    } label: {
+                        Image(systemName: mostrarCalendario ? "list.bullet" : "calendar")
+                    }
+                    .accessibilityLabel(mostrarCalendario ? "Ver como lista" : "Ver como calendario")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -126,58 +138,35 @@ struct HomeView: View {
     private var mainContent: some View {
         ZStack(alignment: .bottom) {
             // Views (List, Chart, etc.)
+            // Los gastos del mes, por lista o por calendario. El donut de
+            // categorías estaba aquí y en Análisis enseñando lo mismo: esta
+            // pantalla dice cuánto llevas, la otra dice en qué se te va.
             Group {
-                switch selectedView {
-                case 0:
-                    listView
-                case 1:
-                    chartView
-                case 2:
+                if mostrarCalendario {
                     calendarView
-                // case 3: comparisonView  // Temporalmente deshabilitado
-                default:
+                } else {
                     listView
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: selectedView)
-            .padding(.bottom, 60)  // Space for floating bar
+            .animation(.easeInOut(duration: 0.2), value: mostrarCalendario)
+            .padding(.bottom, 60)  // Espacio para el botón de voz
 
-            // Floating Bottom Bar
-            segmentedPicker
+            // Botón de voz, la acción principal de la pantalla
+            voiceButtonBar
         }
     }
 
-    // MARK: - Bottom Picker
-    private var segmentedPicker: some View {
-        ZStack(alignment: .bottom) {
-            // Centered Pills (Floating Island)
-            HStack(spacing: 0) {
-                viewModeButton(icon: "list.bullet", index: 0)
-                    .accessibilityLabel("Vista lista")
-                viewModeButton(icon: "chart.pie.fill", index: 1)
-                    .accessibilityLabel("Vista gráficos")
-                viewModeButton(icon: "calendar", index: 2)
-                    .accessibilityLabel("Vista calendario")
-                // viewModeButton(icon: "arrow.left.arrow.right", index: 3)
-                //     .accessibilityLabel("Comparar meses")
-            }
-            .padding(4)
-            .background(.regularMaterial)
-            .clipShape(Capsule())
-            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-            .frame(maxWidth: .infinity, alignment: .center)  // Force center
+    // MARK: - Botón de voz
 
-            // Voice Button Aligned Right
-            HStack {
-                Spacer()
-                SimpleVoiceButton(
-                    viewModel: viewModel,
-                    categories: UserDataManager.shared.categories
-                )
-                .offset(y: 4)  // "mas abajo" slightly to align nicely vs capsule
-            }
-            .padding(.trailing, DesignTokens.Spacing.md)
+    private var voiceButtonBar: some View {
+        HStack {
+            Spacer()
+            SimpleVoiceButton(
+                viewModel: viewModel,
+                categories: UserDataManager.shared.categories
+            )
         }
+        .padding(.trailing, DesignTokens.Spacing.md)
         .padding(.bottom, DesignTokens.Spacing.sm)
     }
 
@@ -220,51 +209,6 @@ struct HomeView: View {
         }
     }
 
-    // MARK: - Tab 2: Chart View
-    private var chartView: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if viewModel.filteredExpenses.isEmpty {
-                    SinGastosEmptyView(
-                        titulo: "Todavía no hay nada que enseñar",
-                        mensaje: "En cuanto apuntes un gasto verás aquí en qué se te va el mes.",
-                        icono: "chart.pie"
-                    ) { showAddExpense = true }
-                } else {
-                    // Donut Chart - Comparativa ahora en tab VS de ExpensesView
-                    DonutChartView(
-                        categoryData: buildChartData(),
-                        total: filteredTotal,
-                        expenses: viewModel.filteredExpenses
-                    )
-                }
-            }
-            .padding(.bottom, 80)
-        }
-        // Swipe horizontal cambia de mes (← anterior / → siguiente, sin futuro).
-        // Asignar el mes ya dispara la carga de sus gastos: lo hace el didSet
-        // de `selectedMonth`.
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                    let cal = Calendar.current
-                    if value.translation.width < -50 {
-                        if let next = cal.date(byAdding: .month, value: 1, to: viewModel.selectedMonth),
-                           next <= Date() {
-                            withAnimation(.snappy) { viewModel.selectedMonth = next }
-                            HapticManager.shared.selection()
-                        }
-                    } else if value.translation.width > 50 {
-                        if let prev = cal.date(byAdding: .month, value: -1, to: viewModel.selectedMonth) {
-                            withAnimation(.snappy) { viewModel.selectedMonth = prev }
-                            HapticManager.shared.selection()
-                        }
-                    }
-                }
-        )
-    }
-
     // MARK: - Tab 3: Calendar View
     private var calendarView: some View {
         ScrollView {
@@ -295,31 +239,6 @@ struct HomeView: View {
                 }
             }
             .padding(.bottom, 80)
-        }
-    }
-
-    private func viewModeButton(icon: String, index: Int) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedView = index
-            }
-            HapticManager.shared.selection()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: selectedView == index ? .semibold : .medium))  // Slightly smaller icon
-                .foregroundStyle(selectedView == index ? Color.white : Color.primary.opacity(0.5))
-                .frame(width: 44, height: 36)  // More compact
-        }
-        .background(
-            Capsule()
-                .fill(selectedView == index ? DesignTokens.Colors.accent : Color.clear)
-        )
-    }
-
-    // MARK: - Tab 4: Comparison View (VS)
-    private var comparisonView: some View {
-        MonthComparisonView(expenses: viewModel.allHistoricalExpenses) {
-            showAddExpense = true
         }
     }
 
