@@ -15,6 +15,8 @@ struct GraficasPage: View {
                 porDia
                 if !viewModel.gastosMesAnterior.isEmpty { comparativa }
                 evolucion
+                calendario
+                semanas
                 Color.clear.frame(height: 90)
             }
             .padding(.horizontal, Spacing.sm)
@@ -57,6 +59,7 @@ struct GraficasPage: View {
         }
         .padding(16)
         .glassCard()
+        .ondaAlTocar()
     }
 
     // Gasto por día, con el más caro señalado
@@ -158,6 +161,38 @@ struct GraficasPage: View {
             }
             .chartYAxis(.hidden)
             .frame(height: 150)
+        }
+        .padding(16)
+        .glassCard()
+    }
+}
+
+// MARK: - Cuándo
+
+extension GraficasPage {
+    private var calendario: some View {
+        ExpenseCalendarView(expenses: viewModel.allHistoricalExpenses)
+            .padding(.vertical, 8)
+            .glassCard()
+    }
+
+    private var semanas: some View {
+        let filas = viewModel.semanasDelMes
+        let maximo = filas.map(\.importe).max() ?? 0
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Por semanas").font(.subheadline.weight(.semibold))
+            HStack(spacing: 8) {
+                ForEach(Array(filas.enumerated()), id: \.offset) { _, f in
+                    VStack(spacing: 3) {
+                        Text(f.etiqueta).font(.caption2).foregroundStyle(.secondary)
+                        Text(Formatters.currencyCompact(f.importe))
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(maximo > 0 && f.importe == maximo ? Color.error : .primary)
+                            .lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
         }
         .padding(16)
         .glassCard()

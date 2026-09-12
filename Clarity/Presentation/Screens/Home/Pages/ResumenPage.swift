@@ -6,7 +6,7 @@ import SwiftUI
 struct ResumenPage: View {
     @Bindable var viewModel: HomeViewModel
     let onEditar: (Expense) -> Void
-    let onAnadir: () -> Void
+    let onVerGastos: () -> Void
 
     var body: some View {
         ScrollView {
@@ -26,10 +26,8 @@ struct ResumenPage: View {
                     .entrada()
                 }
 
-                CategoriasCard(grupos: viewModel.categoryGroups, total: r.total, numero: r.numeroGastos) {
-                    GastosDelMesView(viewModel: viewModel, onEditar: onEditar)
-                }
-                .entrada()
+                CategoriasCard(grupos: viewModel.categoryGroups, total: r.total, numero: r.numeroGastos, onVerGastos: onVerGastos)
+                    .entrada()
 
                 UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
                     .entrada()
@@ -54,9 +52,8 @@ private extension View {
     func entrada() -> some View {
         scrollTransition(.interactive) { content, phase in
             content
-                .opacity(phase.isIdentity ? 1 : 0.35)
-                .scaleEffect(phase.isIdentity ? 1 : 0.96)
-                .offset(y: phase.value * 18)
+                .opacity(phase.isIdentity ? 1 : 0.4)
+                .scaleEffect(phase.isIdentity ? 1 : 0.97)
         }
     }
 }
@@ -65,6 +62,8 @@ private extension View {
 
 private struct HeroCard: View {
     let resumen: HomeResumen
+    /// La cifra sube desde cero al aparecer: los dígitos ruedan hasta el total.
+    @State private var mostrado = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -77,15 +76,17 @@ private struct HeroCard: View {
                 chip
             }
 
-            Text(Formatters.currency(resumen.total))
+            Text(Formatters.currency(mostrado ? resumen.total : 0))
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .tracking(-1.2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 // Los dígitos ruedan al nuevo valor en vez de parpadear.
-                .contentTransition(.numericText(value: resumen.total))
+                .contentTransition(.numericText(value: mostrado ? resumen.total : 0))
+                .animation(.snappy(duration: 0.9), value: mostrado)
                 .animation(.snappy(duration: 0.5), value: resumen.total)
                 .padding(.top, 4)
+                .onAppear { mostrado = true }
 
             if let progreso = resumen.progresoPresupuesto, let libres = resumen.libres, let presupuesto = resumen.presupuesto {
                 Barra(progreso: progreso, color: .clarityPrimary)
@@ -118,6 +119,7 @@ private struct HeroCard: View {
         }
         .padding(20)
         .glassCard(cornerRadius: CornerRadius.xlarge)
+        .ondaAlTocar()
     }
 
     @ViewBuilder
@@ -196,6 +198,14 @@ private struct SlotCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(compacta ? 14 : 16)
         .glassCard(tint: tinte)
+        .ondaAlTocar()
+        .temblor(cuando: superados)
+    }
+
+    /// Cambia cuando un límite pasa a estar superado: dispara el temblor.
+    private var superados: Int {
+        if case .limites(let l) = contenido { return l.filter(\.superado).count }
+        return 0
     }
 
     private var tinte: Color? {
@@ -364,20 +374,20 @@ private struct SlotCard: View {
 
 // MARK: - Categorías y últimos
 
-private struct CategoriasCard<Destino: View>: View {
+private struct CategoriasCard: View {
     let grupos: [CategoryGroup]
     let total: Double
     let numero: Int
-    @ViewBuilder let destino: () -> Destino
+    let onVerGastos: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Por categoría").font(.subheadline.weight(.semibold))
                 Spacer()
-                // La lista completa —editar, borrar, desplegar subcategorías—
-                // sigue existiendo; esta tarjeta es el resumen y aquella el detalle.
-                NavigationLink { destino() } label: {
+                // La lista completa es la tercera página: esta tarjeta es el
+                // resumen y aquella el detalle.
+                Button(action: onVerGastos) {
                     HStack(spacing: 3) {
                         Text("\(numero) gastos")
                         Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
@@ -409,6 +419,7 @@ private struct CategoriasCard<Destino: View>: View {
         }
         .padding(16)
         .glassCard()
+        .ondaAlTocar()
     }
 }
 
@@ -438,23 +449,7 @@ private struct UltimosCard: View {
         }
         .padding(16)
         .glassCard()
+        .destello(cuando: gastos.first?.stableId)
     }
 }
 
-// MARK: - La lista completa, la de siempre
-
-private struct GastosDelMesView: View {
-    @Bindable var viewModel: HomeViewModel
-    let onEditar: (Expense) -> Void
-
-    var body: some View {
-        ExpandableExpenseList(
-            categories: viewModel.categoryGroups,
-            onExpenseDelete: { expense in Task { await viewModel.deleteExpense(expense) } },
-            onExpenseEdit: onEditar,
-            onLoadMore: { Task { await viewModel.loadMore() } }
-        )
-        .navigationTitle(Formatters.monthYear(from: viewModel.selectedMonth).capitalized)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}

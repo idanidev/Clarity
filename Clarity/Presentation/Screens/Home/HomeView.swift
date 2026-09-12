@@ -10,9 +10,8 @@ struct HomeView: View {
     @State private var viewModel: HomeViewModel
     private var userDataManager = UserDataManager.shared
 
-    /// Página visible del carrusel. Con `scrollPosition` el swipe y los puntos
-    /// hablan del mismo estado.
-    @State private var pagina: HomePagina? = .resumen
+    /// Página visible del carrusel.
+    @State private var pagina: HomePagina = .resumen
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
@@ -107,24 +106,18 @@ struct HomeView: View {
         }
     }
 
-    /// Las tres páginas, a lo ancho de la pantalla, encajando de una en una.
+    /// Las tres páginas. `TabView` paginado es el carrusel de iOS: solo se
+    /// mueve en horizontal, y cada página desplaza en vertical por su cuenta.
     private var carrusel: some View {
         VStack(spacing: 0) {
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(HomePagina.allCases) { p in
-                        pagina(p)
-                            .containerRelativeFrame(.horizontal)
-                            .id(p)
-                    }
+            TabView(selection: $pagina) {
+                ForEach(HomePagina.allCases) { p in
+                    pagina(p).tag(p)
                 }
-                .scrollTargetLayout()
             }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $pagina)
-            .scrollIndicators(.hidden)
+            .tabViewStyle(.page(indexDisplayMode: .never))
 
-            HomePuntos(actual: pagina ?? .resumen)
+            HomePuntos(actual: pagina)
                 .padding(.bottom, Spacing.xs)
         }
     }
@@ -133,11 +126,15 @@ struct HomeView: View {
     private func pagina(_ p: HomePagina) -> some View {
         switch p {
         case .resumen:
-            ResumenPage(viewModel: viewModel, onEditar: { expenseToEdit = $0 }, onAnadir: { showAddExpense = true })
+            ResumenPage(
+                viewModel: viewModel,
+                onEditar: { expenseToEdit = $0 },
+                onVerGastos: { withAnimation(.snappy) { pagina = .gastos } }
+            )
         case .graficas:
             GraficasPage(viewModel: viewModel)
-        case .calendario:
-            CalendarioPage(viewModel: viewModel)
+        case .gastos:
+            GastosPage(viewModel: viewModel, onEditar: { expenseToEdit = $0 })
         }
     }
 
@@ -253,7 +250,7 @@ struct HomeView: View {
 // MARK: - Páginas
 
 enum HomePagina: CaseIterable, Identifiable, Hashable {
-    case resumen, graficas, calendario
+    case resumen, graficas, gastos
     var id: Self { self }
 }
 
