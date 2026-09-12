@@ -1,5 +1,18 @@
 // AddExpenseSheet.swift
 // Add new expense form
+//
+// Diseño (#65): lo obligatorio cabe en una pantalla sin desplegar nada.
+//
+// De las seis secciones que tenía, solo dos son obligatorias —importe y
+// categoría— y la categoría casi nunca hay que tocarla: escribir el nombre la
+// deduce sola desde lo aprendido, el historial o las palabras clave. El
+// problema era que esa deducción ocurría en una fila plegada al fondo, así que
+// el usuario bajaba a comprobarla igualmente y el trabajo del parser no se veía.
+//
+// Ahora importe, nombre y categoría van juntos arriba; la categoría deducida se
+// enseña resuelta y se cambia en un toque desde los chips, sin salir de la
+// pantalla. Fecha, método de pago y notas bajan a "Más detalles", que muestra en
+// su cabecera lo que lleva dentro para no tener que abrirlo a comprobarlo.
 
 import SwiftUI
 
@@ -20,23 +33,20 @@ struct AddExpenseSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                AddExpAmountSection(viewModel: viewModel, focused: $focused)
-                AddExpDescriptionSection(viewModel: viewModel, focused: $focused)
+                AddExpEssentialsSection(viewModel: viewModel, focused: $focused)
                 AddExpCategorySection(viewModel: viewModel)
-                AddExpDateSection(viewModel: viewModel)
-                AddExpPaymentSection(viewModel: viewModel)
+                AddExpDetailsSection(viewModel: viewModel, focused: $focused)
                 GiftModeSection(
                     isShared: $viewModel.isShared,
                     debtors: $viewModel.debtors,
                     totalAmount: viewModel.amount ?? 0,
                     focused: $focused
                 )
-                AddExpNotesSection(viewModel: viewModel, focused: $focused)
             }
             .scrollDismissesKeyboard(.interactively)
             .trackScreen("anadir_gasto")
             .navigationTitle("Nuevo Gasto")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .task {
                 await viewModel.warmup()
                 // Foco inicial en importe
@@ -71,7 +81,10 @@ struct AddExpenseSheet: View {
 // MARK: - Sections (structs separadas para que @Observable solo re-renderice
 // las secciones cuyas propiedades cambian — evita re-render global al teclear)
 
-private struct AddExpAmountSection: View {
+/// Importe y descripción, los dos campos que hay que escribir sí o sí.
+/// Van juntos porque se rellenan seguidos y porque el nombre es lo que dispara
+/// la categorización: separarlos escondía esa relación.
+private struct AddExpEssentialsSection: View {
     @Bindable var viewModel: AddExpenseViewModel
     var focused: FocusState<AddExpField?>.Binding
 
@@ -96,20 +109,6 @@ private struct AddExpAmountSection: View {
             }
             .padding(.vertical, Spacing.sm)
 
-            // Operadores para combinar importes en un mismo gasto (una fanta y unas patatas).
-            // El teclado numérico no los tiene → estos botones los insertan. Iconos compactos
-            // + Spacer → caben en cualquier móvil sin desbordar.
-            HStack(spacing: 8) {
-                operatorButton("+", icon: "plus")
-                operatorButton("-", icon: "minus")
-                operatorButton("×", icon: "multiply")
-                operatorButton("÷", icon: "divide")
-                Spacer(minLength: 0)
-            }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(.small)
-
             // Total en vivo en su PROPIA línea → nunca compite por el ancho ni se corta.
             if viewModel.amountIsExpression {
                 HStack(spacing: 6) {
@@ -124,8 +123,36 @@ private struct AddExpAmountSection: View {
                 }
                 .font(.headline)
             }
+
+            TextField("¿En qué gastaste?", text: $viewModel.name)
+                .font(.clarityBody)
+                .focused(focused, equals: .name)
+                .submitLabel(.done)
+                .onSubmit { focused.wrappedValue = nil }
+                .accessibilityLabel("Descripción del gasto")
+                .onChange(of: viewModel.name) { _, newValue in
+                    viewModel.onNameChange(newValue)
+                }
+
+            // Operadores para combinar importes en un mismo gasto (una fanta y unas patatas).
+            // El teclado numérico no los tiene → estos botones los insertan. Solo aparecen
+            // con el importe enfocado: el resto del tiempo ocupaban sitio sin poder usarse.
+            if focused.wrappedValue == .amount {
+                HStack(spacing: 8) {
+                    operatorButton("+", icon: "plus")
+                    operatorButton("-", icon: "minus")
+                    operatorButton("×", icon: "multiply")
+                    operatorButton("÷", icon: "divide")
+                    Spacer(minLength: 0)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
+                .controlSize(.small)
+            }
         } footer: {
-            Text("¿Varias cosas en un ticket? Escribe un importe, pulsa un operador y añade el siguiente.")
+            if focused.wrappedValue == .amount {
+                Text("¿Varias cosas en un ticket? Escribe un importe, pulsa un operador y añade el siguiente.")
+            }
         }
     }
 
@@ -152,125 +179,154 @@ private struct AddExpAmountSection: View {
     }
 }
 
-private struct AddExpDescriptionSection: View {
-    @Bindable var viewModel: AddExpenseViewModel
-    var focused: FocusState<AddExpField?>.Binding
-
-    var body: some View {
-        Section("Descripción") {
-            TextField("¿En qué gastaste?", text: $viewModel.name)
-                .font(.clarityBody)
-                .focused(focused, equals: .name)
-                .submitLabel(.next)
-                .onSubmit { focused.wrappedValue = nil }
-                .accessibilityLabel("Descripción del gasto")
-                .onChange(of: viewModel.name) { _, newValue in
-                    viewModel.onNameChange(newValue)
-                }
-        }
-    }
-}
-
+/// Categoría: se enseña ya resuelta y se cambia sin salir de la pantalla.
+///
+/// Antes era un `NavigationLink` a otra pantalla: tres toques para algo que el
+/// parser suele acertar solo. Los chips ponen las categorías del usuario a un
+/// toque, y el enlace de siempre sigue disponible en cuanto hay una elegida,
+/// para subcategorías y para quien tenga muchas.
 private struct AddExpCategorySection: View {
     @Bindable var viewModel: AddExpenseViewModel
+    @State private var userData = UserDataManager.shared
 
     var body: some View {
         Section {
-            NavigationLink {
-                CategoryPickerView(
-                    selectedCategory: $viewModel.category,
-                    selectedSubcategory: $viewModel.subcategory
-                )
-                .onAppear {
-                    viewModel.wasAutoCategorized = false
-                }
-                .onChange(of: viewModel.category) { _, newValue in
-                    viewModel.categoryPickedByUser(newValue)
-                }
-            } label: {
-                HStack {
-                    if viewModel.category.isEmpty {
-                        Text("Seleccionar")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        Text(viewModel.category)
-                            .foregroundStyle(.primary)
-
-                        Spacer()
-
-                        if let sub = viewModel.subcategory {
-                            Text(sub)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("Elige subcategoría")
-                                .foregroundStyle(.orange)
-                                .font(.caption.weight(.medium))
-                        }
-
-                        if viewModel.wasAutoCategorized && !viewModel.category.isEmpty {
-                            Image(systemName: "sparkles")
-                                .font(.caption)
-                                .foregroundStyle(.yellow)
-                        }
-                    }
-                }
+            if viewModel.category.isEmpty {
+                categoryChips
+            } else {
+                chosenCategoryRow
             }
         } header: {
             Text("Categoría")
-        } footer: {
-            if !viewModel.category.isEmpty && viewModel.subcategory == nil {
-                Text("⚠️ Las subcategorías son obligatorias para todos los gastos")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-            }
         }
     }
-}
 
-private struct AddExpDateSection: View {
-    @Bindable var viewModel: AddExpenseViewModel
-
-    var body: some View {
-        Section("Fecha") {
-            DatePicker(
-                "Fecha",
-                selection: $viewModel.date,
-                displayedComponents: .date
-            )
-            .datePickerStyle(.compact)
-            .tint(Color.clarityPrimary)
-            .accessibilityLabel("Fecha del gasto")
-        }
-    }
-}
-
-private struct AddExpPaymentSection: View {
-    @Bindable var viewModel: AddExpenseViewModel
-
-    var body: some View {
-        Section("Método de pago") {
-            // Solo los métodos comunes (la gente usa 4-5). Gasto nuevo → no hay valor legacy.
-            Picker("", selection: $viewModel.paymentMethod) {
-                ForEach(PaymentMethod.pickerOptions) { method in
-                    Label(method.rawValue, systemImage: method.icon)
-                        .tag(method)
+    /// Las categorías del usuario en horizontal. Un toque y queda elegida.
+    private var categoryChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.xs) {
+                ForEach(userData.categories) { category in
+                    Button {
+                        viewModel.category = category.name
+                        viewModel.categoryPickedByUser(category.name)
+                        HapticManager.shared.selection()
+                    } label: {
+                        Text(category.name)
+                            .font(.subheadline)
+                            .lineLimit(1)
+                            .padding(.horizontal, Spacing.sm)
+                            .padding(.vertical, Spacing.xs)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
+                    .tint(Color.clarityPrimary)
                 }
             }
-            .pickerStyle(.navigationLink)
+            .padding(.vertical, Spacing.xxs)
+        }
+        .scrollClipDisabled()
+    }
+
+    /// Ya hay categoría: se enseña con su subcategoría y se entra a cambiarla.
+    /// La chispa marca que la puso la app y no el usuario, así se sabe de un
+    /// vistazo si conviene revisarla.
+    private var chosenCategoryRow: some View {
+        NavigationLink {
+            CategoryPickerView(
+                selectedCategory: $viewModel.category,
+                selectedSubcategory: $viewModel.subcategory
+            )
+            .onAppear {
+                viewModel.wasAutoCategorized = false
+            }
+            .onChange(of: viewModel.category) { _, newValue in
+                viewModel.categoryPickedByUser(newValue)
+            }
+        } label: {
+            HStack(spacing: Spacing.xs) {
+                Text(viewModel.category)
+                    .foregroundStyle(.primary)
+
+                if viewModel.wasAutoCategorized {
+                    Image(systemName: "sparkles")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
+                        .accessibilityLabel("Categoría deducida automáticamente")
+                }
+
+                Spacer()
+
+                if let sub = viewModel.subcategory {
+                    Text(sub)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
     }
 }
 
-private struct AddExpNotesSection: View {
+/// Todo lo que tiene un valor por defecto razonable: hoy, tarjeta y sin notas.
+/// Plegado, pero con el resumen en la cabecera para no tener que abrirlo solo a
+/// comprobar que la fecha es la de hoy.
+private struct AddExpDetailsSection: View {
     @Bindable var viewModel: AddExpenseViewModel
     var focused: FocusState<AddExpField?>.Binding
+    @State private var expanded = false
 
     var body: some View {
-        Section("Notas (opcional)") {
-            TextField("Notas adicionales...", text: $viewModel.notes, axis: .vertical)
-                .focused(focused, equals: .notes)
-                .lineLimit(3...6)
+        Section {
+            DisclosureGroup(isExpanded: $expanded) {
+                DatePicker(
+                    "Fecha",
+                    selection: $viewModel.date,
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                .tint(Color.clarityPrimary)
+                .accessibilityLabel("Fecha del gasto")
+
+                // Solo los métodos comunes (la gente usa 4-5). Gasto nuevo → no hay valor legacy.
+                Picker("Método de pago", selection: $viewModel.paymentMethod) {
+                    ForEach(PaymentMethod.pickerOptions) { method in
+                        Label(method.rawValue, systemImage: method.icon)
+                            .tag(method)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+
+                TextField("Notas", text: $viewModel.notes, axis: .vertical)
+                    .focused(focused, equals: .notes)
+                    .lineLimit(3...6)
+            } label: {
+                HStack {
+                    Text("Más detalles")
+                    Spacer()
+                    if !expanded {
+                        Text(resumen)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
         }
+    }
+
+    /// Lo que lleva dentro, en una línea: "Hoy · Tarjeta".
+    private var resumen: String {
+        var partes: [String] = [fechaCorta, viewModel.paymentMethod.rawValue]
+        if !viewModel.notes.isEmpty { partes.append("nota") }
+        return partes.joined(separator: " · ")
+    }
+
+    private var fechaCorta: String {
+        let cal = Calendar.current
+        if cal.isDateInToday(viewModel.date) { return "Hoy" }
+        if cal.isDateInYesterday(viewModel.date) { return "Ayer" }
+        // Mismo camino que usa `save()` para la fecha del gasto, así que lo que
+        // se lee aquí es exactamente lo que se va a guardar.
+        return Formatters.shortDisplay(Formatters.localDayString(from: viewModel.date))
     }
 }
 
