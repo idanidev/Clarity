@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+    a { color: #8B5CF6; } a:hover { color: #A855F7; }
+    @keyframes ripple { 0%, 20% { transform: scale(1); opacity: 1; } 70%, 100% { transform: scale(14); opacity: 0; } }
+    @keyframes wobble { 0%, 18% { transform: scale(1); } 24% { transform: scale(0.97); } 32% { transform: scale(1.02); } 40%, 100% { transform: scale(1); } }
+    @keyframes mesh { 0%, 100% { transform: scale(1) rotate(0deg); } 50% { transform: scale(1.25) rotate(25deg); } }
+    @keyframes squish { 0%, 25% { transform: scale(1, 1); } 40%, 60% { transform: scale(1.06, 0.9); } 75%, 100% { transform: scale(1, 1); } }
+    @keyframes finger { 0%, 25% { opacity: 0; transform: translateX(-30px) scale(0.6); } 40%, 60% { opacity: 1; transform: translateX(0) scale(1); } 75%, 100% { opacity: 0; transform: translateX(30px) scale(0.6); } }
+    @keyframes reveal { 0%, 12% { opacity: 0; filter: blur(10px); transform: translateY(8px); } 35%, 80% { opacity: 1; filter: blur(0); transform: translateY(0); } 100% { opacity: 0; filter: blur(10px); } }
+    @keyframes draw { 0%, 20% { stroke-dashoffset: 30; } 55%, 85% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 30; } }
+    @keyframes pop { 0%, 18% { transform: scale(0.6); opacity: 0; } 30%, 85% { transform: scale(1); opacity: 1; } 100% { transform: scale(0.6); opacity: 0; } }
+    @keyframes island { 0%, 15% { width: 90px; } 30%, 80% { width: 156px; } 95%, 100% { width: 90px; } }
+    @keyframes islandtext { 0%, 30% { opacity: 0; } 45%, 78% { opacity: 1; } 90%, 100% { opacity: 0; } }
+    @keyframes bar { from { transform: scaleY(0.35); } to { transform: scaleY(1.4); } }
+    @keyframes shine { 0%, 20% { left: -60px; } 60%, 100% { left: 160px; } }
+  </style>
+</helmet>
+<div style="width: 660px; min-height: 1260px; background: #0E0B1A; color: #FFFFFF; padding: 28px 30px; box-sizing: border-box;">
+  <div style="font-size: 11px; color: #C4B5FD; letter-spacing: 1px; font-weight: 600;">MOVIMIENTO · AVANZADO</div>
+  <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-top: 6px;">Siete más, y estos ya asustan</div>
+  <div style="font-size: 14px; color: rgba(255,255,255,0.65); margin-top: 8px; line-height: 1.5;">Siguen siendo nativos: dos son shaders Metal que SwiftUI aplica directo (iOS 17), dos son de iOS 18, dos de iOS 26 y uno es la Dynamic Island. <span style="color: #10B981;">Verde</span> funciona hoy; <span style="color: #F59E0B;">ámbar</span> iOS 18; <span style="color: #8B5CF6;">morado</span> iOS 26; <span style="color: #3B82F6;">azul</span> ActivityKit.</div>
+  <div style="margin-top: 14px;">
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 130px; height: 74px; border-radius: 16px; background: rgba(255,255,255,0.08); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; animation: wobble 3s cubic-bezier(.2,.8,.2,1) infinite; position: relative; overflow: hidden;">Coche-Moto · 501 €<div style="position: absolute; left: 40px; top: 30px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.7); animation: ripple 3s ease-out infinite;"></div><div style="position: absolute; left: 40px; top: 30px; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid rgba(255,255,255,0.45); animation: ripple 3s ease-out .18s infinite;"></div></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Onda desde el dedo</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.distortionEffect(ShaderLibrary.ripple(.float2(punto), .float(t)), maxSampleOffset: …)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Al tocar una tarjeta, una onda de agua sale del punto exacto del dedo y la tarjeta se estremece. Es un shader Metal de diez líneas que SwiftUI aplica directo a la vista.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="position: absolute; inset: 0; background: radial-gradient(circle at 30% 30%, rgba(139,92,246,0.9), transparent 55%), radial-gradient(circle at 75% 65%, rgba(99,102,241,0.8), transparent 55%), radial-gradient(circle at 55% 20%, rgba(236,72,153,0.6), transparent 50%); filter: blur(14px); animation: mesh 6s ease-in-out infinite;"></div><div style="position: relative; font-size: 13px; font-weight: 600; text-shadow: 0 2px 10px rgba(0,0,0,0.6);">Abril → Mayo</div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Malla que respira</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #F59E0B22; border: 0.5px solid #F59E0B66; color: #F59E0B;">iOS 18</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">MeshGradient(width: 3, height: 3, points: …, colors: …) animado con .keyframeAnimator</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">El fondo aurora cambia de forma al pasar de mes o al superar un tope. Solo en el evento: con la pantalla quieta se queda quieto.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 120px; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.14); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; animation: squish 2.6s cubic-bezier(.3,.9,.2,1) infinite; position: relative;">Guardar<div style="position: absolute; width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,0.35); box-shadow: 0 0 0 6px rgba(255,255,255,0.08); animation: finger 2.6s cubic-bezier(.3,.9,.2,1) infinite;"></div></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Vidrio bajo el dedo</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #8B5CF622; border: 0.5px solid #8B5CF666; color: #8B5CF6;">iOS 26</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.glassEffect(.regular.interactive())</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Botones y chips de vidrio se hunden y se deforman bajo el dedo, como gel. Lo hace el sistema, sin código.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="font-size: 32px; font-weight: 700; letter-spacing: -1px; display: flex; align-items: baseline;"><span style="display: inline-block; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) 0.0s infinite;">7</span><span style="display: inline-block; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) 0.09s infinite;">5</span><span style="display: inline-block; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) 0.18s infinite;">9</span><span style="display: inline-block; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) 0.27s infinite;">,</span><span style="display: inline-block; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) 0.36s infinite;">6</span><span style="display: inline-block; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) 0.44999999999999996s infinite;">8</span><span style="font-size: 16px; color: rgba(255,255,255,0.5); margin-left: 4px; animation: reveal 3.4s cubic-bezier(.2,.8,.2,1) .6s infinite;">€</span></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Cifra que se revela</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #F59E0B22; border: 0.5px solid #F59E0B66; color: #F59E0B;">iOS 18</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">Text(total).textRenderer(RevelarPorDigito(progreso: t))</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">El total del mes aparece dígito a dígito, desenfocado a nítido, al abrir la app. Un TextRenderer propio de veinte líneas.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 64px; height: 64px; border-radius: 32px; background: rgba(16,185,129,0.18); border: 0.5px solid rgba(16,185,129,0.5); display: flex; align-items: center; justify-content: center; animation: pop 3s cubic-bezier(.34,1.56,.64,1) infinite;"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#10B981" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 12.5 9.5 18 20 6" stroke-dasharray="30" stroke-dashoffset="30" style="animation: draw 3s ease-out infinite;"></polyline></svg></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Check que se traza</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #8B5CF622; border: 0.5px solid #8B5CF666; color: #8B5CF6;">iOS 26</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.symbolEffect(.drawOn, isActive: guardado)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Al guardar un gasto, el check no aparece: se dibuja. Con .drawOff se borra igual al deshacer.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="height: 36px; border-radius: 18px; background: #000; border: 0.5px solid rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: space-between; padding: 0 12px; gap: 10px; animation: island 4.5s cubic-bezier(.3,.9,.2,1) infinite; overflow: hidden; box-shadow: 0 6px 20px rgba(0,0,0,0.6);"><div style="display: flex; align-items: center; gap: 2px; height: 18px; flex-shrink: 0;"><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.0s infinite alternate; height: 6px;"></div><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.11s infinite alternate; height: 13px;"></div><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.22s infinite alternate; height: 8px;"></div><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.33s infinite alternate; height: 15px;"></div><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.44s infinite alternate; height: 10px;"></div><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.55s infinite alternate; height: 17px;"></div><div style="width: 3px; border-radius: 2px; background: #FFF; animation: bar .9s ease-in-out 0.66s infinite alternate; height: 12px;"></div></div><span style="font-size: 12px; font-weight: 600; white-space: nowrap; animation: islandtext 4.5s infinite; color: #FFF;">Gasolina · 20 €</span></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">La isla late con tu voz</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #3B82F622; border: 0.5px solid #3B82F666; color: #3B82F6;">iOS 16.1</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">ActivityKit · Live Activity con DynamicIsland { … } y niveles de audio</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Mientras dictas un gasto, la Dynamic Island se ensancha, late con tu voz y enseña el importe en cuanto lo reconoce. Funciona incluso con la app cerrada.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 170px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 170px; height: 120px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 130px; height: 70px; border-radius: 16px; background: rgba(255,255,255,0.08); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; position: relative; overflow: hidden;">Guardado<div style="position: absolute; top: -20px; bottom: -20px; width: 40px; background: linear-gradient(100deg, transparent, rgba(255,255,255,0.45), transparent); transform: skewX(-20deg); animation: shine 2.8s cubic-bezier(.2,.8,.2,1) infinite;"></div></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Destello al guardar</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.layerEffect(ShaderLibrary.shine(.float(t)), maxSampleOffset: .zero)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Un brillo recorre la tarjeta recién guardada, una sola vez. Otro shader de diez líneas.</div>
+    </div>
+  </div></div>
+  <div style="margin-top: 22px; padding: 14px 16px; border-radius: 14px; background: rgba(139,92,246,0.12); border: 0.5px solid rgba(139,92,246,0.35); font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.8);">
+    <b style="color: #FFFFFF;">Cuáles meter primero.</b> La onda desde el dedo y el destello al guardar son iOS 17 y baratos: van en la primera tanda. La isla dinámica es la que más se nota en el día a día y merece su propia tarea. Malla, revelado y check dependen de a qué iOS subamos. La misma regla de siempre: todo se dispara por un evento, nada corre en bucle.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

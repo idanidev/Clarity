@@ -133,6 +133,8 @@ nonisolated struct HomeResumen: Sendable {
     let comparativa: Comparativa?
     let diasApuntando: Int
     let slots: [Slot: Contenido]
+    /// Aparte de los huecos: Gráficas lo señala aunque el hueco B lo ocupe otra cosa.
+    let diaMasCaro: DiaCaro?
 
     var libres: Double? { presupuesto.map { $0 - total } }
     var progresoPresupuesto: Double? { presupuesto.flatMap { $0 > 0 ? min(total / $0, 1) : nil } }
@@ -228,12 +230,14 @@ nonisolated struct HomeResumen: Sendable {
         }
 
         let porDia = Dictionary(grouping: gastos, by: \.date)
+        var diaMasCaro: DiaCaro?
         if let (fecha, delDia) = porDia.max(by: { a, b in
             a.value.reduce(0) { $0 + $1.amount } < b.value.reduce(0) { $0 + $1.amount }
         }), let date = Formatters.date(from: fecha), delDia.count > 0 {
             let importe = delDia.reduce(0) { $0 + $1.amount }
             let mayor = delDia.max(by: { $0.amount < $1.amount })?.name ?? ""
-            disponibles["diaCaro"] = .diaCaro(DiaCaro(fecha: date, importe: importe, concepto: mayor))
+            diaMasCaro = DiaCaro(fecha: date, importe: importe, concepto: mayor)
+            disponibles["diaCaro"] = .diaCaro(diaMasCaro!)
         }
 
         if let semana = Self.semanaVsAnterior(gastos: gastos, hoy: hoy, calendar: calendar) {
@@ -274,7 +278,8 @@ nonisolated struct HomeResumen: Sendable {
             ritmo: ritmo,
             comparativa: comparativa,
             diasApuntando: diasApuntando,
-            slots: slots
+            slots: slots,
+            diaMasCaro: diaMasCaro
         )
     }
 

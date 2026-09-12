@@ -258,6 +258,95 @@ final class HomeViewModel {
     }
     var allRecurringRules: [RecurringExpense] = []  // Keep them for reference
 
+    // MARK: - Home nueva (#65)
+
+    /// Límites y huchas. Se cargan aparte porque viven en otra colección.
+    private(set) var metas: [Goal] = []
+
+    func loadMetas() async {
+        metas = (try? await financialService.fetchGoals()) ?? []
+    }
+
+    /// Gastos del mes que se enseña, sin filtros, sacados del histórico.
+    var gastosDelMes: [Expense] {
+        let key = Self.monthKey(selectedMonth)
+        return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
+    }
+
+    var gastosMesAnterior: [Expense] {
+        guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
+        let key = Self.monthKey(prev)
+        return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
+    }
+
+    /// Todo lo que pinta la primera página, resuelto por `HomeResumen`.
+    /// Computado a propósito: recalcularlo cuesta una pasada por los gastos del
+    /// mes y así nunca se queda desactualizado respecto a lo que lo alimenta.
+    var resumen: HomeResumen {
+        let cal = Calendar.current
+        // En un mes pasado no quedan días: el "hoy" del cálculo es su último día.
+        let hoy: Date = {
+            if cal.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) { return Date() }
+            guard let range = cal.range(of: .day, in: .month, for: selectedMonth),
+                  let start = cal.date(from: cal.dateComponents([.year, .month], from: selectedMonth))
+            else { return selectedMonth }
+            return cal.date(byAdding: .day, value: range.count - 1, to: start) ?? selectedMonth
+        }()
+        let primerGasto = allHistoricalExpenses.map(\.dateAsDate).min()
+        return HomeResumen.build(
+            gastos: gastosDelMes,
+            gastosMesAnterior: gastosMesAnterior,
+            metas: metas,
+            recurrentes: allRecurringRules,
+            presupuesto: monthlyIncome > 0 ? monthlyIncome : nil,
+            primerGasto: primerGasto,
+            hoy: hoy,
+            calendar: cal
+        )
+    }
+
+    /// Los tres últimos del mes, el más reciente primero.
+    var ultimosGastos: [Expense] {
+        Array(gastosDelMes.sorted { ($0.date, $0.createdAt ?? .distantPast) > ($1.date, $1.createdAt ?? .distantPast) }.prefix(3))
+    }
+
+    /// Importe por día del mes, con ceros en los días sin gasto.
+    var gastosPorDia: [(dia: Int, importe: Double)] {
+        let cal = Calendar.current
+        let dias = cal.range(of: .day, in: .month, for: selectedMonth)?.count ?? 30
+        var porDia = [Double](repeating: 0, count: dias + 1)
+        for g in gastosDelMes {
+            let d = cal.component(.day, from: g.dateAsDate)
+            if d >= 1 && d <= dias { porDia[d] += g.amount }
+        }
+        return (1...dias).map { ($0, porDia[$0]) }
+    }
+
+    /// Actual frente a anterior por categoría, las cuatro que más pesan este mes.
+    var comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)] {
+        let actual = Dictionary(grouping: gastosDelMes, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
+        let anterior = Dictionary(grouping: gastosMesAnterior, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
+        return actual.sorted { $0.value > $1.value }.prefix(4)
+            .map { ($0.key, $0.value, anterior[$0.key] ?? 0) }
+    }
+
+    /// Totales por semana del mes, con su etiqueta "1–7".
+    var semanasDelMes: [(etiqueta: String, importe: Double)] {
+        let cal = Calendar.current
+        var porSemana: [Int: (Int, Int, Double)] = [:]
+        for (dia, importe) in gastosPorDia {
+            guard let fecha = cal.date(bySetting: .day, value: dia, of: selectedMonth) else { continue }
+            let w = cal.component(.weekOfMonth, from: fecha)
+            let prev = porSemana[w] ?? (dia, dia, 0)
+            porSemana[w] = (min(prev.0, dia), max(prev.1, dia), prev.2 + importe)
+        }
+        return porSemana.keys.sorted().compactMap { porSemana[$0] }.map { ("\($0.0)–\($0.1)", $0.2) }
+    }
+
+    private static func monthKey(_ date: Date) -> String {
+        String(Formatters.localDayString(from: date).prefix(7))
+    }
+
     // Pagination
     var currentPage = 0
     var hasMorePages = true

@@ -1,0 +1,150 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Home"
+    },
+    {
+      "id": "page-2",
+      "name": "Descartadas"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 1500,
+      "title": "1 · Resumen",
+      "page": "page-1"
+    },
+    {
+      "file": "Grafico.dc.html",
+      "x": 490,
+      "y": 0,
+      "w": 390,
+      "h": 1560,
+      "title": "2 · Gráficas",
+      "page": "page-1"
+    },
+    {
+      "file": "Calendario.dc.html",
+      "x": 980,
+      "y": 0,
+      "w": 390,
+      "h": 1180,
+      "title": "3 · Calendario",
+      "page": "page-1"
+    },
+    {
+      "file": "Vacio.dc.html",
+      "x": 1470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "Sin gastos",
+      "page": "page-1"
+    },
+    {
+      "file": "DireccionA.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "A · Nativa de libro",
+      "page": "page-2"
+    },
+    {
+      "file": "DireccionC.dc.html",
+      "x": 490,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "C · La cifra manda",
+      "page": "page-2"
+    },
+    {
+      "file": "Reglas.dc.html",
+      "x": 0,
+      "y": 1720,
+      "w": 640,
+      "h": 760,
+      "title": "Reglas de sustitución",
+      "page": "page-1"
+    },
+    {
+      "file": "Nuevo.dc.html",
+      "x": 740,
+      "y": 1720,
+      "w": 390,
+      "h": 1340,
+      "title": "La misma Home, usuario nuevo",
+      "page": "page-1"
+    },
+    {
+      "file": "Efectos.dc.html",
+      "x": 1230,
+      "y": 1720,
+      "w": 640,
+      "h": 1320,
+      "title": "Efectos, en movimiento",
+      "page": "page-1"
+    },
+    {
+      "file": "Avanzados.dc.html",
+      "x": 1950,
+      "y": 1720,
+      "w": 660,
+      "h": 1260,
+      "title": "Efectos avanzados",
+      "page": "page-1"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "flujo",
+      "x": 0,
+      "y": -170,
+      "w": 860,
+      "page": "page-1",
+      "text": "LAS TRES PRIMERAS SON LA HOME: se pasa de una a otra deslizando a los lados. Están desenrolladas para verlas enteras; en el móvil se desplazan.\n\nTodo son datos que la app ya calcula. Netflix, Gimnasio, Marcos, Lucía y los importes de marzo son de muestra."
+    },
+    {
+      "id": "graf",
+      "x": 490,
+      "y": -100,
+      "w": 390,
+      "page": "page-1",
+      "text": "GRÁFICAS: reparto · gasto por día con el más caro señalado · abril frente a marzo por categoría · últimos seis meses. Los dos avisos son los insights que hoy rotan escondidos en Análisis."
+    },
+    {
+      "id": "cal",
+      "x": 980,
+      "y": -100,
+      "w": 390,
+      "page": "page-1",
+      "text": "CALENDARIO: importe en cada día, no solo un punto. Tocas un día y abajo sale su detalle. Totales por semana al pie."
+    },
+    {
+      "id": "desc",
+      "x": 0,
+      "y": -120,
+      "w": 860,
+      "page": "page-2",
+      "text": "Las dos direcciones que no elegiste, por si quieres volver a mirarlas."
+    },
+    {
+      "id": "adapt",
+      "x": 740,
+      "y": 1600,
+      "w": 520,
+      "page": "page-1",
+      "text": "USUARIO DE 8 DÍAS: sin nómina, sin límites, sin recurrentes, sin deudas, sin hucha. Los mismos huecos, llenos de otra cosa. Las etiquetas moradas dicen qué hueco ocupa cada cuadro; en la app no salen."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

@@ -1,6 +1,8 @@
 // HomeView.swift
-// Main screen implementing Clean Architecture + MVVM
-// Restored full functionality: Tabs (List/Graph/Calendar), 3-Card Summary, No Title
+// La Home (#65): tres páginas que se pasan deslizando —resumen, gráficas,
+// calendario— y ningún cuadro vacío. La barra flotante que había para elegir
+// vista se fue: costaba 60 pt fijos sobre los gastos y los puntos de abajo
+// dicen lo mismo sin ocupar nada.
 
 import SwiftUI
 
@@ -8,15 +10,12 @@ struct HomeView: View {
     @State private var viewModel: HomeViewModel
     private var userDataManager = UserDataManager.shared
 
-    // UI State
-    @State private var selectedView = 0  // 0 = Tabla, 1 = Gráfico, 2 = Calendario, 3 = VS
-    @State private var evolutionMonths = 6
+    /// Página visible del carrusel. Con `scrollPosition` el swipe y los puntos
+    /// hablan del mismo estado.
+    @State private var pagina: HomePagina? = .resumen
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
-
-    // Voice & FAB
-    // showVoiceSheet removed
-    @State private var showAddExpense = false  // New state for manual entry
+    @State private var showAddExpense = false
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
     @State private var speechManager = SpeechRecognitionManager.shared
 
@@ -27,7 +26,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        mainContent
+        contenido
             .background(DesignTokens.Colors.background)
             .trackScreen("home")
             .navigationTitle("")
@@ -78,324 +77,109 @@ struct HomeView: View {
                 }
             }
         // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
+            .task { await viewModel.loadMetas() }
+            .navigationBarTitleDisplayMode(.inline)
+            .searchable(
+                text: $viewModel.searchText,
+                placement: .navigationBarDrawer(displayMode: .automatic),
+                prompt: "Buscar gastos"
+            )
+            .toolbar { barra }
+            // Un toque al encajar cada página, como al pasar de pantalla de inicio.
+            .sensoryFeedback(.selection, trigger: pagina)
     }
 
-    // MARK: - Main Content
-    private var mainContent: some View {
+    // MARK: - Contenido
+
+    private var contenido: some View {
         ZStack(alignment: .bottom) {
-            // Views (List, Chart, etc.)
-            Group {
-                switch selectedView {
-                case 0:
-                    listView
-                case 1:
-                    chartView
-                case 2:
-                    calendarView
-                // case 3: comparisonView  // Temporalmente deshabilitado
-                default:
-                    listView
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: selectedView)
-            .padding(.bottom, 60)  // Space for floating bar
-
-            // Floating Bottom Bar
-            segmentedPicker
-        }
-    }
-
-    // MARK: - Bottom Picker
-    private var segmentedPicker: some View {
-        ZStack(alignment: .bottom) {
-            // Centered Pills (Floating Island)
-            HStack(spacing: 0) {
-                viewModeButton(icon: "list.bullet", index: 0)
-                    .accessibilityLabel("Vista lista")
-                viewModeButton(icon: "chart.pie.fill", index: 1)
-                    .accessibilityLabel("Vista gráficos")
-                viewModeButton(icon: "calendar", index: 2)
-                    .accessibilityLabel("Vista calendario")
-                // viewModeButton(icon: "arrow.left.arrow.right", index: 3)
-                //     .accessibilityLabel("Comparar meses")
-            }
-            .padding(4)
-            .background(.regularMaterial)
-            .clipShape(Capsule())
-            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-            .frame(maxWidth: .infinity, alignment: .center)  // Force center
-
-            // Voice Button Aligned Right
-            HStack {
-                Spacer()
-                SimpleVoiceButton(
-                    viewModel: viewModel,
-                    categories: UserDataManager.shared.categories
-                )
-                .offset(y: 4)  // "mas abajo" slightly to align nicely vs capsule
-            }
-            .padding(.trailing, DesignTokens.Spacing.md)
-        }
-        .padding(.bottom, DesignTokens.Spacing.sm)
-    }
-
-    // MARK: - Tab 1: List View
-    private var listView: some View {
-        VStack(spacing: 0) {
-            // Header Content (Cards + Search) - Fixed at top
-            VStack(spacing: DesignTokens.Spacing.sm) {
-                // Summary Cards Modernas
-                SummaryCardsView(
-                    totalExpenses: filteredTotal,
-                    expenseCount: viewModel.filteredExpenses.count,
-                    savings: savings,
-                    savingsPercentage: savings > 0
-                        ? Int((savings / (monthlyIncome > 0 ? monthlyIncome : 1)) * 100)
-                        : 0,
-                    available: savings
-                )
-                .padding(.horizontal, DesignTokens.Spacing.sm)
-                .padding(.top, 12)  // Espacio limpio desde navigation bar
-
-                // Month Selector — hidden while searching (search spans all months)
-                if viewModel.searchText.isEmpty {
-                    MonthSelectorView(currentMonth: $viewModel.selectedMonth)
-                    .padding(.horizontal, DesignTokens.Spacing.sm)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-
-                // Search Bar Moderna + Filter Button
-                HStack(spacing: DesignTokens.Spacing.xs) {
-                    SearchBarView(
-                        searchText: $viewModel.searchText,
-                        filter: $viewModel.selectedFilter,
-                        onFilterChange: {
-                            // Handled automatically by ViewModel bindings
-                        }
-                    )
-
-                    // Clear Filter Button (only if active)
-                    if viewModel.selectedFilter.hasActiveFilters {
-                        Button {
-                            viewModel.selectedFilter = ExpenseFilter()  // Reset
-                            HapticManager.shared.notification(.success)
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor(DesignTokens.Colors.textSecondary)
-                                .frame(width: 44, height: 44)
-                                .background(DesignTokens.Colors.surface)
-                                .clipShape(Circle())
-                                .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                        }
-                        .transition(.scale.combined(with: .opacity))
-                        .accessibilityLabel("Limpiar filtros")
-                    }
-
-                    Button {
-                        showFilterSheet = true
-                        HapticManager.shared.selection()
-                    } label: {
-                        // Purple icon if active filters
-                        Image(
-                            systemName: viewModel.selectedFilter.hasActiveFilters
-                                ? "line.3.horizontal.decrease.circle.fill"
-                                : "line.3.horizontal.decrease.circle"
-                        )
-                        .font(.system(size: 22))
-                        .foregroundColor(
-                            viewModel.selectedFilter.hasActiveFilters
-                                ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary
-                        )
-                        .frame(width: 44, height: 44)
-                        .background(DesignTokens.Colors.surface)
-                        .clipShape(Circle())
-                        .shadow(color: Color.black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    }
-                    .accessibilityLabel("Filtros")
-                }
-                .padding(.horizontal, DesignTokens.Spacing.sm)
-                // ActiveFilterPillsView removed as requested
-            }
-            .animation(.easeInOut(duration: 0.2), value: viewModel.searchText.isEmpty)
-            .background(DesignTokens.Colors.background)
-            // Sombra inferior que crea profundidad entre header y lista
-            .overlay(alignment: .bottom) {
-                LinearGradient(
-                    colors: [
-                        DesignTokens.Colors.background,
-                        DesignTokens.Colors.background.opacity(0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .frame(height: 16)
-                .offset(y: 16)
-                .allowsHitTesting(false)
-            }
-
-            // List Content - Scrollable
             if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
                 loadingView
             } else if case .error(let error) = viewModel.state {
                 errorView(error.localizedDescription)
-            } else if viewModel.filteredExpenses.isEmpty {
+            } else if viewModel.gastosDelMes.isEmpty && viewModel.searchText.isEmpty {
                 emptyStateView
             } else {
-                ExpandableExpenseList(
-                    categories: viewModel.categoryGroups,
-                    onExpenseDelete: { expense in
-                        Task { await viewModel.deleteExpense(expense) }
-                    },
-                    onExpenseEdit: { expense in
-                        expenseToEdit = expense
-                    },
-                    onLoadMore: {
-                        Task { await viewModel.loadMore() }
-                    }
-                )
+                carrusel
             }
+
+            botonDeVoz
         }
     }
 
-    // MARK: - Tab 2: Chart View
-    private var chartView: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if viewModel.filteredExpenses.isEmpty {
-                    ContentUnavailableView("Sin datos para gráficos", systemImage: "chart.pie")
-                } else {
-                    // Donut Chart - Comparativa ahora en tab VS de ExpensesView
-                    DonutChartView(
-                        categoryData: buildChartData(),
-                        total: filteredTotal,
-                        expenses: viewModel.filteredExpenses
-                    )
-                }
-            }
-            .padding(.bottom, 80)
-        }
-        // Swipe horizontal cambia de mes (← anterior / → siguiente, sin futuro).
-        // Asignar el mes ya dispara la carga de sus gastos: lo hace el didSet
-        // de `selectedMonth`.
-        .highPriorityGesture(
-            DragGesture(minimumDistance: 40)
-                .onEnded { value in
-                    guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-                    let cal = Calendar.current
-                    if value.translation.width < -50 {
-                        if let next = cal.date(byAdding: .month, value: 1, to: viewModel.selectedMonth),
-                           next <= Date() {
-                            withAnimation(.snappy) { viewModel.selectedMonth = next }
-                            HapticManager.shared.selection()
-                        }
-                    } else if value.translation.width > 50 {
-                        if let prev = cal.date(byAdding: .month, value: -1, to: viewModel.selectedMonth) {
-                            withAnimation(.snappy) { viewModel.selectedMonth = prev }
-                            HapticManager.shared.selection()
-                        }
+    /// Las tres páginas, a lo ancho de la pantalla, encajando de una en una.
+    private var carrusel: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(HomePagina.allCases) { p in
+                        pagina(p)
+                            .containerRelativeFrame(.horizontal)
+                            .id(p)
                     }
                 }
-        )
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $pagina)
+            .scrollIndicators(.hidden)
+
+            HomePuntos(actual: pagina ?? .resumen)
+                .padding(.bottom, Spacing.xs)
+        }
     }
 
-    // MARK: - Tab 3: Calendar View
-    private var calendarView: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if viewModel.allHistoricalExpenses.isEmpty {
-                    ContentUnavailableView("Sin datos para calendario", systemImage: "calendar")
-                } else {
-                    // Historial completo: el calendario navega meses internamente
-                    // (con filteredExpenses solo veía el mes seleccionado).
-                    ExpenseCalendarView(expenses: viewModel.allHistoricalExpenses)
+    @ViewBuilder
+    private func pagina(_ p: HomePagina) -> some View {
+        switch p {
+        case .resumen:
+            ResumenPage(viewModel: viewModel, onEditar: { expenseToEdit = $0 }, onAnadir: { showAddExpense = true })
+        case .graficas:
+            GraficasPage(viewModel: viewModel)
+        case .calendario:
+            CalendarioPage(viewModel: viewModel)
+        }
+    }
 
-                    // Evolución mensual — totales pre-agregados en VM (memo dict)
-                    let evo = viewModel.monthlyEvolution(months: evolutionMonths)
-                    if evo.count >= 2 {
-                        MonthlyEvolutionChart(
-                            data: evo,
-                            selectedMonthKey: String(
-                                Formatters.localDayString(from: viewModel.selectedMonth).prefix(7)),
-                            range: $evolutionMonths
-                        )
-                        .id(evolutionMonths)  // fuerza recrear el Chart al cambiar 6M/1A
-                        .padding(.horizontal, 16)
+    private var botonDeVoz: some View {
+        HStack {
+            Spacer()
+            SimpleVoiceButton(viewModel: viewModel, categories: userDataManager.categories)
+        }
+        .padding(.trailing, Spacing.md)
+        .padding(.bottom, Spacing.xl)
+    }
+
+    // MARK: - Barra de navegación: mes en el centro, filtros a la derecha
+
+    @ToolbarContentBuilder
+    private var barra: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            MonthSelectorView(currentMonth: $viewModel.selectedMonth)
+        }
+        ToolbarItem(placement: .topBarTrailing) {
+            HStack(spacing: Spacing.xxs) {
+                if viewModel.selectedFilter.hasActiveFilters {
+                    Button {
+                        viewModel.selectedFilter = ExpenseFilter()
+                        HapticManager.shared.notification(.success)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
                     }
+                    .accessibilityLabel("Limpiar filtros")
                 }
+                Button {
+                    showFilterSheet = true
+                    HapticManager.shared.selection()
+                } label: {
+                    Image(systemName: viewModel.selectedFilter.hasActiveFilters
+                          ? "line.3.horizontal.decrease.circle.fill"
+                          : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Filtros")
             }
-            .padding(.bottom, 80)
+            .tint(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary)
         }
-    }
-
-    private func viewModeButton(icon: String, index: Int) -> some View {
-        Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                selectedView = index
-            }
-            HapticManager.shared.selection()
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 18, weight: selectedView == index ? .semibold : .medium))  // Slightly smaller icon
-                .foregroundStyle(selectedView == index ? Color.white : Color.primary.opacity(0.5))
-                .frame(width: 44, height: 36)  // More compact
-        }
-        .background(
-            Capsule()
-                .fill(selectedView == index ? DesignTokens.Colors.accent : Color.clear)
-        )
-    }
-
-    // MARK: - Tab 4: Comparison View (VS)
-    private var comparisonView: some View {
-        MonthComparisonView(expenses: viewModel.allHistoricalExpenses)
-    }
-
-    // MARK: - Helpers
-    // Misma fuente que el VM (budget del mes, nómina + extras) — antes leía el
-    // income raíz del userDocument y el % de ahorro discrepaba del importe.
-    private var monthlyIncome: Double {
-        viewModel.monthlyIncome
-    }
-
-    // Reusa el total ya calculado por el VM (evita doble reduce por render)
-    private var filteredTotal: Double { viewModel.totalFilteredAmount }
-
-    private var savings: Double {
-        viewModel.calculatedSavings
-    }
-
-    private func buildChartData() -> [CategoryChartData] {
-        // 1 pasada: acumula importe por categoría (sin leer color en el loop)
-        var amounts: [String: Double] = [:]
-        for expense in viewModel.filteredExpenses {
-            amounts[expense.category, default: 0] += expense.amount
-        }
-        let total = filteredTotal
-
-        // Mes anterior al seleccionado → "YYYY-MM" para comparar tendencia
-        let cal = Calendar.current
-        let prevPrefix: String? = cal.date(byAdding: .month, value: -1, to: viewModel.selectedMonth)
-            .map { String(Formatters.localDayString(from: $0).prefix(7)) }
-        var prevAmounts: [String: Double] = [:]
-        if let prefix = prevPrefix {
-            for e in viewModel.allHistoricalExpenses where e.date.hasPrefix(prefix) {
-                prevAmounts[e.category, default: 0] += e.amount
-            }
-        }
-
-        // color() solo 1× por categoría única (antes 1× por gasto)
-        return amounts.map { key, amount in
-            let prev = prevAmounts[key]
-            let delta: Double? = (prev != nil && prev! > 0) ? (amount - prev!) / prev! : nil
-            return CategoryChartData(
-                name: key,
-                amount: amount,
-                percentage: total > 0 ? (amount / total) * 100 : 0,
-                color: UserDataManager.shared.color(for: key),
-                deltaVsPrevious: delta
-            )
-        }.sorted { $0.amount > $1.amount }
     }
 
     // MARK: - View States
@@ -466,7 +250,31 @@ struct HomeView: View {
     }
 }
 
+// MARK: - Páginas
+
+enum HomePagina: CaseIterable, Identifiable, Hashable {
+    case resumen, graficas, calendario
+    var id: Self { self }
+}
+
+/// Los puntos de página. El activo se alarga, como en la pantalla de inicio.
+private struct HomePuntos: View {
+    let actual: HomePagina
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(HomePagina.allCases) { p in
+                Capsule()
+                    .fill(p == actual ? Color.clarityPrimary : Color.primary.opacity(0.22))
+                    .frame(width: p == actual ? 22 : 5, height: 5)
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: actual)
+        .accessibilityHidden(true)
+    }
+}
+
 
 #Preview {
-    HomeView()
+    NavigationStack { HomeView() }
 }

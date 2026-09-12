@@ -1,0 +1,65 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+    a { color: #8B5CF6; } a:hover { color: #A855F7; }
+  </style>
+</helmet>
+<div style="width: 640px; min-height: 760px; background: #0E0B1A; color: #FFFFFF; padding: 28px 30px; box-sizing: border-box;">
+  <div style="font-size: 11px; color: #C4B5FD; letter-spacing: 1px; font-weight: 600;">REGLA ÚNICA</div>
+  <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-top: 6px;">Ningún cuadro se queda vacío</div>
+  <div style="font-size: 14px; color: rgba(255,255,255,0.65); margin-top: 8px; line-height: 1.5;">Cada hueco tiene una cola de candidatos. Gana el primero que tenga datos. Un mismo candidato no sale dos veces en pantalla. Lo que se enseña en el hueco es <b style="color: #FFFFFF;">información</b>, nunca un «configura esto»: la invitación a configurar va en una línea pequeña, no ocupa el cuadro.</div>
+  <div style="margin-top: 22px;">
+    <div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding-bottom: 8px; font-size: 11px; color: rgba(255,255,255,0.4); letter-spacing: 0.5px;"><div>HUECO</div><div>PRIMERA OPCIÓN</div><div>SI NO HAY DATOS →</div></div>
+    <div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Cabecera</div>
+      <div style="font-weight: 600;">Total del mes</div>
+      <div style="color: rgba(255,255,255,0.7);">Siempre. Debajo: barra de presupuesto si hay nómina; si no, la previsión a fin de mes con un enlace para poner tope.</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Chip</div>
+      <div style="font-weight: 600;">Variación vs mes anterior</div>
+      <div style="color: rgba(255,255,255,0.7);">→ «N días apuntando» si es el primer mes → se oculta si hay menos de 3 gastos.</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Ritmo</div>
+      <div style="font-weight: 600;">Media · previsión · días</div>
+      <div style="color: rgba(255,255,255,0.7);">Siempre: sale de los propios gastos. Con nómina la previsión se compara con el tope.</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Hueco A</div>
+      <div style="font-weight: 600;">Límites por categoría</div>
+      <div style="color: rgba(255,255,255,0.7);">→ «Dónde se te va» (top 3 con %) → se funde con Por categoría si hay menos de 3 categorías.</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Hueco B</div>
+      <div style="font-weight: 600;">Próximos cargos</div>
+      <div style="color: rgba(255,255,255,0.7);">→ Recurrentes sin fecha → «Día más caro» → «Categoría que más sube».</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Hueco C</div>
+      <div style="font-weight: 600;">Te deben</div>
+      <div style="color: rgba(255,255,255,0.7);">→ Hucha (si el hueco E ya está ocupado por otra cosa) → «Esta semana vs la anterior» → «Media diaria vs mes pasado».</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Lista</div>
+      <div style="font-weight: 600;">Por categoría</div>
+      <div style="color: rgba(255,255,255,0.7);">Siempre. Con mini-barra si hay tope, con % del mes si no.</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Lista</div>
+      <div style="font-weight: 600;">Últimos gastos</div>
+      <div style="color: rgba(255,255,255,0.7);">Siempre, 3 filas. Con «Ver todos» si hay más de 3.</div>
+    </div><div style="display: grid; grid-template-columns: 80px 150px 1fr; gap: 12px; padding: 12px 0; border-top: 0.5px solid rgba(255,255,255,0.1); font-size: 13px; line-height: 1.4;">
+      <div style="color: rgba(255,255,255,0.45); font-weight: 600;">Hueco E</div>
+      <div style="font-weight: 600;">Hucha</div>
+      <div style="color: rgba(255,255,255,0.7);">→ «Abril frente a marzo» (si hay 2 meses) → «Semana a semana» → «Categoría que más sube».</div>
+    </div>
+  </div>
+  <div style="margin-top: 22px; padding: 14px 16px; border-radius: 14px; background: rgba(139,92,246,0.12); border: 0.5px solid rgba(139,92,246,0.35); font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.8);">
+    <b style="color: #FFFFFF;">Y así en toda la app.</b> Metas sin huchas enseña el reparto del mes; Análisis sin dos meses enseña semanas; Te deben sin deudas no existe como pantalla vacía, su sitio lo ocupa lo siguiente útil.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

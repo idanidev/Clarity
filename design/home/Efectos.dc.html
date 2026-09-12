@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+    a { color: #8B5CF6; } a:hover { color: #A855F7; }
+    @keyframes roll { 0%, 35% { transform: translateY(0); } 55%, 100% { transform: translateY(-36px); } }
+    @keyframes rise { 0% { opacity: 0; transform: translateY(14px); } 25%, 75% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-10px); } }
+    @keyframes ring { 0% { transform: scale(1); opacity: .8; } 100% { transform: scale(2.1); opacity: 0; } }
+    @keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    @keyframes morph { 0%, 25% { width: 44px; } 50%, 80% { width: 126px; } 100% { width: 44px; } }
+    @keyframes fadein { 0%, 35% { opacity: 0; } 55%, 80% { opacity: 1; } 100% { opacity: 0; } }
+    @keyframes blink { 50% { opacity: .3; } }
+    @keyframes fill { 0%, 15% { width: 0; } 60%, 100% { width: 70%; } }
+    @keyframes alert { 0%, 30% { transform: translateX(0); background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); } 34% { transform: translateX(-4px); } 38% { transform: translateX(4px); } 42% { transform: translateX(-3px); } 46% { transform: translateX(0); } 50%, 85% { background: rgba(239,68,68,0.14); border-color: rgba(239,68,68,0.5); } 100% { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.16); } }
+    @keyframes zoom { 0%, 25% { transform: scale(1); border-radius: 14px; } 50%, 75% { transform: scale(1.55); border-radius: 8px; } 100% { transform: scale(1); } }
+    @keyframes swipe { 0%, 35% { transform: translateX(0); } 50%, 85% { transform: translateX(-150px); } 100% { transform: translateX(0); } }
+    @keyframes dotA { 0%, 35% { width: 14px; background: #8B5CF6; } 50%, 85% { width: 4px; background: rgba(255,255,255,0.3); } 100% { width: 14px; background: #8B5CF6; } }
+    @keyframes dotB { 0%, 35% { width: 4px; background: rgba(255,255,255,0.3); } 50%, 85% { width: 14px; background: #8B5CF6; } 100% { width: 4px; background: rgba(255,255,255,0.3); } }
+  </style>
+</helmet>
+<div style="width: 640px; min-height: 1320px; background: #0E0B1A; color: #FFFFFF; padding: 28px 30px; box-sizing: border-box;">
+  <div style="font-size: 11px; color: #C4B5FD; letter-spacing: 1px; font-weight: 600;">MOVIMIENTO</div>
+  <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin-top: 6px;">Ocho efectos, todos nativos</div>
+  <div style="font-size: 14px; color: rgba(255,255,255,0.65); margin-top: 8px; line-height: 1.5;">Nada de librerías: todo es SwiftUI de serie. El color de la etiqueta dice desde qué iOS. <span style="color: #10B981;">Verde</span>: funciona hoy con tu target. <span style="color: #F59E0B;">Ámbar</span>: iOS 18. <span style="color: #8B5CF6;">Morado</span>: solo iOS 26.</div>
+  <div style="margin-top: 14px;">
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="font-size: 30px; font-weight: 700; letter-spacing: -1px; display: flex; align-items: baseline;"><span style="display: inline-block; height: 36px; overflow: hidden; line-height: 36px;"><span style="display: block; animation: roll 3s cubic-bezier(.2,.8,.2,1) infinite;">6<br>7</span></span><span style="display: inline-block; height: 36px; overflow: hidden; line-height: 36px;"><span style="display: block; animation: roll 3s cubic-bezier(.2,.8,.2,1) .08s infinite;">2<br>5</span></span><span style="display: inline-block; height: 36px; overflow: hidden; line-height: 36px;"><span style="display: block; animation: roll 3s cubic-bezier(.2,.8,.2,1) .16s infinite;">1<br>9</span></span><span style="font-size: 16px; color: rgba(255,255,255,0.5); margin-left: 4px;">€</span></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Cifras que ruedan</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.contentTransition(.numericText())</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">El total del mes al cambiar de mes o al guardar un gasto: los dígitos ruedan al nuevo valor en vez de parpadear.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="position: absolute; left: 14px; right: 14px; top: 14px; height: 22px; border-radius: 8px; background: rgba(255,255,255,0.09); border: 0.5px solid rgba(255,255,255,0.16); animation: rise 2.8s cubic-bezier(.2,.8,.2,1) 0.0s infinite;"></div><div style="position: absolute; left: 14px; right: 14px; top: 44px; height: 22px; border-radius: 8px; background: rgba(255,255,255,0.09); border: 0.5px solid rgba(255,255,255,0.16); animation: rise 2.8s cubic-bezier(.2,.8,.2,1) 0.12s infinite;"></div><div style="position: absolute; left: 14px; right: 14px; top: 74px; height: 22px; border-radius: 8px; background: rgba(255,255,255,0.09); border: 0.5px solid rgba(255,255,255,0.16); animation: rise 2.8s cubic-bezier(.2,.8,.2,1) 0.24s infinite;"></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Entrada escalonada</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.scrollTransition { view, phase in view.opacity(phase.isIdentity ? 1 : 0).offset(y: …) }</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Las tarjetas de la Home aparecen una tras otra al entrar en pantalla y se desvanecen al salir por arriba.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="position: absolute; width: 54px; height: 54px; border-radius: 27px; border: 1.5px solid rgba(139,92,246,0.5); animation: ring 1.8s ease-out infinite;"></div><div style="position: absolute; width: 54px; height: 54px; border-radius: 27px; border: 1.5px solid rgba(139,92,246,0.5); animation: ring 1.8s ease-out .6s infinite;"></div><div style="width: 54px; height: 54px; border-radius: 27px; background: #8B5CF6; display: flex; align-items: center; justify-content: center; animation: breathe 1.8s ease-in-out infinite;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Micro que respira</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.symbolEffect(.variableColor.iterative) + anillos con .repeatForever</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">El botón de voz mientras escucha. Ya está en la pantalla del primer gasto; va también en la Home.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="height: 44px; border-radius: 22px; background: rgba(255,255,255,0.12); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px); border: 0.5px solid rgba(255,255,255,0.18); display: flex; align-items: center; justify-content: center; gap: 8px; animation: morph 3.2s cubic-bezier(.3,.9,.2,1) infinite;"><div style="width: 8px; height: 8px; border-radius: 4px; background: #EF4444; animation: blink 1s infinite;"></div><span style="font-size: 12px; font-weight: 600; white-space: nowrap; animation: fadein 3.2s infinite;">Escuchando…</span></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Vidrio que se transforma</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #8B5CF622; border: 0.5px solid #8B5CF666; color: #8B5CF6;">iOS 26</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">GlassEffectContainer + .glassEffectID("mic", in: ns)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">El botón redondo del micro se estira y se convierte en la píldora «Escuchando…» sin cortes. Es el efecto más iOS 26 de todos.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 110px;"><div style="display: flex; justify-content: space-between; font-size: 11px; color: rgba(255,255,255,0.6); margin-bottom: 8px;"><span>Ocio</span><span style="font-weight: 600; color: #FFF;">70 %</span></div><div style="height: 8px; border-radius: 4px; background: rgba(255,255,255,0.12); overflow: hidden;"><div style="height: 100%; border-radius: 4px; background: #F59E0B; animation: fill 2.6s cubic-bezier(.34,1.56,.64,1) infinite;"></div></div></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Barras con muelle</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.animation(.spring(response: 0.6, dampingFraction: 0.7), value: progreso)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Límites, presupuesto y huchas: la barra se pasa un poco y vuelve, como un muelle.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 118px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.07); border: 0.5px solid rgba(255,255,255,0.16); animation: alert 3s ease-in-out infinite;"><div style="font-size: 11px; color: rgba(255,255,255,0.5);">Coche-Moto</div><div style="font-size: 15px; font-weight: 700; margin-top: 2px;">501 / 400 €</div></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Aviso de límite</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.phaseAnimator([.idle, .shake, .tinted]) + .sensoryFeedback(.warning)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Cuando un gasto supera un tope: la tarjeta tiembla, se tiñe de rojo y el iPhone vibra. Una vez, no en bucle.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="width: 90px; height: 56px; border-radius: 14px; background: rgba(245,158,11,0.2); border: 0.5px solid rgba(245,158,11,0.5); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; animation: zoom 3s cubic-bezier(.2,.8,.2,1) infinite; transform-origin: center;">Coche-Moto</div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Zoom al detalle</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #F59E0B22; border: 0.5px solid #F59E0B66; color: #F59E0B;">iOS 18</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">.navigationTransition(.zoom(sourceID:in:))</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Tocas una categoría y su tarjeta crece hasta ser la pantalla de detalle, y vuelve a encogerse al salir.</div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: 150px 1fr; gap: 18px; padding: 18px 0; border-top: 0.5px solid rgba(255,255,255,0.1); align-items: center;">
+    <div style="width: 150px; height: 110px; border-radius: 18px; background: #07050F; border: 0.5px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative;"><div style="position: absolute; inset: 0; display: flex; animation: swipe 4s cubic-bezier(.2,.8,.2,1) infinite;"><div style="width: 150px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: rgba(255,255,255,0.6);">Resumen</div><div style="width: 150px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; color: rgba(255,255,255,0.6);">Gráficas</div></div><div style="position: absolute; bottom: 10px; left: 0; right: 0; display: flex; justify-content: center; gap: 5px;"><div style="width: 14px; height: 4px; border-radius: 2px; background: #8B5CF6; animation: dotA 4s infinite;"></div><div style="width: 4px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.3); animation: dotB 4s infinite;"></div></div></div>
+    <div>
+      <div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 15px; font-weight: 600;">Deslizar entre vistas</span><span style="font-size: 10px; font-weight: 700; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 8px; background: #10B98122; border: 0.5px solid #10B98166; color: #10B981;">iOS 17</span></div>
+      <div style="font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #C4B5FD; margin-top: 5px;">ScrollView(.horizontal) + .scrollTargetBehavior(.paging) + .sensoryFeedback(.selection)</div>
+      <div style="font-size: 12.5px; color: rgba(255,255,255,0.65); margin-top: 6px; line-height: 1.45;">Resumen → Gráficas → Calendario. Con un toque háptico al encajar cada página.</div>
+    </div>
+  </div></div>
+  <div style="margin-top: 22px; padding: 14px 16px; border-radius: 14px; background: rgba(239,68,68,0.1); border: 0.5px solid rgba(239,68,68,0.35); font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.8);">
+    <b style="color: #FFFFFF;">Una regla que ya nos costó un bug.</b> Todo esto se dispara por eventos: al entrar, al tocar, al guardar, al cambiar de mes. Nada corre en bucle mientras la pantalla está quieta. El fondo de Análisis se animaba a 20 fps y hacía que el scroll diera tirones (#63), porque los materiales de encima tenían que recalcularse cada frame. Los anillos del micro son la única excepción, y solo mientras graba.
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
