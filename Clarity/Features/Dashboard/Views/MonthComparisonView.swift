@@ -6,6 +6,9 @@ import Charts
 
 struct MonthComparisonView: View {
     let expenses: [Expense]
+    /// Qué hacer cuando no hay nada que comparar. Lo pone quien la presenta,
+    /// que es quien sabe abrir el formulario.
+    var onApuntarGasto: () -> Void = {}
 
     @State private var selectedYear: Int
     @State private var selectedMonth: Int
@@ -34,8 +37,9 @@ struct MonthComparisonView: View {
         fetchedExpenses.isEmpty ? expenses : fetchedExpenses
     }
 
-    init(expenses: [Expense]) {
+    init(expenses: [Expense], onApuntarGasto: @escaping () -> Void = {}) {
         self.expenses = expenses
+        self.onApuntarGasto = onApuntarGasto
         let cal = Calendar.current
         let now = Date()
         let y = cal.component(.year, from: now)
@@ -416,8 +420,13 @@ struct MonthComparisonView: View {
             }
             
             if data.isEmpty {
-                ContentUnavailableView("Sin datos", systemImage: "chart.bar", description: Text("No hay gastos para comparar"))
-                    .frame(height: 200)
+                SinGastosEmptyView(
+                    titulo: "Aún no hay meses que comparar",
+                    mensaje: "Con gastos de dos meses podrás ver si estás gastando más o menos que antes.",
+                    icono: "chart.bar",
+                    accion: onApuntarGasto
+                )
+                .frame(height: 240)
             } else {
                 Chart(Array(data)) { item in
                     BarMark(

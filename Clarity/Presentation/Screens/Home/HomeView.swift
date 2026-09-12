@@ -263,7 +263,11 @@ struct HomeView: View {
         ScrollView {
             VStack(spacing: 20) {
                 if viewModel.filteredExpenses.isEmpty {
-                    ContentUnavailableView("Sin datos para gráficos", systemImage: "chart.pie")
+                    SinGastosEmptyView(
+                        titulo: "Todavía no hay nada que enseñar",
+                        mensaje: "En cuanto apuntes un gasto verás aquí en qué se te va el mes.",
+                        icono: "chart.pie"
+                    ) { showAddExpense = true }
                 } else {
                     // Donut Chart - Comparativa ahora en tab VS de ExpensesView
                     DonutChartView(
@@ -304,7 +308,11 @@ struct HomeView: View {
         ScrollView {
             VStack(spacing: 20) {
                 if viewModel.allHistoricalExpenses.isEmpty {
-                    ContentUnavailableView("Sin datos para calendario", systemImage: "calendar")
+                    SinGastosEmptyView(
+                        titulo: "El calendario está vacío",
+                        mensaje: "Cada gasto que apuntes aparecerá aquí en su día.",
+                        icono: "calendar"
+                    ) { showAddExpense = true }
                 } else {
                     // Historial completo: el calendario navega meses internamente
                     // (con filteredExpenses solo veía el mes seleccionado).
@@ -348,7 +356,9 @@ struct HomeView: View {
 
     // MARK: - Tab 4: Comparison View (VS)
     private var comparisonView: some View {
-        MonthComparisonView(expenses: viewModel.allHistoricalExpenses)
+        MonthComparisonView(expenses: viewModel.allHistoricalExpenses) {
+            showAddExpense = true
+        }
     }
 
     // MARK: - Helpers

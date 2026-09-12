@@ -5,6 +5,7 @@ import SwiftUI
 
 struct DebtsView: View {
     @State private var viewModel: DebtsViewModel
+    @State private var showAddExpense = false
 
     @MainActor
     init(viewModel: DebtsViewModel? = nil) {
@@ -47,11 +48,16 @@ struct DebtsView: View {
         }
         .overlay {
             if viewModel.visibleSummaries.isEmpty && !viewModel.isLoading {
-                ContentUnavailableView {
-                    Label("Nadie te debe nada", systemImage: "gift")
-                } description: {
-                    Text("Marca un gasto como «modo regalo» al crearlo y apunta quién te lo tiene que devolver.")
-                }
+                SinGastosEmptyView(
+                    titulo: "Nadie te debe nada",
+                    mensaje: "Marca un gasto como «modo regalo» al crearlo y apunta quién te lo tiene que devolver.",
+                    icono: "gift"
+                ) { showAddExpense = true }
+            }
+        }
+        .sheet(isPresented: $showAddExpense) {
+            AddExpenseSheet {
+                Task { await viewModel.load() }
             }
         }
         .task { await viewModel.load() }
