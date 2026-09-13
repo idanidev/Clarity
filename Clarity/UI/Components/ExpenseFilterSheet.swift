@@ -40,57 +40,36 @@ struct ExpenseFilterSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: Spacing.lg) {
                     // 1. Saved Presets (Top Bar)
                     presetsSection
-                    
+
                     // 2. Main Criteria (Date & Amount)
-                    VStack(spacing: 0) {
-                        sectionHeader(String(localized: "filters.whenAndHowMuch", defaultValue: "Cuándo y Cuánto"), icon: "calendar.badge.clock")
-                            .padding()
-                        
-                        Divider()
-                        
-                        VStack(spacing: 20) {
+                    seccion(String(localized: "filters.whenAndHowMuch", defaultValue: "Cuándo y Cuánto")) {
+                        VStack(alignment: .leading, spacing: 20) {
                             dateRangeSelector
                             amountRangeSelector
                         }
-                        .padding()
                     }
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    
+
                     // 3. Details (Category & Payment)
-                    VStack(spacing: 0) {
-                        sectionHeader(String(localized: "filters.details", defaultValue: "Detalles"), icon: "tag.fill")
-                            .padding()
-                        
-                        Divider()
-                        
-                        VStack(spacing: 20) {
+                    seccion(String(localized: "filters.details", defaultValue: "Detalles")) {
+                        VStack(alignment: .leading, spacing: 20) {
                             if !availableCategories.isEmpty {
                                 categorySelector
                             }
                             paymentMethodSelector
                         }
-                        .padding()
                     }
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    
+
                     // 4. Options & Sort (Compact)
-                    VStack(spacing: 0) {
-                        sectionHeader(String(localized: "filters.options", defaultValue: "Opciones"), icon: "slider.horizontal.3")
-                            .padding()
-                        
-                        Divider()
-                        
+                    seccion(String(localized: "filters.options", defaultValue: "Opciones")) {
                         VStack(spacing: 16) {
                             Toggle(String(localized: "filters.onlyRecurring", defaultValue: "Solo recurrentes"), isOn: $filter.showOnlyRecurring)
                                 .tint(Color.clarityPrimary)
-                            
+
                             Divider()
-                            
+
                             HStack {
                                 Text(String(localized: "filters.sortBy", defaultValue: "Ordenar por"))
                                 Spacer()
@@ -106,32 +85,28 @@ struct ExpenseFilterSheet: View {
                                             .foregroundStyle(Color.clarityPrimary)
                                         Image(systemName: "chevron.up.chevron.down")
                                             .font(.caption)
-                                            .foregroundStyle(DesignTokens.Colors.textSecondary)
+                                            .foregroundStyle(Color.textSecondary)
                                     }
                                 }
                             }
                         }
-                        .padding()
                     }
-                    .background(Color(.secondarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    
+
                     // Clear All (Text Link)
                     if filter.hasActiveFilters {
                         Button(String(localized: "filters.clearAll", defaultValue: "Limpiar todos los filtros")) {
                             resetFilters()
                             HapticManager.shared.notification(.warning)
                         }
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.error)
                         .font(.subheadline)
-                        .padding(.top, 8)
                     }
-                    
+
                     Spacer(minLength: 40)
                 }
                 .padding()
             }
-            .background(Color(.systemGroupedBackground))
+            .fondoClarity()
             .navigationTitle(String(localized: "filters.navigationTitle", defaultValue: "Filtros"))
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar()
@@ -177,10 +152,9 @@ struct ExpenseFilterSheet: View {
     // MARK: - Sections
     
     private var presetsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            sectionHeader(String(localized: "filters.myFilters", defaultValue: "Mis Filtros"), icon: "bookmark.fill")
-                .padding()
-            
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            CabeceraSeccionClarity(titulo: String(localized: "filters.myFilters", defaultValue: "Mis Filtros"))
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     // Save/Update Button
@@ -196,13 +170,9 @@ struct ExpenseFilterSheet: View {
                                 Text("Actualizar '\(newPresetName)'")
                             }
                             .font(.caption.weight(.bold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.green.opacity(0.1))
-                            .foregroundStyle(.green)
-                            .clipShape(Capsule())
                         }
-                        
+                        .buttonStyle(BotonSecundarioClarity(color: Color.success))
+
                         // Botón para cancelar edición
                         Button {
                             isEditMode = false
@@ -214,12 +184,8 @@ struct ExpenseFilterSheet: View {
                                 Text("Cancelar")
                             }
                             .font(.caption.weight(.bold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.red.opacity(0.1))
-                            .foregroundStyle(.red)
-                            .clipShape(Capsule())
                         }
+                        .buttonStyle(BotonSecundarioClarity(color: Color.error))
                     } else if filter.hasActiveFilters {
                         // Modo normal - Guardar nuevo
                         Button {
@@ -231,14 +197,10 @@ struct ExpenseFilterSheet: View {
                                 Text("Guardar nuevo")
                             }
                             .font(.caption.weight(.bold))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.clarityPrimary.opacity(0.1))
-                            .foregroundStyle(Color.clarityPrimary)
-                            .clipShape(Capsule())
                         }
+                        .buttonStyle(.secundarioClarity)
                     }
-                    
+
                     let saved = savedPresets
 
                     if saved.isEmpty {
@@ -246,7 +208,7 @@ struct ExpenseFilterSheet: View {
                         HStack {
                             Text("No hay filtros guardados")
                                 .font(.caption)
-                                .foregroundStyle(DesignTokens.Colors.textSecondary)
+                                .foregroundStyle(Color.textSecondary)
                             Spacer()
                         }
                         .padding(.vertical, 8)
@@ -257,24 +219,18 @@ struct ExpenseFilterSheet: View {
                         }
                     }
                 }
-                .padding(.horizontal)
+                .padding(.horizontal, 14)
             }
-            .padding(.top, 12)
-            .padding(.bottom, 12)
-            
-            Divider()
-                .padding(.horizontal)
+            .padding(.vertical, 12)
+            .glassCard(cornerRadius: CornerRadius.large)
         }
-        .background(Color(.secondarySystemGroupedBackground)) // Visual separation like other cards
-        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
-    
+
     private var dateRangeSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Período")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            
+                .estiloEtiquetaClarity()
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach([ExpenseFilter.DateRange.thisMonth, .lastMonth, .thisYear, .allTime], id: \.self) { range in
@@ -286,58 +242,55 @@ struct ExpenseFilterSheet: View {
                     } label: {
                         Text("Custom")
                             .font(.subheadline)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(filter.dateRange == .custom ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-                            .foregroundStyle(filter.dateRange == .custom ? .white : .primary)
-                            .clipShape(Capsule())
+                            .modifier(ChipFiltro(seleccionado: filter.dateRange == .custom))
                     }
                 }
             }
-            
+
             if filter.dateRange == .custom {
                 HStack {
                     DatePicker("", selection: $filter.customStartDate, displayedComponents: .date)
                     Text("-")
+                        .foregroundStyle(Color.textSecondary)
                     DatePicker("", selection: $filter.customEndDate, displayedComponents: .date)
                 }
                 .labelsHidden()
+                .tint(Color.clarityPrimary)
             }
         }
     }
-    
+
     private var amountRangeSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Rango de Importe")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            
+                .estiloEtiquetaClarity()
+
             HStack {
                 TextField("Min", text: $minAmountText)
                     .keyboardType(.numberPad)
-                    .padding(8)
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .monospacedDigit()
+                    .padding(10)
+                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous))
                     .onChange(of: minAmountText) { _, val in filter.minAmount = Double(val) }
-                
+
                 Text("-")
-                
+                    .foregroundStyle(Color.textSecondary)
+
                 TextField("Max", text: $maxAmountText)
                     .keyboardType(.numberPad)
-                    .padding(8)
-                    .background(Color(.tertiarySystemGroupedBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .monospacedDigit()
+                    .padding(10)
+                    .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous))
                     .onChange(of: maxAmountText) { _, val in filter.maxAmount = Double(val) }
             }
         }
     }
-    
+
     private var categorySelector: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Categorías")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .estiloEtiquetaClarity()
                 Spacer()
                 Button(filter.selectedCategories.count == availableCategories.count ? "Ninguna" : "Todas") {
                     HapticManager.shared.selection()
@@ -365,8 +318,7 @@ struct ExpenseFilterSheet: View {
     private var paymentMethodSelector: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Métodos de Pago")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .estiloEtiquetaClarity()
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -380,13 +332,15 @@ struct ExpenseFilterSheet: View {
     
     // MARK: - Components
     
-    private func sectionHeader(_ title: String, icon: String) -> some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundStyle(Color.clarityPrimary)
-            Text(title)
-                .font(.headline)
-            Spacer()
+    /// Cabecera en mayúsculas pequeñas fuera y el contenido en una tarjeta de
+    /// vidrio, como las secciones de la Home y de Recurrentes.
+    private func seccion<Contenido: View>(_ titulo: String, @ViewBuilder contenido: () -> Contenido) -> some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            CabeceraSeccionClarity(titulo: titulo)
+            contenido()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(Spacing.md)
+                .glassCard(cornerRadius: CornerRadius.large)
         }
     }
     
@@ -397,11 +351,7 @@ struct ExpenseFilterSheet: View {
         } label: {
             Text(range.rawValue)
                 .font(.subheadline)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(filter.dateRange == range ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-                .foregroundStyle(filter.dateRange == range ? .white : .primary)
-                .clipShape(Capsule())
+                .modifier(ChipFiltro(seleccionado: filter.dateRange == range))
         }
     }
     
@@ -415,11 +365,7 @@ struct ExpenseFilterSheet: View {
             Text(category)
                 .font(.caption)
                 .lineLimit(1)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
+                .modifier(ChipFiltro(seleccionado: isSelected, horizontal: 10))
         }
     }
     
@@ -432,11 +378,7 @@ struct ExpenseFilterSheet: View {
         } label: {
             Text(method)
                 .font(.caption)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.clarityPrimary : Color(.tertiarySystemGroupedBackground))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
+                .modifier(ChipFiltro(seleccionado: isSelected, horizontal: 10))
         }
     }
     
@@ -458,19 +400,12 @@ struct ExpenseFilterSheet: View {
                 if isSavedDefault {
                     Image(systemName: "star.fill")
                         .font(.caption2)
-                        .foregroundStyle(Color.yellow)
+                        .foregroundStyle(Color.warning)
                 }
             }
             .font(.caption.weight(.medium))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(isActive ? Color.clarityPrimary.opacity(0.15) : Color(.tertiarySystemGroupedBackground))
-            .foregroundStyle(isActive ? Color.clarityPrimary : .primary)
-            .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(isActive ? Color.clarityPrimary : Color.clear, lineWidth: 1)
-            )
+            .padding(.vertical, 2)
+            .modifier(ChipFiltro(seleccionado: isActive))
         }
         .contextMenu {
             Button {
@@ -548,6 +483,24 @@ struct ExpenseFilterSheet: View {
             self.filterToEdit = nil
             newPresetName = ""
         }
+    }
+}
+
+// MARK: - Chip
+
+/// Chip seleccionable de los filtros: morado de marca y texto blanco si está
+/// elegido; si no, un velo del color del texto que se lee sobre el vidrio en
+/// claro y en oscuro, cosa que los grises de sistema no hacían.
+private struct ChipFiltro: ViewModifier {
+    let seleccionado: Bool
+    var horizontal: CGFloat = 12
+
+    func body(content: Content) -> some View {
+        content
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, 6)
+            .foregroundStyle(seleccionado ? Color.white : Color.primary)
+            .background(seleccionado ? Color.clarityPrimary : Color.primary.opacity(0.08), in: Capsule())
     }
 }
 

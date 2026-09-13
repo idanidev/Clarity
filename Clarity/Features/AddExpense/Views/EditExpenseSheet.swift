@@ -32,6 +32,7 @@ struct EditExpenseSheet: View {
                 )
                 notesSection
             }
+            .fondoClarity()
             .navigationTitle("Editar Gasto")
             .navigationBarTitleDisplayMode(.large)
             .keyboardDoneToolbar()
@@ -71,11 +72,12 @@ struct EditExpenseSheet: View {
         Section {
             HStack(alignment: .center) {
                 Text("€")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(Color.clarityPrimary)
 
                 TextField("0.00", value: $viewModel.amount, format: .number)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
+                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .monospacedDigit()
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
                     .accessibilityLabel("Cantidad del gasto")
@@ -116,7 +118,7 @@ struct EditExpenseSheet: View {
                     speechManager.isListening ? "Escuchando..." : "Dictar",
                     systemImage: speechManager.isListening ? "waveform.circle.fill" : "mic.fill"
                 )
-                .foregroundStyle(speechManager.isListening ? .red : Color.clarityPrimary)
+                .foregroundStyle(speechManager.isListening ? Color.error : Color.clarityPrimary)
                 .symbolEffect(.pulse, isActive: speechManager.isListening)
             }
         }
@@ -132,11 +134,11 @@ struct EditExpenseSheet: View {
             } label: {
                 HStack {
                     Text(viewModel.category.isEmpty ? "Seleccionar" : viewModel.category)
-                        .foregroundStyle(viewModel.category.isEmpty ? .secondary : .primary)
+                        .foregroundStyle(viewModel.category.isEmpty ? Color.textSecondary : Color.primary)
                     Spacer()
                     if let sub = viewModel.subcategory {
                         Text(sub)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     }
                 }
             }

@@ -72,11 +72,12 @@ struct VoiceConfirmationSheet: View {
                 Section {
                     HStack {
                         Text("€")
-                            .foregroundStyle(.secondary)
-                            .font(.title)
+                            .foregroundStyle(Color.clarityPrimary)
+                            .font(.system(.title, design: .rounded, weight: .bold))
                         TextField("0.00", text: $amount)
                             .keyboardType(.decimalPad)
                             .scaledFont(size: 34, weight: .bold, design: .rounded)
+                            .monospacedDigit()
                             .onChange(of: amount) { _, _ in cancelCountdown() }
                     }
 
@@ -128,7 +129,7 @@ struct VoiceConfirmationSheet: View {
                                     addSubcategory(to: category)
                                 } label: {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(Color.success)
                                 }
                                 .disabled(newSubcategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
                                 Button {
@@ -136,7 +137,7 @@ struct VoiceConfirmationSheet: View {
                                     newSubcategoryName = ""
                                 } label: {
                                     Image(systemName: "xmark.circle.fill")
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Color.textSecondary)
                                 }
                             }
                         } else {
@@ -160,6 +161,7 @@ struct VoiceConfirmationSheet: View {
                     }
                 }
             }
+            .fondoClarity()
             // Antes: .simultaneousGesture(TapGesture) cancelaba en cualquier tap.
             // Eso a veces consumía el tap del Picker → no se abría el detalle.
             // Cobertura suficiente vía: onChange de campos + onChange de pickers
@@ -414,27 +416,14 @@ private struct AutoSaveBar: View {
 
     private var accentColor: Color {
         switch secondsLeft {
-        case 4...: return .green
-        case 2...3: return .orange
-        default: return .red
+        case 4...: return Color.success
+        case 2...3: return Color.warning
+        default: return Color.error
         }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Thin progress line at top edge
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Rectangle()
-                        .fill(Color(.systemGray5))
-                    Rectangle()
-                        .fill(accentColor)
-                        .frame(width: geo.size.width * progress)
-                        .animation(.linear(duration: 0.25), value: progress)
-                }
-            }
-            .frame(height: 2)
-
+        VStack(alignment: .leading, spacing: 10) {
             // Content row
             HStack(spacing: 12) {
                 // Animated checkmark icon
@@ -449,7 +438,7 @@ private struct AutoSaveBar: View {
                         .foregroundStyle(.primary)
                     Text("en \(secondsLeft) segundo\(secondsLeft == 1 ? "" : "s")")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .contentTransition(.numericText(countsDown: true))
                         .animation(.easeInOut(duration: 0.2), value: secondsLeft)
                 }
@@ -458,19 +447,20 @@ private struct AutoSaveBar: View {
 
                 Button(action: onCancel) {
                     Text("Cancelar")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(accentColor)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 7)
-                        .background(accentColor.opacity(0.12), in: Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(BotonSecundarioClarity(color: accentColor))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(.bar)  // system-standard material (adapts to dark mode)
+
+            // La cuenta atrás como las barras de la Home, dentro de la tarjeta.
+            BarraProgresoClarity(progreso: progress, color: accentColor, alto: 4)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        // Tarjeta flotante de vidrio en vez de barra de material pegada al borde.
+        .glassCard(cornerRadius: CornerRadius.large)
         .onTapGesture { onCancel() }  // tap anywhere on the bar also cancels
+        .padding(.horizontal, Spacing.md)
+        .padding(.bottom, Spacing.xs)
     }
 }
 
@@ -484,9 +474,9 @@ struct SaveCountdownButton: View {
 
     private var ringColor: Color {
         switch secondsLeft {
-        case 4...: return .green
-        case 2...3: return .orange
-        default: return .red
+        case 4...: return Color.success
+        case 2...3: return Color.warning
+        default: return Color.error
         }
     }
 

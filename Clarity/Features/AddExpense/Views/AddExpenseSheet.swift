@@ -33,6 +33,7 @@ struct AddExpenseSheet: View {
                 )
                 AddExpNotesSection(viewModel: viewModel, focused: $focused)
             }
+            .fondoClarity()
             .scrollDismissesKeyboard(.interactively)
             .trackScreen("anadir_gasto")
             .navigationTitle("Nuevo Gasto")
@@ -79,11 +80,14 @@ private struct AddExpAmountSection: View {
         Section {
             HStack(alignment: .center) {
                 Text("€")
-                    .font(.largeTitle)
-                    .foregroundStyle(.secondary)
+                    .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .foregroundStyle(Color.clarityPrimary)
 
+                // Redondeada y con dígitos de ancho fijo, como las cifras de la
+                // Home: el importe no cambia de ancho con cada tecla.
                 TextField("0.00", text: $viewModel.amountText)
-                    .font(.system(size: 48, weight: .bold, design: .monospaced))
+                    .font(.system(size: 48, weight: .bold, design: .rounded))
+                    .monospacedDigit()
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
                     // Responsive: expresiones largas ("1,50 + 2 × 3") encogen para caber
@@ -106,9 +110,9 @@ private struct AddExpAmountSection: View {
                 operatorButton("÷", icon: "divide")
                 Spacer(minLength: 0)
             }
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .controlSize(.small)
+            // Cápsulas tintadas, como las acciones secundarias del resto de la app.
+            // Con un estilo propio cada botón conserva su toque dentro de la fila.
+            .buttonStyle(.secundarioClarity)
 
             // Total en vivo en su PROPIA línea → nunca compite por el ancho ni se corta.
             if viewModel.amountIsExpression {
@@ -117,7 +121,8 @@ private struct AddExpAmountSection: View {
                         .foregroundStyle(Color.clarityPrimary)
                     Text(viewModel.amount.map { Formatters.currency($0) } ?? "—")
                         .fontWeight(.bold)
-                        .foregroundStyle(viewModel.amount == nil ? .secondary : Color.clarityPrimary)
+                        .monospacedDigit()
+                        .foregroundStyle(viewModel.amount == nil ? Color.textSecondary : Color.clarityPrimary)
                         .minimumScaleFactor(0.6)
                         .lineLimit(1)
                     Spacer(minLength: 0)
@@ -191,7 +196,7 @@ private struct AddExpCategorySection: View {
                 HStack {
                     if viewModel.category.isEmpty {
                         Text("Seleccionar")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     } else {
                         Text(viewModel.category)
                             .foregroundStyle(.primary)
@@ -200,17 +205,17 @@ private struct AddExpCategorySection: View {
 
                         if let sub = viewModel.subcategory {
                             Text(sub)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                         } else {
                             Text("Elige subcategoría")
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.warning)
                                 .font(.caption.weight(.medium))
                         }
 
                         if viewModel.wasAutoCategorized && !viewModel.category.isEmpty {
                             Image(systemName: "sparkles")
                                 .font(.caption)
-                                .foregroundStyle(.yellow)
+                                .foregroundStyle(Color.warning)
                         }
                     }
                 }
@@ -221,7 +226,7 @@ private struct AddExpCategorySection: View {
             if !viewModel.category.isEmpty && viewModel.subcategory == nil {
                 Text("⚠️ Las subcategorías son obligatorias para todos los gastos")
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.warning)
             }
         }
     }

@@ -13,7 +13,9 @@ struct FiltersOnboardingSheet: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            // El fondo de la app detrás de todas las páginas, que van transparentes:
+            // así el vidrio de las tarjetas de ejemplo tiene algo que refractar.
+            HomeFondo()
 
             TabView(selection: $page) {
                 IntroPage().tag(0)
@@ -27,7 +29,7 @@ struct FiltersOnboardingSheet: View {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in
                         Capsule()
-                            .fill(i == page ? Color.white : Color.white.opacity(0.3))
+                            .fill(i == page ? Color.clarityPrimary : Color.primary.opacity(0.25))
                             .frame(width: i == page ? 22 : 6, height: 6)
                             .animation(.spring(response: 0.3), value: page)
                     }
@@ -43,19 +45,14 @@ struct FiltersOnboardingSheet: View {
                     }
                 } label: {
                     Text(page < 2 ? "Siguiente" : "Entendido")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
+                .buttonStyle(.principalClarity)
                 .padding(.horizontal, 24)
 
                 if page == 0 {
                     Button("Saltar") { dismiss() }
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.textSecondary)
                 } else {
                     Color.clear.frame(height: 20)
                 }
@@ -72,50 +69,34 @@ private struct IntroPage: View {
     @State private var appear = false
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            RadialGradient(
-                colors: [Color(hex: "#3B82F6").opacity(0.28), Color.clear],
-                center: .center, startRadius: 0, endRadius: 280
+        VStack(spacing: 22) {
+            Spacer()
+
+            CirculoIconoClarity(
+                icono: "line.3.horizontal.decrease.circle.fill",
+                color: .clarityPrimary,
+                tamano: 110,
+                esSimbolo: true
             )
-            .ignoresSafeArea()
+            .scaleEffect(appear ? 1 : 0.4)
+            .opacity(appear ? 1 : 0)
 
-            VStack(spacing: 22) {
-                Spacer()
-
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [Color(hex: "#3B82F6"), Color(hex: "#6366F1")],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 110, height: 110)
-                        .shadow(color: Color(hex: "#3B82F6").opacity(0.55), radius: 28, y: 10)
-
-                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
-                        .font(.system(size: 56, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .scaleEffect(appear ? 1 : 0.4)
-                .opacity(appear ? 1 : 0)
-
-                VStack(spacing: 10) {
-                    Text("Filtros")
-                        .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                    Text("Encuentra cualquier gasto\nen segundos")
-                        .font(.title3)
-                        .foregroundStyle(Color.white.opacity(0.6))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(4)
-                }
-                .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 20)
-
-                Spacer()
-                Spacer()
+            VStack(spacing: 10) {
+                Text("Filtros")
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
+                Text("Encuentra cualquier gasto\nen segundos")
+                    .font(.title3)
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
             }
+            .opacity(appear ? 1 : 0)
+            .offset(y: appear ? 0 : 20)
+
+            Spacer()
+            Spacer()
         }
+        .frame(maxWidth: .infinity)
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) { appear = true }
         }
@@ -127,87 +108,70 @@ private struct ApplyPage: View {
     @State private var showChips = false
 
     private let chips: [(icon: String, label: String, color: Color)] = [
-        ("calendar", "Este mes", Color(hex: "#3B82F6")),
-        ("eurosign.circle", "20-100€", Color(hex: "#10B981")),
-        ("tag", "Comida", Color(hex: "#F59E0B")),
-        ("creditcard", "Tarjeta", Color(hex: "#EC4899")),
+        ("calendar", "Este mes", Color.clarityPrimary),
+        ("eurosign.circle", "20-100€", Color.success),
+        ("tag", "Comida", Color.warning),
+        ("creditcard", "Tarjeta", Color.claritySecondary),
     ]
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            RadialGradient(
-                colors: [Color(hex: "#10B981").opacity(0.18), Color.clear],
-                center: .top, startRadius: 0, endRadius: 320
-            )
-            .ignoresSafeArea()
+        VStack(spacing: 0) {
+            Spacer().frame(height: 50)
 
-            VStack(spacing: 0) {
-                Spacer().frame(height: 50)
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 56, weight: .semibold))
+                .foregroundStyle(Color.clarityPrimary)
+                .scaleEffect(appear ? 1 : 0.4)
 
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 56, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .scaleEffect(appear ? 1 : 0.4)
+            Spacer().frame(height: 18)
 
-                Spacer().frame(height: 18)
+            VStack(spacing: 8) {
+                Text("CÓMO FUNCIONAN")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.success)
+                    .tracking(2.5)
+                Text("Combina criterios\ny aplica")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                Text("Fecha, importe, categoría, método de pago. Mezcla los que necesites.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 4)
+            }
+            .opacity(appear ? 1 : 0)
+            .offset(y: appear ? 0 : 16)
 
-                VStack(spacing: 8) {
-                    Text("CÓMO FUNCIONAN")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#10B981"))
-                        .tracking(2.5)
-                    Text("Combina criterios\ny aplica")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                    Text("Fecha, importe, categoría, método de pago. Mezcla los que necesites.")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.55))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 4)
-                }
-                .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 16)
+            Spacer().frame(height: 18)
 
-                Spacer().frame(height: 18)
-
-                // Mock chips
-                VStack(spacing: 10) {
-                    ForEach(Array(chips.enumerated()), id: \.offset) { i, chip in
-                        if showChips {
-                            HStack(spacing: 12) {
-                                Image(systemName: chip.icon)
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(chip.color)
-                                    .frame(width: 36, height: 36)
-                                    .background(chip.color.opacity(0.18))
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                Text(chip.label)
-                                    .font(.system(size: 15, weight: .medium))
-                                    .foregroundStyle(.white)
-                                Spacer()
-                                Image(systemName: "checkmark")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(chip.color)
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 10)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(chip.color.opacity(0.25), lineWidth: 1))
-                            .transition(.move(edge: .leading).combined(with: .opacity))
+            // Mock chips
+            VStack(spacing: 10) {
+                ForEach(Array(chips.enumerated()), id: \.offset) { i, chip in
+                    if showChips {
+                        HStack(spacing: 12) {
+                            CirculoIconoClarity(icono: chip.icon, color: chip.color, tamano: 36, esSimbolo: true)
+                            Text(chip.label)
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                            Image(systemName: "checkmark")
+                                .font(.caption.bold())
+                                .foregroundStyle(chip.color)
                         }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .glassCard(cornerRadius: CornerRadius.medium)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
                     }
                 }
-                .padding(.horizontal, 28)
-
-                Spacer()
-                Spacer()
             }
+            .padding(.horizontal, 28)
+
+            Spacer()
+            Spacer()
         }
+        .frame(maxWidth: .infinity)
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) { appear = true }
             for i in 0..<chips.count {
@@ -225,89 +189,73 @@ private struct SavedPage: View {
     @State private var showCards = false
 
     private let presets: [(emoji: String, name: String, summary: String, color: Color)] = [
-        ("🍔", "Comida fuera", "Hostelería · Tarjeta", Color(hex: "#F59E0B")),
-        ("🚗", "Coche", "Transporte · >50€", Color(hex: "#3B82F6")),
-        ("🎁", "Regalos", "Este año · Efectivo", Color(hex: "#EC4899")),
+        ("🍔", "Comida fuera", "Hostelería · Tarjeta", Color.warning),
+        ("🚗", "Coche", "Transporte · >50€", Color.clarityPrimary),
+        ("🎁", "Regalos", "Este año · Efectivo", Color.claritySecondary),
     ]
 
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            RadialGradient(
-                colors: [Color(hex: "#8B5CF6").opacity(0.22), Color.clear],
-                center: .top, startRadius: 0, endRadius: 320
-            )
-            .ignoresSafeArea()
+        VStack(spacing: 0) {
+            Spacer().frame(height: 50)
 
-            VStack(spacing: 0) {
-                Spacer().frame(height: 50)
+            Image(systemName: "bookmark.fill")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(Color.clarityPrimary)
+                .scaleEffect(appear ? 1 : 0.4)
 
-                Image(systemName: "bookmark.fill")
-                    .font(.system(size: 52, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#8B5CF6"))
-                    .scaleEffect(appear ? 1 : 0.4)
+            Spacer().frame(height: 16)
 
-                Spacer().frame(height: 16)
+            VStack(spacing: 8) {
+                Text("FILTROS GUARDADOS")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(Color.clarityPrimary)
+                    .tracking(2.5)
+                Text("Guarda los\nque más uses")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+                Text("Aplica una combinación favorita con un toque. Sin volver a configurarla.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+                    .padding(.top, 4)
+            }
+            .opacity(appear ? 1 : 0)
+            .offset(y: appear ? 0 : 16)
 
-                VStack(spacing: 8) {
-                    Text("FILTROS GUARDADOS")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#8B5CF6"))
-                        .tracking(2.5)
-                    Text("Guarda los\nque más uses")
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                    Text("Aplica una combinación favorita con un toque. Sin volver a configurarla.")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.55))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 32)
-                        .padding(.top, 4)
-                }
-                .opacity(appear ? 1 : 0)
-                .offset(y: appear ? 0 : 16)
+            Spacer().frame(height: 18)
 
-                Spacer().frame(height: 18)
-
-                VStack(spacing: 10) {
-                    ForEach(Array(presets.enumerated()), id: \.offset) { i, p in
-                        if showCards {
-                            HStack(spacing: 12) {
-                                Text(p.emoji)
-                                    .font(.system(size: 24))
-                                    .frame(width: 44, height: 44)
-                                    .background(p.color.opacity(0.18))
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(p.name)
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                    Text(p.summary)
-                                        .font(.caption)
-                                        .foregroundStyle(Color.white.opacity(0.5))
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Color.white.opacity(0.4))
+            VStack(spacing: 10) {
+                ForEach(Array(presets.enumerated()), id: \.offset) { i, p in
+                    if showCards {
+                        HStack(spacing: 12) {
+                            CirculoIconoClarity(icono: p.emoji, color: p.color, tamano: 44)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(p.name)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(p.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.textSecondary)
                             }
-                            .padding(14)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
-                            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                            .animation(.spring(response: 0.45).delay(Double(i) * 0.08), value: showCards)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(Color.textTertiary)
                         }
+                        .padding(14)
+                        .glassCard(cornerRadius: CornerRadius.medium)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.spring(response: 0.45).delay(Double(i) * 0.08), value: showCards)
                     }
                 }
-                .padding(.horizontal, 28)
-
-                Spacer()
-                Spacer()
             }
+            .padding(.horizontal, 28)
+
+            Spacer()
+            Spacer()
         }
+        .frame(maxWidth: .infinity)
         .onAppear {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) { appear = true }
             withAnimation(.spring(response: 0.5).delay(0.4)) { showCards = true }
