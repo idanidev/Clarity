@@ -74,7 +74,7 @@ private struct HeroCard: View {
                 Text("GASTADO ESTE MES")
                     .font(.caption2.weight(.medium))
                     .tracking(0.7)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                 Spacer()
                 chip
             }
@@ -96,7 +96,7 @@ private struct HeroCard: View {
                     .padding(.top, 14)
                 HStack {
                     Text("\(Int((progreso * 100).rounded())) % del presupuesto · \(Formatters.currency(presupuesto))")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                     Spacer()
                     Text("\(Formatters.currency(libres)) libres")
                         .foregroundStyle(libres >= 0 ? Color.success : Color.error)
@@ -107,7 +107,7 @@ private struct HeroCard: View {
             } else {
                 Text("A este ritmo acabarás el mes en **\(Formatters.currency(resumen.ritmo.prevision))**.")
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                     .padding(.top, 10)
             }
 
@@ -121,8 +121,11 @@ private struct HeroCard: View {
             }
         }
         .padding(20)
-        .glassCard(cornerRadius: CornerRadius.xlarge)
+        // La onda va sobre el contenido y el vidrio por fuera: los efectos de
+        // capa rasterizan lo que envuelven, y un material rasterizado pierde el
+        // fondo y sale negro.
         .ondaAlTocar()
+        .glassCard(cornerRadius: CornerRadius.xlarge)
     }
 
     @ViewBuilder
@@ -141,7 +144,7 @@ private struct HeroCard: View {
         } else if resumen.diasApuntando > 0 {
             Text("\(resumen.diasApuntando) días apuntando")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.textSecondary)
                 .padding(.horizontal, 9).padding(.vertical, 4)
                 .background(Color.primary.opacity(0.08), in: Capsule())
         }
@@ -154,7 +157,7 @@ private struct Dato: View {
     init(_ titulo: String, _ valor: String) { self.titulo = titulo; self.valor = valor }
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(titulo).font(.caption).foregroundStyle(.secondary)
+            Text(titulo).font(.caption).foregroundStyle(Color.textSecondary)
             Text(valor).font(.callout.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -203,8 +206,8 @@ private struct SlotCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(compacta ? 14 : 16)
-        .glassCard(tint: tinte)
         .ondaAlTocar()
+        .glassCard(tint: tinte)
         .temblor(cuando: superados)
     }
 
@@ -220,7 +223,7 @@ private struct SlotCard: View {
     }
 
     private func titulo(_ t: String) -> some View {
-        Text(t.uppercased()).font(.caption2.weight(.medium)).tracking(0.5).foregroundStyle(.secondary)
+        Text(t.uppercased()).font(.caption2.weight(.medium)).tracking(0.5).foregroundStyle(Color.textSecondary)
     }
 
     // Límites
@@ -233,14 +236,14 @@ private struct SlotCard: View {
                         Text(l.categoria.nombreSinEmoji).font(.subheadline.weight(.medium))
                         Spacer()
                         Text(Formatters.currency(l.gastado)).fontWeight(.semibold).foregroundStyle(l.superado ? Color.error : .primary)
-                        + Text(" / \(Formatters.currency(l.tope))").foregroundStyle(.secondary)
+                        + Text(" / \(Formatters.currency(l.tope))").foregroundStyle(Color.textSecondary)
                     }
                     .font(.footnote)
                     Barra(progreso: l.progreso, color: l.superado ? .error : (l.progreso > 0.75 ? .warning : .success), alto: 5)
                     Text(l.superado
                          ? "Superado en \(Formatters.currency(-l.restante))"
                          : "Te quedan \(Formatters.currency(l.restante))")
-                        .font(.caption).foregroundStyle(l.superado ? Color.error : .secondary)
+                        .font(.caption).foregroundStyle(l.superado ? Color.error : Color.textSecondary)
                 }
             }
         }
@@ -268,11 +271,11 @@ private struct SlotCard: View {
         VStack(alignment: .leading, spacing: 4) {
             titulo("Próximos cargos")
             Text(Formatters.currency(total)).font(.title3.weight(.bold))
-            Text("\(cargos.count == 1 ? "1 cargo" : "\(cargos.count) cargos") este mes").font(.caption).foregroundStyle(.secondary)
+            Text("\(cargos.count == 1 ? "1 cargo" : "\(cargos.count) cargos") este mes").font(.caption).foregroundStyle(Color.textSecondary)
             VStack(spacing: 5) {
                 ForEach(cargos) { c in
                     HStack {
-                        Text("\(c.nombre) · \(c.dia)").foregroundStyle(.secondary).lineLimit(1)
+                        Text("\(c.nombre) · \(c.dia)").foregroundStyle(Color.textSecondary).lineLimit(1)
                         Spacer()
                         Text(Formatters.currency(c.importe))
                     }
@@ -288,11 +291,11 @@ private struct SlotCard: View {
         VStack(alignment: .leading, spacing: 4) {
             titulo("Te deben")
             Text(Formatters.currency(total)).font(.title3.weight(.bold)).foregroundStyle(Color.success)
-            Text(deudas.count == 1 ? "1 persona" : "\(deudas.count) personas").font(.caption).foregroundStyle(.secondary)
+            Text(deudas.count == 1 ? "1 persona" : "\(deudas.count) personas").font(.caption).foregroundStyle(Color.textSecondary)
             VStack(spacing: 5) {
                 ForEach(deudas.prefix(3)) { d in
                     HStack {
-                        Text(d.nombre).foregroundStyle(.secondary).lineLimit(1)
+                        Text(d.nombre).foregroundStyle(Color.textSecondary).lineLimit(1)
                         Spacer()
                         Text(Formatters.currency(d.importe))
                     }
@@ -309,7 +312,7 @@ private struct SlotCard: View {
             titulo("Hucha · \(h.nombre)")
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(Formatters.currency(h.actual)).font(.callout.weight(.semibold))
-                Text("de \(Formatters.currency(h.objetivo))").font(.footnote).foregroundStyle(.secondary)
+                Text("de \(Formatters.currency(h.objetivo))").font(.footnote).foregroundStyle(Color.textSecondary)
             }
             Barra(progreso: h.progreso, color: .clarityPrimary, alto: 5).padding(.top, 4)
         }
@@ -320,8 +323,8 @@ private struct SlotCard: View {
         VStack(alignment: .leading, spacing: 4) {
             titulo("Día más caro")
             Text(Formatters.currency(d.importe)).font(.title3.weight(.bold))
-            Text(d.fecha.formatted(.dateTime.weekday(.wide).day()).capitalized).font(.caption).foregroundStyle(.secondary)
-            Text(d.concepto).font(.caption).foregroundStyle(.secondary).lineLimit(1).padding(.top, 8)
+            Text(d.fecha.formatted(.dateTime.weekday(.wide).day()).capitalized).font(.caption).foregroundStyle(Color.textSecondary)
+            Text(d.concepto).font(.caption).foregroundStyle(Color.textSecondary).lineLimit(1).padding(.top, 8)
         }
     }
 
@@ -332,9 +335,9 @@ private struct SlotCard: View {
             Text("\(s.porcentaje >= 0 ? "+" : "")\(s.porcentaje) %")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(s.porcentaje > 0 ? Color.error : Color.success)
-            Text("\(Formatters.currency(s.actual)) frente a \(Formatters.currency(s.anterior))").font(.caption).foregroundStyle(.secondary)
+            Text("\(Formatters.currency(s.actual)) frente a \(Formatters.currency(s.anterior))").font(.caption).foregroundStyle(Color.textSecondary)
             Text(s.porcentaje > 0 ? "Vas por encima de la semana pasada." : "Vas por debajo de la semana pasada.")
-                .font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+                .font(.caption).foregroundStyle(Color.textSecondary).padding(.top, 8)
         }
     }
 
@@ -343,7 +346,7 @@ private struct SlotCard: View {
         VStack(alignment: .leading, spacing: 4) {
             titulo("Sube fuerte")
             Text(s.categoria.nombreSinEmoji).font(.title3.weight(.bold)).lineLimit(1)
-            Text("+\(Formatters.currency(s.delta)) frente al mes pasado").font(.caption).foregroundStyle(.secondary)
+            Text("+\(Formatters.currency(s.delta)) frente al mes pasado").font(.caption).foregroundStyle(Color.textSecondary)
         }
     }
 
@@ -354,7 +357,7 @@ private struct SlotCard: View {
             Text("\(c.porcentaje >= 0 ? "+" : "")\(c.porcentaje) %")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(c.delta > 0 ? Color.error : Color.success)
-            Text("\(Formatters.currency(c.totalActual)) frente a \(Formatters.currency(c.totalAnterior))").font(.caption).foregroundStyle(.secondary)
+            Text("\(Formatters.currency(c.totalActual)) frente a \(Formatters.currency(c.totalAnterior))").font(.caption).foregroundStyle(Color.textSecondary)
         }
     }
 
@@ -366,7 +369,7 @@ private struct SlotCard: View {
             HStack(alignment: .bottom, spacing: 10) {
                 ForEach(Array(semanas.enumerated()), id: \.offset) { i, v in
                     VStack(spacing: 5) {
-                        Text(Formatters.currencyCompact(v)).font(.caption2).foregroundStyle(i == semanas.count - 1 ? .primary : .secondary)
+                        Text(Formatters.currencyCompact(v)).font(.caption2).foregroundStyle(i == semanas.count - 1 ? .primary : Color.textSecondary)
                         RoundedRectangle(cornerRadius: 5, style: .continuous)
                             .fill(i == semanas.count - 1 ? Color.clarityPrimary : Color.primary.opacity(0.2))
                             .frame(height: max(6, 56 * (maximo > 0 ? v / maximo : 0)))
@@ -436,8 +439,8 @@ private struct CategoriasCard: View {
             }
         }
         .padding(16)
-        .glassCard()
         .ondaAlTocar()
+        .glassCard()
     }
 }
 
@@ -455,7 +458,7 @@ private struct UltimosCard: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(g.name).font(.subheadline.weight(.medium)).lineLimit(1)
                             Text("\(Formatters.shortDisplay(g.date)) · \(g.category) · \(g.paymentMethod)")
-                                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                .font(.caption).foregroundStyle(Color.textSecondary).lineLimit(1)
                         }
                         Spacer()
                         Text(Formatters.currency(g.amount)).font(.subheadline.weight(.semibold))
@@ -466,8 +469,8 @@ private struct UltimosCard: View {
             }
         }
         .padding(16)
-        .glassCard()
         .destello(cuando: gastos.first?.stableId)
+        .glassCard()
     }
 }
 

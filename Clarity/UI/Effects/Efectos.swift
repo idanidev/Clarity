@@ -13,6 +13,14 @@ enum Shaders {
     static let disponibles: Bool = Bundle.main.url(forResource: "default", withExtension: "metallib") != nil
 }
 
+// Dos reglas que salieron de verlo fallar:
+// 1. Los efectos de capa (`distortionEffect`, `colorEffect`) rasterizan lo que
+//    envuelven. Van SOBRE el contenido y el vidrio POR FUERA; si envuelven el
+//    material, la tarjeta sale negra opaca.
+// 2. Dentro de esa capa, `.secondary` y `.tertiary` —estilos vibrantes— se
+//    pintan transparentes. Texto secundario con `Color.textSecondary`, que es
+//    opacidad explícita y no depende de qué haya debajo.
+
 // MARK: - Onda desde el dedo
 
 extension View {

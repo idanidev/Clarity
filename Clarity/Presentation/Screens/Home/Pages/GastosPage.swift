@@ -100,7 +100,7 @@ private struct CabeceraCategoria: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(grupo.name.nombreSinEmoji).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
                     Text(grupo.expenseCount == 1 ? "1 gasto" : "\(grupo.expenseCount) gastos")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Color.textSecondary)
                 }
                 Spacer()
                 Text(Formatters.currency(grupo.totalAmount))
@@ -109,7 +109,7 @@ private struct CabeceraCategoria: View {
                     .contentTransition(.numericText(value: grupo.totalAmount))
                 Image(systemName: "chevron.down")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.textTertiary)
                     .rotationEffect(.degrees(plegada ? -90 : 0))
             }
             .padding(.horizontal, 14).padding(.vertical, 11)
@@ -129,9 +129,9 @@ private struct CabeceraSubcategoria: View {
 
     var body: some View {
         HStack {
-            Text(nombre.isEmpty ? "Sin subcategoría" : nombre).font(.caption.weight(.medium)).foregroundStyle(.secondary)
+            Text(nombre.isEmpty ? "Sin subcategoría" : nombre).font(.caption.weight(.medium)).foregroundStyle(Color.textSecondary)
             Spacer()
-            Text(Formatters.currency(total)).font(.caption).foregroundStyle(.secondary)
+            Text(Formatters.currency(total)).font(.caption).foregroundStyle(Color.textSecondary)
         }
         .padding(.horizontal, 6).padding(.top, 6)
     }
@@ -147,7 +147,7 @@ private struct FilaGasto: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(gasto.name).font(.subheadline.weight(.medium)).lineLimit(1)
                 Text("\(Formatters.shortDisplay(gasto.date)) · \(gasto.paymentMethod)")
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .font(.caption).foregroundStyle(Color.textSecondary).lineLimit(1)
             }
             Spacer()
             Text(Formatters.currency(gasto.amount)).font(.subheadline.weight(.semibold))

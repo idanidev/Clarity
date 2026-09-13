@@ -83,7 +83,9 @@ struct HomeView: View {
             .task { await viewModel.loadMetas() }
             .task { await viewModel.loadMesAnterior() }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { barra }
+            // La barra de navegación del sistema se queda fuera: la del diseño es
+            // una píldora de vidrio con el mes y los iconos, y eso se pinta aquí.
+            .toolbar(.hidden, for: .navigationBar)
             // Un toque al encajar cada página, como al pasar de pantalla de inicio.
             .sensoryFeedback(.selection, trigger: pagina)
     }
@@ -92,6 +94,11 @@ struct HomeView: View {
 
     private var contenido: some View {
         VStack(spacing: 0) {
+            barraSuperior
+                .padding(.horizontal, Spacing.sm)
+                .padding(.top, Spacing.xxs)
+                .padding(.bottom, Spacing.xs)
+
             if buscando { barraBusqueda }
 
             ZStack(alignment: .bottom) {
@@ -109,6 +116,52 @@ struct HomeView: View {
             }
         }
         .animation(.snappy(duration: 0.3), value: buscando)
+    }
+
+    /// La píldora del diseño: mes a la izquierda con sus flechas, buscar y
+    /// filtros a la derecha, todo en un solo vidrio.
+    private var barraSuperior: some View {
+        HStack(spacing: 4) {
+            HomeMesControl(mes: $viewModel.selectedMonth)
+            Spacer(minLength: 4)
+            Button {
+                buscando.toggle()
+                if !buscando { viewModel.searchText = "" }
+                HapticManager.shared.selection()
+            } label: {
+                Image(systemName: buscando ? "magnifyingglass.circle.fill" : "magnifyingglass")
+                    .font(.body.weight(.medium))
+                    .frame(width: 36, height: 36)
+            }
+            .accessibilityLabel(buscando ? "Cerrar búsqueda" : "Buscar")
+
+            if viewModel.selectedFilter.hasActiveFilters {
+                Button {
+                    viewModel.selectedFilter = ExpenseFilter()
+                    HapticManager.shared.notification(.success)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.body.weight(.medium))
+                        .frame(width: 36, height: 36)
+                }
+                .accessibilityLabel("Limpiar filtros")
+            }
+            Button {
+                showFilterSheet = true
+                HapticManager.shared.selection()
+            } label: {
+                Image(systemName: viewModel.selectedFilter.hasActiveFilters
+                      ? "line.3.horizontal.decrease.circle.fill"
+                      : "line.3.horizontal.decrease.circle")
+                    .font(.body.weight(.medium))
+                    .frame(width: 36, height: 36)
+            }
+            .accessibilityLabel("Filtros")
+        }
+        .tint(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : .primary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .glassCard(cornerRadius: 26)
     }
 
     private var barraBusqueda: some View {
@@ -140,19 +193,13 @@ struct HomeView: View {
     /// `TabView` de las pestañas y anidar otro es justo lo que iOS 26 rehízo con
     /// Liquid Glass —en el iPhone con 26 no pintaba nada—.
     private var carrusel: some View {
-        // El carrusel horizontal extiende su contenido bajo la barra de
-        // navegación y no se lo inseta, así que la barra pisaba la primera
-        // tarjeta. Aquí se mide el área segura superior —estado más barra— y
-        // cada página deja ese margen en su propio desplazamiento: la primera
-        // tarjeta nace debajo de la barra y, al desplazar, pasa por debajo.
         GeometryReader { geo in
-            let margen = geo.safeAreaInsets.top + Spacing.xs
             VStack(spacing: 0) {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 0) {
                         ForEach(HomePagina.allCases) { p in
-                            pagina(p, margenSuperior: margen)
-                                .frame(width: geo.size.width, height: geo.size.height + geo.safeAreaInsets.top - 22)
+                            pagina(p, margenSuperior: Spacing.xxs)
+                                .frame(width: geo.size.width, height: geo.size.height - 22)
                                 .id(p)
                         }
                     }
@@ -165,7 +212,6 @@ struct HomeView: View {
                 HomePuntos(actual: pagina ?? .resumen)
                     .frame(height: 22)
             }
-            .ignoresSafeArea(edges: .top)
         }
     }
 
@@ -196,45 +242,6 @@ struct HomeView: View {
     }
 
     // MARK: - Barra de navegación: mes en el centro, filtros a la derecha
-
-    @ToolbarContentBuilder
-    private var barra: some ToolbarContent {
-        ToolbarItem(placement: .principal) {
-            HomeMesControl(mes: $viewModel.selectedMonth)
-        }
-        ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: Spacing.xs) {
-                Button {
-                    buscando.toggle()
-                    if !buscando { viewModel.searchText = "" }
-                    HapticManager.shared.selection()
-                } label: {
-                    Image(systemName: buscando ? "magnifyingglass.circle.fill" : "magnifyingglass")
-                }
-                .accessibilityLabel(buscando ? "Cerrar búsqueda" : "Buscar")
-
-                if viewModel.selectedFilter.hasActiveFilters {
-                    Button {
-                        viewModel.selectedFilter = ExpenseFilter()
-                        HapticManager.shared.notification(.success)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                    }
-                    .accessibilityLabel("Limpiar filtros")
-                }
-                Button {
-                    showFilterSheet = true
-                    HapticManager.shared.selection()
-                } label: {
-                    Image(systemName: viewModel.selectedFilter.hasActiveFilters
-                          ? "line.3.horizontal.decrease.circle.fill"
-                          : "line.3.horizontal.decrease.circle")
-                }
-                .accessibilityLabel("Filtros")
-            }
-            .tint(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : DesignTokens.Colors.textPrimary)
-        }
-    }
 
     // MARK: - View States
     private var loadingView: some View {
@@ -317,7 +324,7 @@ private struct HomeMesControl: View {
     var body: some View {
         HStack(spacing: 2) {
             Button { cambiar(-1) } label: {
-                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold)).frame(width: 30, height: 30)
+                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold)).frame(width: 34, height: 36)
             }
             .accessibilityLabel("Mes anterior")
 
@@ -346,11 +353,11 @@ private struct HomeMesControl: View {
                         Text("mes actual").font(.caption2).foregroundStyle(.secondary)
                     }
                 }
-                .frame(minWidth: 150)
+                .frame(minWidth: 132)
             }
 
             Button { cambiar(1) } label: {
-                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).frame(width: 30, height: 30)
+                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).frame(width: 34, height: 36)
             }
             .disabled(esActual)
             .accessibilityLabel("Mes siguiente")

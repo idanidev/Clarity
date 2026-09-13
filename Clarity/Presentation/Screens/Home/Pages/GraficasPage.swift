@@ -43,7 +43,7 @@ struct GraficasPage: View {
                     }
                     .frame(width: 150, height: 150)
                     VStack(spacing: 2) {
-                        Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(.secondary)
+                        Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(Color.textSecondary)
                         Text(Formatters.currency(total)).font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
                     }
                     .frame(width: 96)
@@ -74,7 +74,7 @@ struct GraficasPage: View {
             HStack {
                 Text("Por día").font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Media \(Formatters.currency(viewModel.resumen.ritmo.mediaDiaria))").font(.caption).foregroundStyle(.secondary)
+                Text("Media \(Formatters.currency(viewModel.resumen.ritmo.mediaDiaria))").font(.caption).foregroundStyle(Color.textSecondary)
             }
             // El día va como categoría, no como número: con un eje numérico las
             // barras de ancho por ratio se quedaban a cero y el gráfico salía vacío.
@@ -85,7 +85,9 @@ struct GraficasPage: View {
             }
             .chartXAxis {
                 AxisMarks(values: ["1", "10", "20", String(dias.count)]) { v in
-                    AxisValueLabel { if let n = v.as(String.self) { Text(n).font(.caption2) } }
+                    AxisValueLabel(anchor: .top, collisionResolution: .disabled) {
+                        if let n = v.as(String.self) { Text(n).font(.caption2) }
+                    }
                 }
             }
             .chartYAxis(.hidden)
@@ -109,13 +111,13 @@ struct GraficasPage: View {
             HStack {
                 Text("Frente al mes pasado").font(.subheadline.weight(.semibold))
                 Spacer()
-                if let c { Text("\(c.delta > 0 ? "+" : "−")\(Formatters.currency(abs(c.delta))) en total").font(.caption).foregroundStyle(.secondary) }
+                if let c { Text("\(c.delta > 0 ? "+" : "−")\(Formatters.currency(abs(c.delta))) en total").font(.caption).foregroundStyle(Color.textSecondary) }
             }
             HStack(spacing: 14) {
                 Label { Text("Este mes") } icon: { Capsule().fill(Color.clarityPrimary).frame(width: 10, height: 6) }
                 Label { Text("Anterior") } icon: { Capsule().fill(Color.primary.opacity(0.28)).frame(width: 10, height: 6) }
             }
-            .font(.caption).foregroundStyle(.secondary)
+            .font(.caption).foregroundStyle(Color.textSecondary)
             ForEach(filas, id: \.categoria) { f in
                 let delta = f.actual - f.anterior
                 VStack(alignment: .leading, spacing: 5) {
@@ -155,14 +157,14 @@ struct GraficasPage: View {
             HStack {
                 Text("Últimos \(evolucionMeses) meses").font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Media \(Formatters.currencyCompact(media))").font(.caption).foregroundStyle(.secondary)
+                Text("Media \(Formatters.currencyCompact(media))").font(.caption).foregroundStyle(Color.textSecondary)
             }
             Chart(evo) { m in
                 BarMark(x: .value("Mes", m.label), y: .value("€", m.total), width: .ratio(0.55))
                     .cornerRadius(6)
                     .foregroundStyle(m.key == clave ? Color.clarityPrimary : Color.primary.opacity(0.22))
                     .annotation(position: .top, spacing: 4) {
-                        Text(Formatters.currencyCompact(m.total)).font(.caption2).foregroundStyle(m.key == clave ? .primary : .secondary)
+                        Text(Formatters.currencyCompact(m.total)).font(.caption2).foregroundStyle(m.key == clave ? .primary : Color.textSecondary)
                     }
             }
             .chartYAxis(.hidden)
@@ -190,7 +192,7 @@ extension GraficasPage {
             HStack(spacing: 8) {
                 ForEach(Array(filas.enumerated()), id: \.offset) { _, f in
                     VStack(spacing: 3) {
-                        Text(f.etiqueta).font(.caption2).foregroundStyle(.secondary)
+                        Text(f.etiqueta).font(.caption2).foregroundStyle(Color.textSecondary)
                         Text(Formatters.currencyCompact(f.importe))
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(maximo > 0 && f.importe == maximo ? Color.error : .primary)
