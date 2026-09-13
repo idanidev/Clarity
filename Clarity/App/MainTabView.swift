@@ -126,7 +126,7 @@ struct MainTabView: View {
         }
         // Detrás de todo, la aurora: el vidrio de la píldora necesita algo que
         // refractar también en las pestañas con fondo propio.
-        .background(HomeFondo(mes: homeViewModel.selectedMonth))
+        .background(HomeFondo())
         .environment(\.medidaBarraInferior, medidaBarra)
         // Sheets and alerts
         .sheet(isPresented: $showManualExpense) {

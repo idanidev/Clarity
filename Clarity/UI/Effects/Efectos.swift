@@ -138,53 +138,40 @@ extension View {
     }
 }
 
-// MARK: - Fondo aurora
+// MARK: - Fondo
 
-/// El fondo de la Home. Sin él, el vidrio no tiene nada que refractar y parece
-/// un rectángulo gris. Se recoloca al cambiar de mes, con animación, y el
-/// resto del tiempo está quieto: no es un `TimelineView`.
+/// El fondo de la app: negro con un brillo violeta arriba que se apaga hacia la
+/// mitad. Sin nada detrás, el vidrio no tiene qué refractar y parece gris plano.
+///
+/// Antes era una aurora de varios colores que cambiaba con el mes. Se comparó
+/// con este brillo y con negro liso, y se eligió el brillo: la aurora quedaba
+/// detrás de las tarjetas y llamaba más que los importes. Es estático, así que
+/// no se recalcula nunca.
 struct HomeFondo: View {
-    let mes: Date
+    enum Intensidad {
+        /// Ajustes, Metas, Recurrentes y detrás de la barra de pestañas.
+        case normal
+        /// La Home: el brillo cae detrás de la barra del mes y con la
+        /// intensidad normal apenas se veía.
+        case home
+    }
 
-    private var semilla: Int { Calendar.current.component(.month, from: mes) }
+    var intensidad: Intensidad = .normal
 
     var body: some View {
         ZStack {
             DesignTokens.Colors.background
-            if #available(iOS 18, *) {
-                // Sin `blur`: la malla ya es suave, y un desenfoque a pantalla
-                // completa se recalculaba en cada frame del cambio de mes.
-                MeshGradient(width: 3, height: 3, points: puntos, colors: colores)
-                    .opacity(0.6)
-                    .animation(.easeInOut(duration: 0.8), value: semilla)
-            } else {
-                Circle().fill(Color.clarityPrimary.opacity(0.35)).frame(width: 340).blur(radius: 90)
-                    .offset(x: -90 + CGFloat(semilla % 3) * 30, y: -160)
-                Circle().fill(Color.clarityAccent.opacity(0.28)).frame(width: 320).blur(radius: 90)
-                    .offset(x: 120, y: 260 + CGFloat(semilla % 4) * 20)
-                    .animation(.easeInOut(duration: 1.4), value: semilla)
-            }
+            EllipticalGradient(
+                colors: intensidad == .home
+                    ? [Color.clarityPrimary.opacity(0.6), Color.clarityPrimary.opacity(0.2), .clear]
+                    : [Color.clarityPrimary.opacity(0.42), Color.clarityPrimary.opacity(0.12), .clear],
+                center: UnitPoint(x: 0.5, y: 0),
+                startRadiusFraction: 0,
+                endRadiusFraction: intensidad == .home ? 0.8 : 0.65
+            )
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
-    }
-
-    /// Los dos puntos interiores bailan con el mes; los bordes se quedan.
-    private var puntos: [SIMD2<Float>] {
-        let a = Float(semilla % 5) * 0.06
-        let b = Float(semilla % 3) * 0.08
-        return [
-            [0, 0], [0.5, 0], [1, 0],
-            [0, 0.5], [0.35 + a, 0.45 + b], [1, 0.5],
-            [0, 1], [0.6 - b, 1], [1, 1],
-        ]
-    }
-
-    private var colores: [Color] {
-        let p = Color.clarityPrimary, i = Color.clarityAccent, r = Color(hex: "#EC4899"), n = DesignTokens.Colors.background
-        return semilla.isMultiple(of: 2)
-            ? [p, n, i, n, p, n, r, n, i]
-            : [i, n, p, n, r, n, p, n, i]
     }
 }
 
@@ -248,11 +235,11 @@ struct TarjetaButtonStyle: ButtonStyle {
 // MARK: - Fondo de la app
 
 extension View {
-    /// La aurora de la Home detrás de listas y formularios. Sin esto cada
+    /// El fondo de la app detrás de listas y formularios. Sin esto cada
     /// pestaña pintaba su negro liso y la barra de vidrio de abajo contrastaba
     /// raro al pasar de la Home a Ajustes o Metas.
-    func fondoClarity(mes: Date = Date()) -> some View {
+    func fondoClarity() -> some View {
         scrollContentBackground(.hidden)
-            .background(HomeFondo(mes: mes))
+            .background(HomeFondo())
     }
 }

@@ -17,7 +17,7 @@ struct FinancialDashboardView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                HomeFondo(mes: Date())
+                HomeFondo()
 
                 if viewModel.isLoading {
                     ProgressView()

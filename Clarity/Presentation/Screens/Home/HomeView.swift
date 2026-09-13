@@ -40,7 +40,9 @@ struct HomeView: View {
 
     var body: some View {
         contenido
-            .background(HomeFondo(mes: viewModel.selectedMonth))
+            // Más intenso que en el resto: el brillo cae detrás de la barra del
+            // mes y con la intensidad normal apenas se veía.
+            .background(HomeFondo(intensidad: .home))
             .trackScreen("home")
             .navigationTitle("")
             .refreshable { await viewModel.refresh() }
