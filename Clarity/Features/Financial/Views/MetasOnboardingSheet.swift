@@ -14,7 +14,9 @@ struct MetasOnboardingSheet: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            // El fondo de la app una sola vez, detrás de las páginas: cada página
+            // solo añade su brillo y se desliza sobre él.
+            HomeFondo()
 
             TabView(selection: $page) {
                 IntroPage().tag(0)
@@ -29,7 +31,7 @@ struct MetasOnboardingSheet: View {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in
                         Capsule()
-                            .fill(i == page ? Color.white : Color.white.opacity(0.3))
+                            .fill(i == page ? Color.clarityPrimary : Color.textTertiary)
                             .frame(width: i == page ? 22 : 6, height: 6)
                             .animation(.spring(response: 0.3), value: page)
                     }
@@ -46,19 +48,14 @@ struct MetasOnboardingSheet: View {
                     }
                 } label: {
                     Text(page < 2 ? "Siguiente" : "Empezar")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
+                .buttonStyle(.principalClarity)
                 .padding(.horizontal, 24)
 
                 if page == 0 {
                     Button("Saltar") { dismiss() }
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.textSecondary)
                 } else {
                     Color.clear.frame(height: 20)
                 }
@@ -76,10 +73,8 @@ private struct IntroPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-
             RadialGradient(
-                colors: [Color(hex: "#8B5CF6").opacity(0.3), Color.clear],
+                colors: [Color.clarityPrimary.opacity(0.3), Color.clear],
                 center: .center, startRadius: 0, endRadius: 280
             )
             .ignoresSafeArea()
@@ -87,21 +82,9 @@ private struct IntroPage: View {
             VStack(spacing: 20) {
                 Spacer()
 
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 110, height: 110)
-                        .shadow(color: Color(hex: "#8B5CF6").opacity(0.6), radius: 28, y: 10)
-
-                    Image(systemName: "target")
-                        .font(.system(size: 50, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .scaleEffect(appear ? 1 : 0.4)
-                .opacity(appear ? 1 : 0)
+                CirculoIconoClarity(icono: "target", color: Color.clarityPrimary, tamano: 110, esSimbolo: true)
+                    .scaleEffect(appear ? 1 : 0.4)
+                    .opacity(appear ? 1 : 0)
 
                 VStack(spacing: 10) {
                     Text("Metas")
@@ -109,7 +92,7 @@ private struct IntroPage: View {
                         .foregroundStyle(.white)
                     Text("Dos herramientas\npara dominar tu dinero")
                         .font(.title3)
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                 }
@@ -132,9 +115,8 @@ private struct HuchaPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
             RadialGradient(
-                colors: [Color(hex: "#10B981").opacity(0.18), Color.clear],
+                colors: [Color.success.opacity(0.18), Color.clear],
                 center: .top, startRadius: 0, endRadius: 320
             )
             .ignoresSafeArea()
@@ -151,7 +133,7 @@ private struct HuchaPage: View {
                 VStack(spacing: 8) {
                     Text("HUCHA")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#10B981"))
+                        .foregroundStyle(Color.success)
                         .tracking(2.5)
                     Text("Ahorra hacia\nun objetivo")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -160,7 +142,7 @@ private struct HuchaPage: View {
                         .lineSpacing(2)
                     Text("Define cuánto quieres juntar y ve sumando aportaciones poco a poco.")
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                         .padding(.top, 4)
@@ -173,50 +155,39 @@ private struct HuchaPage: View {
                 // Mock card
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
-                        Text("✈️")
-                            .font(.system(size: 28))
-                            .frame(width: 50, height: 50)
-                            .background(Color(hex: "#10B981").opacity(0.18))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        CirculoIconoClarity(icono: "✈️", color: Color.success, tamano: 50)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Vacaciones Japón")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white)
                             Text("Objetivo: 2.500 €")
                                 .font(.caption)
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .monospacedDigit()
+                                .foregroundStyle(Color.textSecondary)
                         }
                         Spacer()
                         Text("60%")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(hex: "#10B981"))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.success)
                     }
 
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.08)).frame(height: 8)
-                            Capsule()
-                                .fill(LinearGradient(colors: [Color(hex: "#10B981"), Color(hex: "#34D399")],
-                                                     startPoint: .leading, endPoint: .trailing))
-                                .frame(width: geo.size.width * progress, height: 8)
-                        }
-                    }
-                    .frame(height: 8)
+                    BarraProgresoClarity(progreso: Double(progress), color: Color.success, alto: 8)
 
                     HStack {
                         Text("1.500 € ahorrados")
                             .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.textSecondary)
                         Spacer()
                         Text("Faltan 1.000 €")
                             .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.4))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.textTertiary)
                     }
                 }
                 .padding(16)
-                .background(Color.white.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                .glassCard(cornerRadius: CornerRadius.large)
                 .padding(.horizontal, 28)
                 .opacity(appear ? 1 : 0)
                 .offset(y: appear ? 0 : 24)
@@ -238,9 +209,8 @@ private struct EscudoPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
             RadialGradient(
-                colors: [Color(hex: "#F59E0B").opacity(0.18), Color.clear],
+                colors: [Color.warning.opacity(0.18), Color.clear],
                 center: .top, startRadius: 0, endRadius: 320
             )
             .ignoresSafeArea()
@@ -257,7 +227,7 @@ private struct EscudoPage: View {
                 VStack(spacing: 8) {
                     Text("ESCUDO")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#F59E0B"))
+                        .foregroundStyle(Color.warning)
                         .tracking(2.5)
                     Text("Limita el gasto\nde una categoría")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
@@ -266,7 +236,7 @@ private struct EscudoPage: View {
                         .lineSpacing(2)
                     Text("Pon un tope mensual y Clarity te avisa cuando te acercas al límite.")
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                         .padding(.top, 4)
@@ -279,50 +249,39 @@ private struct EscudoPage: View {
                 // Mock card
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
-                        Text("🍿")
-                            .font(.system(size: 28))
-                            .frame(width: 50, height: 50)
-                            .background(Color(hex: "#F59E0B").opacity(0.18))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        CirculoIconoClarity(icono: "🍿", color: Color.warning, tamano: 50)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Ocio")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundStyle(.white)
                             Text("Límite: 200 €/mes")
                                 .font(.caption)
-                                .foregroundStyle(Color.white.opacity(0.5))
+                                .monospacedDigit()
+                                .foregroundStyle(Color.textSecondary)
                         }
                         Spacer()
                         Text("85%")
                             .font(.system(size: 16, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color(hex: "#F59E0B"))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.warning)
                     }
 
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.08)).frame(height: 8)
-                            Capsule()
-                                .fill(LinearGradient(colors: [Color(hex: "#F59E0B"), Color(hex: "#EF4444")],
-                                                     startPoint: .leading, endPoint: .trailing))
-                                .frame(width: geo.size.width * progress, height: 8)
-                        }
-                    }
-                    .frame(height: 8)
+                    BarraProgresoClarity(progreso: Double(progress), color: Color.warning, alto: 8)
 
                     HStack {
                         Text("170 € gastados")
                             .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.textSecondary)
                         Spacer()
                         Text("Quedan 30 €")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(Color(hex: "#F59E0B"))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.warning)
                     }
                 }
                 .padding(16)
-                .background(Color.white.opacity(0.06))
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-                .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                .glassCard(cornerRadius: CornerRadius.large)
                 .padding(.horizontal, 28)
                 .opacity(appear ? 1 : 0)
                 .offset(y: appear ? 0 : 24)

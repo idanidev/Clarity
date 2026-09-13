@@ -53,8 +53,7 @@ struct ShieldCategoryPickerView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
-        .background(Color.bgPrimary)
+        .fondoClarity()
         .navigationTitle("Categoría del Escudo")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showNewCategory) {

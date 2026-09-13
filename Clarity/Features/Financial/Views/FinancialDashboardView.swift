@@ -21,6 +21,7 @@ struct FinancialDashboardView: View {
 
                 if viewModel.isLoading {
                     ProgressView()
+                        .tint(Color.clarityPrimary)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     scrollContent
@@ -88,7 +89,7 @@ struct FinancialDashboardView: View {
 
     private var scrollContent: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: Spacing.md) {
                 summaryCard
 
                 if viewModel.goals.isEmpty {
@@ -97,24 +98,23 @@ struct FinancialDashboardView: View {
                     goalsContent
                 }
             }
-            .padding(.horizontal)
-            .padding(.top, 4)
-            .padding(.bottom, 24)
+            .padding(.horizontal, Spacing.md)
+            .padding(.top, Spacing.xxs)
+            .padding(.bottom, Spacing.lg)
         }
     }
 
     // MARK: - Summary Card
 
+    /// Tarjeta principal, como la de la Home: lo que queda libre en grande y,
+    /// debajo, de dónde sale.
     private var summaryCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            // Month header
-            HStack {
+        VStack(alignment: .leading, spacing: 0) {
+            // Mes y nómina
+            HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "financial.summary.thisMonth", defaultValue: "Este mes"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .tracking(0.5)
+                        .estiloEtiquetaClarity()
                     Text("\(viewModel.currentMonthName.capitalized) \(viewModel.currentYear)")
                         .font(.headline)
                 }
@@ -124,72 +124,71 @@ struct FinancialDashboardView: View {
                 } label: {
                     Image(systemName: "pencil.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(Color.textTertiary)
                 }
             }
 
-            // Stats row
-            HStack(spacing: 0) {
-                statColumn(title: String(localized: "financial.summary.income", defaultValue: "Ingresos"), amount: viewModel.income, color: .primary)
+            // Libre
+            Text(String(localized: "financial.summary.free", defaultValue: "Libre"))
+                .estiloEtiquetaClarity()
+                .padding(.top, Spacing.md)
 
-                Divider().frame(height: 40)
+            Text(Formatters.currency(viewModel.freeCash))
+                .estiloCifraClarity()
+                .foregroundStyle(viewModel.freeCash >= 0 ? Color.primary : Color.error)
+                .contentTransition(.numericText(value: viewModel.freeCash))
+                .animation(.snappy(duration: 0.5), value: viewModel.freeCash)
+                .padding(.top, 2)
+
+            // Gastado sobre ingresos
+            BarraProgresoClarity(progreso: spendingRatio, color: barColor)
+                .padding(.top, 14)
+
+            Divider()
+                .padding(.vertical, 14)
+
+            // Ingresos, gastado y lo guardado en huchas
+            HStack(alignment: .top, spacing: Spacing.xs) {
+                statColumn(
+                    title: String(localized: "financial.summary.income", defaultValue: "Ingresos"),
+                    amount: viewModel.income,
+                    color: Color.primary
+                )
 
                 statColumn(
                     title: String(localized: "financial.summary.spent", defaultValue: "Gastado"),
                     amount: viewModel.totalSpent,
-                    color: spendingRatio > 0.9 ? .red : spendingRatio > 0.7 ? .orange : .primary
+                    color: spentColor
                 )
 
-                Divider().frame(height: 40)
-
-                statColumn(
-                    title: String(localized: "financial.summary.free", defaultValue: "Libre"),
-                    amount: viewModel.freeCash,
-                    color: viewModel.freeCash >= 0 ? Color.clarityPrimary : .red
-                )
-            }
-
-            // Spending bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color(.systemGray5))
-                    Capsule()
-                        .fill(barColor)
-                        .frame(width: min(CGFloat(spendingRatio) * geo.size.width, geo.size.width))
-                        .animation(.spring(response: 0.5), value: spendingRatio)
+                // Como antes, solo si hay algo guardado: una hucha a 0 € no dice nada.
+                if viewModel.savingsAllocated > 0 {
+                    statColumn(
+                        title: String(localized: "financial.goals.piggyBanks", defaultValue: "Huchas"),
+                        amount: viewModel.savingsAllocated,
+                        color: Color.primary
+                    )
                 }
             }
-            .frame(height: 6)
-
-            // Savings allocated footnote
-            if viewModel.savingsAllocated > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "banknote")
-                    Text("\(Formatters.currency(viewModel.savingsAllocated)) guardado en huchas")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
         }
-        .padding(16)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(20)
+        .glassCard(cornerRadius: CornerRadius.xlarge)
     }
 
     private func statColumn(title: String, amount: Double, color: Color) -> some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 2) {
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
-            Text(Formatters.currency(amount))
-                .font(.system(.callout, design: .rounded, weight: .bold))
-                .foregroundStyle(color)
-                .minimumScaleFactor(0.6)
+                .foregroundStyle(Color.textSecondary)
                 .lineLimit(1)
+            Text(Formatters.currency(amount))
+                .font(.callout.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var spendingRatio: Double {
@@ -197,16 +196,24 @@ struct FinancialDashboardView: View {
         return min(viewModel.totalSpent / viewModel.income, 1.0)
     }
 
+    private var spentColor: Color {
+        spendingRatio > 0.9 ? Color.error : (spendingRatio > 0.7 ? Color.warning : Color.primary)
+    }
+
     private var barColor: Color {
-        spendingRatio > 0.9 ? .red : spendingRatio > 0.7 ? .orange : Color.clarityPrimary
+        spendingRatio > 0.9 ? Color.error : (spendingRatio > 0.7 ? Color.warning : Color.success)
     }
 
     // MARK: - Goals Content
 
     private var goalsContent: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
             if !viewModel.spendingLimits.isEmpty {
-                sectionLabel(String(localized: "financial.goals.spendingLimits", defaultValue: "Límites de Gasto"))
+                CabeceraSeccionClarity(
+                    titulo: String(localized: "financial.goals.spendingLimits", defaultValue: "Límites de Gasto")
+                )
+                .padding(.top, Spacing.xs)
+
                 ForEach(viewModel.spendingLimits) { goal in
                     GoalCardView(
                         goal: goal,
@@ -218,7 +225,11 @@ struct FinancialDashboardView: View {
             }
 
             if !viewModel.savingsTargets.isEmpty {
-                sectionLabel(String(localized: "financial.goals.piggyBanks", defaultValue: "Huchas"))
+                CabeceraSeccionClarity(
+                    titulo: String(localized: "financial.goals.piggyBanks", defaultValue: "Huchas")
+                )
+                .padding(.top, Spacing.xs)
+
                 ForEach(viewModel.savingsTargets) { goal in
                     GoalCardView(
                         goal: goal,
@@ -234,90 +245,70 @@ struct FinancialDashboardView: View {
         }
     }
 
-    private func sectionLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.secondary)
-            .padding(.top, 4)
-    }
-
     // MARK: - Empty State
 
+    /// No es `EstadoVacioClarity` porque hay que conservar la explicación de las
+    /// dos herramientas: una tarjeta de vidrio por cada una y el botón debajo.
     private var emptyGoals: some View {
-        VStack(spacing: 24) {
-            Spacer().frame(height: 8)
-
+        VStack(spacing: Spacing.sm) {
             VStack(spacing: 6) {
                 Text("Tus metas financieras")
-                    .font(.title3.bold())
+                    .font(.title3.weight(.semibold))
+                    .multilineTextAlignment(.center)
                 Text("Dos herramientas para ordenar tu dinero")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                     .multilineTextAlignment(.center)
             }
+            .frame(maxWidth: .infinity)
+            .padding(.top, Spacing.xs)
+            .padding(.bottom, Spacing.xxs)
 
-            VStack(spacing: 12) {
-                explainerCard(
-                    icon: "🐖",
-                    iconBg: Color.clarityPrimary.opacity(0.18),
-                    title: "Hucha",
-                    subtitle: "Ahorra hacia un objetivo",
-                    example: "Ej: 1.500€ para vacaciones. Cada aportación se registra como gasto y suma a tu hucha."
-                )
-                explainerCard(
-                    icon: "🛡️",
-                    iconBg: Color.warning.opacity(0.18),
-                    title: "Escudo",
-                    subtitle: "Limita el gasto mensual de una categoría",
-                    example: "Ej: máximo 200€/mes en Ocio. Clarity te avisa cuando te acercas al límite."
-                )
-            }
+            explainerCard(
+                icon: "🐖",
+                iconColor: Color.clarityPrimary,
+                title: "Hucha",
+                subtitle: "Ahorra hacia un objetivo",
+                example: "Ej: 1.500€ para vacaciones. Cada aportación se registra como gasto y suma a tu hucha."
+            )
+            explainerCard(
+                icon: "🛡️",
+                iconColor: Color.warning,
+                title: "Escudo",
+                subtitle: "Limita el gasto mensual de una categoría",
+                example: "Ej: máximo 200€/mes en Ocio. Clarity te avisa cuando te acercas al límite."
+            )
 
             Button {
                 viewModel.showAddGoal = true
                 HapticManager.shared.impact(.light)
             } label: {
                 Label("Crear mi primera meta", systemImage: "plus.circle.fill")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.clarityPrimary)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-
-            Spacer().frame(height: 8)
+            .buttonStyle(.principalClarity)
+            .padding(.top, Spacing.xxs)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .frame(maxWidth: .infinity)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
-    private func explainerCard(icon: String, iconBg: Color, title: String, subtitle: String, example: String) -> some View {
+    private func explainerCard(icon: String, iconColor: Color, title: String, subtitle: String, example: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            Text(icon)
-                .font(.system(size: 28))
-                .frame(width: 52, height: 52)
-                .background(Circle().fill(iconBg))
+            CirculoIconoClarity(icono: icon, color: iconColor, tamano: 52)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
                 Text(subtitle)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                 Text(example)
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.textSecondary)
                     .padding(.top, 2)
             }
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.tertiarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .glassCard(cornerRadius: CornerRadius.large)
     }
 }

@@ -43,20 +43,13 @@ struct FeedGoalSheet: View {
               VStack(spacing: 24) {
                 // Goal Header
                 VStack(spacing: 6) {
-                    Group {
-                        if let sysImage = goal.systemImage, !sysImage.isEmpty {
-                            Image(systemName: sysImage)
-                        } else if let icon = goal.icon, !icon.isEmpty {
-                            if icon.contains(".") || icon.count > 2 {
-                                Image(systemName: icon)
-                            } else {
-                                Text(icon)
-                            }
-                        } else {
-                            Text("🐖")
-                        }
-                    }
-                    .scaledFont(size: 44)
+                    CirculoIconoClarity(
+                        icono: iconoMeta.icono,
+                        color: colorMeta,
+                        tamano: 72,
+                        esSimbolo: iconoMeta.esSimbolo
+                    )
+                    .padding(.bottom, 4)
 
                     Text(goal.name)
                         .font(.title3.bold())
@@ -64,18 +57,14 @@ struct FeedGoalSheet: View {
 
                     Text("Faltan \(Formatters.currency(remaining))")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.textSecondary)
                 }
                 .padding(.top)
 
-                Divider()
-
                 // Quick Amount Buttons
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Cantidad rápida")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                    CabeceraSeccionClarity(titulo: String(localized: "Cantidad rápida"))
 
                     LazyVGrid(
                         columns: [
@@ -96,27 +85,25 @@ struct FeedGoalSheet: View {
                 HStack {
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundStyle(.secondary.opacity(0.3))
+                        .foregroundStyle(Color.textTertiary.opacity(0.5))
                     Text("o")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                     Rectangle()
                         .frame(height: 1)
-                        .foregroundStyle(.secondary.opacity(0.3))
+                        .foregroundStyle(Color.textTertiary.opacity(0.5))
                 }
                 .padding(.horizontal)
 
                 // Custom Amount Input
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Cantidad personalizada")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
+                        .estiloEtiquetaClarity()
 
                     HStack(alignment: .firstTextBaseline) {
                         Text("€")
                             .scaledFont(size: 28, weight: .bold, design: .rounded)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
 
                         TextField("0", text: $customAmount)
                             .keyboardType(.decimalPad)
@@ -128,50 +115,36 @@ struct FeedGoalSheet: View {
                 }
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                )
+                .glassCard(cornerRadius: CornerRadius.large)
                 .padding(.horizontal)
 
                 // Preview
                 if let amount = selectedAmount, isValid {
                     VStack(spacing: 4) {
                         Text("Vista previa")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .estiloEtiquetaClarity()
 
                         HStack(spacing: 4) {
                             Text(Formatters.currency(goal.currentAmount + amount))
                                 .font(.headline)
+                                .monospacedDigit()
                             Text("de \(Formatters.currency(goal.targetAmount))")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .foregroundStyle(Color.textSecondary)
                         }
 
                         // Mini progress bar
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule()
-                                    .fill(Color(uiColor: .systemGray6))
-
-                                Capsule()
-                                    .fill(Color.clarityPrimary)
-                                    .frame(
-                                        width: min(
-                                            CGFloat(
-                                                goal.targetAmount > 0 ? (goal.currentAmount + amount) / goal.targetAmount : 0)
-                                                * geo.size.width, geo.size.width))
-                            }
-                        }
-                        .frame(height: 8)
+                        BarraProgresoClarity(
+                            progreso: goal.targetAmount > 0 ? (goal.currentAmount + amount) / goal.targetAmount : 0,
+                            color: Color.clarityPrimary,
+                            alto: 8
+                        )
                         .padding(.horizontal)
+                        .padding(.top, 4)
                     }
                     .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.clarityPrimary.opacity(0.1))
-                    )
+                    .glassCard(cornerRadius: CornerRadius.large, tint: Color.clarityPrimary)
                     .padding(.horizontal)
                 }
 
@@ -187,21 +160,14 @@ struct FeedGoalSheet: View {
                         Image(systemName: "plus.circle.fill")
                         Text("Alimentar Hucha")
                     }
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(isValid ? Color.clarityPrimary : Color.secondary)
-                    )
                 }
+                .buttonStyle(.principalClarity)
                 .disabled(!isValid)
                 .padding(.horizontal)
                 .padding(.bottom)
               }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .fondoClarity()
             .navigationTitle("Alimentar")
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar()
@@ -229,31 +195,49 @@ struct FeedGoalSheet: View {
             VStack(spacing: 4) {
                 Text("€\(Int(amount))")
                     .font(.title3.bold())
+                    .monospacedDigit()
 
                 if amount <= remaining {
                     Text("\(Int((amount / remaining) * 100))%")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
             }
+            .foregroundStyle(Color.primary)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        isSelected
-                            ? Color.clarityPrimary
-                            : Color(uiColor: .secondarySystemGroupedBackground))
-            )
+            // La elegida, en vidrio teñido de marca y con borde: así se distingue
+            // también en iOS 17, donde el tinte del vidrio es suave.
+            .glassCard(cornerRadius: CornerRadius.medium, tint: isSelected ? Color.clarityPrimary : nil)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: CornerRadius.medium, style: .continuous)
                     .strokeBorder(
                         isSelected ? Color.clarityPrimary : Color.clear,
                         lineWidth: 2
                     )
             )
         }
-        .foregroundStyle(isSelected ? .white : .primary)
+        .buttonStyle(TarjetaButtonStyle())
+    }
+
+    // MARK: - Helpers
+
+    /// El mismo criterio de icono que la tarjeta de la meta.
+    private var iconoMeta: (icono: String, esSimbolo: Bool) {
+        if let sysImage = goal.systemImage, !sysImage.isEmpty {
+            return (sysImage, true)
+        }
+        if let icon = goal.icon, !icon.isEmpty {
+            return (icon, icon.contains(".") || icon.count > 2)
+        }
+        return ("🐖", false)
+    }
+
+    private var colorMeta: Color {
+        if let hex = goal.colorHex, !hex.isEmpty {
+            return Color(hex: hex)
+        }
+        return Color.clarityPrimary
     }
 }
 

@@ -77,13 +77,13 @@ struct SymbolPickerView: View {
                 // Search Bar
                 HStack {
                     Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
 
                     TextField("Buscar símbolos", text: $searchText)
                         .textFieldStyle(.plain)
                 }
                 .padding()
-                .background(.fill.tertiary, in: RoundedRectangle(cornerRadius: 12))
+                .glassCard(cornerRadius: CornerRadius.medium)
                 .padding()
 
                 // Category Picker
@@ -95,6 +95,7 @@ struct SymbolPickerView: View {
                     }
                     .padding(.horizontal)
                 }
+                .sinHuecoBarraInferior()
                 .padding(.bottom)
 
                 // Symbols Grid
@@ -111,7 +112,7 @@ struct SymbolPickerView: View {
                     .padding()
                 }
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .fondoClarity()
             .navigationTitle("Elegir Ícono")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -139,12 +140,12 @@ struct SymbolPickerView: View {
         } label: {
             Text(category.rawValue)
                 .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? .white : .primary)
+                .foregroundStyle(isSelected ? Color.white : Color.primary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(
                     Capsule().fill(
-                        isSelected ? Color.clarityPrimary : Color(uiColor: .tertiarySystemFill))
+                        isSelected ? Color.clarityPrimary : Color.primary.opacity(0.1))
                 )
         }
     }
@@ -158,18 +159,25 @@ struct SymbolPickerView: View {
             HapticManager.shared.impact(.medium)
         } label: {
             VStack(spacing: 4) {
-                Image(systemName: symbol)
-                    .font(.title2)
-                    .frame(width: 44, height: 44)
-                    .foregroundStyle(isSelected ? .white : Color.clarityPrimary)
-                    .background(
-                        Circle().fill(
-                            isSelected ? Color.clarityPrimary : Color(uiColor: .tertiarySystemFill))
-                    )
+                ZStack {
+                    CirculoIconoClarity(icono: symbol, color: Color.clarityPrimary, tamano: 44, esSimbolo: true)
+
+                    // La elegida, rellena de marca como antes; oculta a VoiceOver
+                    // igual que el círculo, y el nombre de debajo sigue leyéndose.
+                    if isSelected {
+                        Circle()
+                            .fill(Color.clarityPrimary)
+                        Image(systemName: symbol)
+                            .font(.system(size: 44 * 0.42, weight: .semibold))
+                            .foregroundStyle(Color.white)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(width: 44, height: 44)
 
                 Text(symbolName(symbol))
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(isSelected ? Color.clarityPrimary : Color.textSecondary)
                     .lineLimit(1)
                     .frame(width: 70)
             }

@@ -10,14 +10,14 @@ import SwiftUI
 
 struct MonthlySetupSheet: View {
     @Environment(\.dismiss) private var dismiss
-    
+
     let monthName: String
     let previousMonthIncome: Double?
     let onConfirm: (Double) -> Void
-    
+
     @State private var incomeText: String = ""
     @FocusState private var isInputFocused: Bool
-    
+
     // Seasonal emoji based on month
     private var seasonalEmoji: String {
         let month = Calendar.current.component(.month, from: Date())
@@ -29,7 +29,7 @@ struct MonthlySetupSheet: View {
         default: return "✨"
         }
     }
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 32) {
@@ -38,23 +38,25 @@ struct MonthlySetupSheet: View {
                     Text("¡Bienvenido a \(monthName)! \(seasonalEmoji)")
                         .font(.largeTitle.bold())
                         .multilineTextAlignment(.center)
-                    
+
                     Text("Vamos a organizar tus finanzas.\n¿Cuál es tu ingreso estimado para este mes?")
                         .font(.body)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, 24)
-                
+
                 Spacer()
-                
+
                 // Income Input
+                // Sin tarjeta a propósito: con el teclado abierto la hoja ya va
+                // justa de alto en pantallas pequeñas.
                 VStack(spacing: 16) {
                     HStack(alignment: .center, spacing: 8) {
                         Text("€")
                             .font(.system(size: 48, weight: .bold, design: .rounded))
-                            .foregroundStyle(.secondary)
-                        
+                            .foregroundStyle(Color.textSecondary)
+
                         TextField("0", text: $incomeText)
                             .font(.system(size: 64, weight: .bold, design: .rounded))
                             .keyboardType(.numberPad)
@@ -65,17 +67,17 @@ struct MonthlySetupSheet: View {
                             .foregroundStyle(Color.primary)
                     }
                     .padding(.horizontal, 32)
-                    
+
                     // Quick Tip — solo la nómina/ingreso fijo del mes. Los ingresos
                     // puntuales (bonus, freelance…) se añaden aparte como "ingresos extra"
                     // para no contarlos dos veces.
                     Text("Indica tu nómina o ingreso fijo del mes. Los extras los añades luego.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
-                
+
                 Spacer()
-                
+
                 // Actions
                 VStack(spacing: 16) {
                     // "Use same as last month" button
@@ -88,37 +90,23 @@ struct MonthlySetupSheet: View {
                                 Image(systemName: "arrow.counterclockwise")
                                 Text("Usar lo mismo del mes pasado (\(Formatters.currency(previousIncome)))")
                             }
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(Color.clarityPrimary)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 20)
-                            .background(
-                                Capsule()
-                                    .fill(Color.clarityPrimary.opacity(0.1))
-                            )
                         }
+                        .buttonStyle(.secundarioClarity)
                     }
-                    
+
                     // Confirm Button
                     Button {
                         confirmSetup()
                     } label: {
                         Text("Empezar el Mes")
-                            .font(.headline)
-                            .foregroundStyle(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(isValid ? Color.clarityPrimary : Color.gray)
-                            )
                     }
+                    .buttonStyle(.principalClarity)
                     .disabled(!isValid)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)
             }
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(HomeFondo())
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar()
             .toolbar {
@@ -131,17 +119,17 @@ struct MonthlySetupSheet: View {
             }
         }
     }
-    
+
     // MARK: - Logic
-    
+
     private var isValid: Bool {
         guard let amount = Double(incomeText), amount > 0 else { return false }
         return true
     }
-    
+
     private func confirmSetup() {
         guard let amount = Double(incomeText) else { return }
-        
+
         HapticManager.shared.playSuccess()
         onConfirm(amount)
     }

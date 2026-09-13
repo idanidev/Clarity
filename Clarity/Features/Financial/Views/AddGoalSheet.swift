@@ -75,9 +75,13 @@ struct AddGoalSheet: View {
                             showSymbolPicker = true
                             HapticManager.shared.impact(.light)
                         } label: {
+                            // No es CirculoIconoClarity: ese oculta el icono a
+                            // VoiceOver y aquí es la única etiqueta del botón.
                             ZStack {
                                 Circle()
-                                    .fill(Color.clarityPrimary.opacity(0.15))
+                                    .fill(Color.clarityPrimary.opacity(0.22))
+                                Circle()
+                                    .strokeBorder(Color.clarityPrimary.opacity(0.5), lineWidth: 0.5)
                                 Image(systemName: selectedSymbol)
                                     .font(.system(size: 22, weight: .semibold))
                                     .foregroundStyle(Color.clarityPrimary)
@@ -102,7 +106,7 @@ struct AddGoalSheet: View {
                     HStack(spacing: 4) {
                         Text("€")
                             .font(.system(.title2, design: .rounded, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                         TextField("0", text: $targetAmount)
                             .keyboardType(.decimalPad)
                             .font(.system(.title2, design: .rounded, weight: .semibold))
@@ -123,7 +127,7 @@ struct AddGoalSheet: View {
                                     selectedCategory.isEmpty ? "Selecciona categoría" : selectedCategory,
                                     systemImage: "tag"
                                 )
-                                .foregroundStyle(selectedCategory.isEmpty ? .secondary : .primary)
+                                .foregroundStyle(selectedCategory.isEmpty ? Color.textSecondary : Color.primary)
                             }
                         }
                     } header: {
@@ -164,7 +168,7 @@ struct AddGoalSheet: View {
                                             addSubcategory(to: currentCat)
                                         } label: {
                                             Image(systemName: "checkmark.circle.fill")
-                                                .foregroundStyle(.green)
+                                                .foregroundStyle(Color.success)
                                         }
                                         .disabled(newSubcategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
                                         Button {
@@ -172,7 +176,7 @@ struct AddGoalSheet: View {
                                             newSubcategoryName = ""
                                         } label: {
                                             Image(systemName: "xmark.circle.fill")
-                                                .foregroundStyle(.secondary)
+                                                .foregroundStyle(Color.textSecondary)
                                         }
                                     }
                                 } else {
@@ -213,6 +217,7 @@ struct AddGoalSheet: View {
                             String(localized: "goal.deadline", defaultValue: "Fecha límite"),
                             isOn: $useDeadline.animation()
                         )
+                        .tint(Color.clarityPrimary)
 
                         if useDeadline {
                             DatePicker(
@@ -221,10 +226,12 @@ struct AddGoalSheet: View {
                                 in: Date()...,
                                 displayedComponents: .date
                             )
+                            .tint(Color.clarityPrimary)
                         }
                     }
                 }
             }
+            .fondoClarity()
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar()
