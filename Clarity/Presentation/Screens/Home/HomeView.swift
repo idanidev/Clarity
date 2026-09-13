@@ -234,7 +234,18 @@ struct HomeView: View {
         VStack(spacing: 0) {
             TabView(selection: $pagina) {
                 ForEach(HomePagina.allCases) { p in
-                    pagina(p, margenSuperior: Spacing.xxs).tag(p)
+                    pagina(p, margenSuperior: Spacing.xxs)
+                        // Profundidad al deslizar: la página que se va se aleja y
+                        // se apaga, la que llega se acerca. Solo escala y opacidad,
+                        // que no rasterizan: el vidrio sigue siendo vidrio.
+                        .visualEffect { content, proxy in
+                            let ancho = max(proxy.size.width, 1)
+                            let desplazamiento = min(max(proxy.frame(in: .global).minX / ancho, -1), 1)
+                            return content
+                                .scaleEffect(1 - abs(desplazamiento) * 0.08)
+                                .opacity(1 - abs(desplazamiento) * 0.55)
+                        }
+                        .tag(p)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
@@ -256,7 +267,7 @@ struct HomeView: View {
                 onDestino: irA
             )
         case .graficas:
-            GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior)
+            GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior, activa: pagina == .graficas)
         case .gastos:
             GastosPage(viewModel: viewModel, margenSuperior: margenSuperior, onEditar: { expenseToEdit = $0 })
         }

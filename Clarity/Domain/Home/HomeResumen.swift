@@ -236,7 +236,11 @@ nonisolated struct HomeResumen: Sendable {
             disponibles["teDeben"] = .teDeben(deudas, total: deudas.reduce(0) { $0 + $1.importe })
         }
 
-        if let meta = metas.first(where: { $0.type == .savingsTarget && !$0.isArchived }) {
+        // Una hucha a 0 € no es información: el hueco lo ocupa lo siguiente de
+        // la cola. Entre las que tienen algo, la más avanzada.
+        if let meta = metas
+            .filter({ $0.type == .savingsTarget && !$0.isArchived && $0.currentAmount > 0 })
+            .max(by: { ($0.currentAmount / max($0.targetAmount, 1)) < ($1.currentAmount / max($1.targetAmount, 1)) }) {
             disponibles["hucha"] = .hucha(Hucha(nombre: meta.name, actual: meta.currentAmount, objetivo: meta.targetAmount))
         }
 
@@ -301,15 +305,20 @@ nonisolated struct HomeResumen: Sendable {
         gastos.filter { calendar.component(.day, from: $0.dateAsDate) <= hastaDia }
     }
 
+    /// Esta semana frente a la anterior HASTA EL MISMO DÍA de la semana: un
+    /// miércoles se compara lunes–miércoles con lunes–miércoles, no con la
+    /// semana pasada entera, que siempre saldría mayor.
     private static func semanaVsAnterior(gastos: [Expense], hoy: Date, calendar: Calendar) -> Semana? {
         guard let inicioSemana = calendar.dateInterval(of: .weekOfYear, for: hoy)?.start,
-              let inicioAnterior = calendar.date(byAdding: .day, value: -7, to: inicioSemana)
+              let inicioAnterior = calendar.date(byAdding: .day, value: -7, to: inicioSemana),
+              let finHoy = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: hoy)),
+              let finTramoAnterior = calendar.date(byAdding: .day, value: -7, to: finHoy)
         else { return nil }
         var actual = 0.0, anterior = 0.0
         for g in gastos {
             let d = g.dateAsDate
-            if d >= inicioSemana { actual += g.amount }
-            else if d >= inicioAnterior { anterior += g.amount }
+            if d >= inicioSemana && d < finHoy { actual += g.amount }
+            else if d >= inicioAnterior && d < finTramoAnterior { anterior += g.amount }
         }
         guard anterior > 0 else { return nil }
         return Semana(actual: actual, anterior: anterior)

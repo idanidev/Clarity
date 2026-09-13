@@ -8,17 +8,22 @@ struct GraficasPage: View {
     @Bindable var viewModel: HomeViewModel
     /// Hueco de la barra de navegación, medido por quien presenta la página.
     var margenSuperior: CGFloat = 0
+    /// Si es la página visible. Al llegar a ella los gráficos se dibujan desde
+    /// cero; al irse se reinician sin animación para dibujarse otra vez al volver.
+    var activa: Bool = true
     @State private var evolucionMeses = 6
+    /// 0 → 1 al entrar en la página. Todo lo que se dibuja cuelga de aquí.
+    @State private var dibujado: Double = 0
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: Spacing.md) {
-                reparto
-                porDia
-                if !viewModel.gastosMesAnterior.isEmpty { comparativa }
-                evolucion
-                calendario
-                semanas
+                reparto.aparece(dibujado, orden: 0)
+                porDia.aparece(dibujado, orden: 1)
+                if !viewModel.gastosMesAnterior.isEmpty { comparativa.aparece(dibujado, orden: 2) }
+                evolucion.aparece(dibujado, orden: 3)
+                calendario.aparece(dibujado, orden: 4)
+                semanas.aparece(dibujado, orden: 5)
                 Color.clear.frame(height: 16)
             }
             .padding(.horizontal, Spacing.sm)
@@ -27,29 +32,58 @@ struct GraficasPage: View {
         .contentMargins(.top, margenSuperior, for: .scrollContent)
         .scrollIndicators(.hidden)
         .trackScreen("home_graficas")
+        .onAppear { if activa { dibujar() } }
+        .onChange(of: activa) { _, ahora in
+            if ahora {
+                dibujar()
+            } else {
+                var t = Transaction()
+                t.disablesAnimations = true
+                withTransaction(t) { dibujado = 0 }
+            }
+        }
+        // Cambiar de mes también redibuja.
+        .onChange(of: viewModel.selectedMonth) { _, _ in
+            guard activa else { return }
+            var t = Transaction()
+            t.disablesAnimations = true
+            withTransaction(t) { dibujado = 0 }
+            dibujar()
+        }
+    }
+
+    private func dibujar() {
+        withAnimation(.spring(response: 0.9, dampingFraction: 0.82)) { dibujado = 1 }
     }
 
     // Reparto por categoría
     private var reparto: some View {
-        let datos = viewModel.categoryGroups.prefix(6)
+        let datos = gruposParaAnillo(viewModel.gruposDelMes)
         let total = viewModel.resumen.total
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 18) {
                 ZStack {
-                    Chart(Array(datos), id: \.id) { g in
-                        SectorMark(angle: .value("€", g.totalAmount), innerRadius: .ratio(0.68), angularInset: 1.5)
-                            .cornerRadius(3)
-                            .foregroundStyle(g.color)
+                    // El anillo se traza: cada sector crece con `dibujado` y un
+                    // sector transparente ocupa lo que falta hasta la vuelta
+                    // completa. De paso gira un cuarto hasta su posición.
+                    Chart(porciones(datos: datos, total: total)) { p in
+                        SectorMark(angle: .value("€", p.valor), innerRadius: .ratio(0.68), angularInset: p.relleno ? 0 : 1.5)
+                            .cornerRadius(p.relleno ? 0 : 3)
+                            .foregroundStyle(p.color)
                     }
+                    .chartLegend(.hidden)
                     .frame(width: 150, height: 150)
+                    .rotationEffect(.degrees((1 - dibujado) * -120))
                     VStack(spacing: 2) {
                         Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(Color.textSecondary)
-                        Text(Formatters.currency(total)).font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(Formatters.currency(total * dibujado))
+                            .font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
+                            .contentTransition(.numericText(value: total * dibujado))
                     }
                     .frame(width: 96)
                 }
                 VStack(alignment: .leading, spacing: 9) {
-                    ForEach(Array(datos), id: \.id) { g in
+                    ForEach(datos, id: \.id) { g in
                         HStack(spacing: 8) {
                             Circle().fill(g.color).frame(width: 8, height: 8)
                             Text(g.name.nombreSinEmoji).font(.footnote).lineLimit(1)
@@ -79,7 +113,7 @@ struct GraficasPage: View {
             // El día va como categoría, no como número: con un eje numérico las
             // barras de ancho por ratio se quedaban a cero y el gráfico salía vacío.
             Chart(dias, id: \.dia) { d in
-                BarMark(x: .value("Día", String(d.dia)), y: .value("€", d.importe), width: .ratio(0.6))
+                BarMark(x: .value("Día", String(d.dia)), y: .value("€", d.importe * dibujado), width: .ratio(0.6))
                     .cornerRadius(2)
                     .foregroundStyle(d.dia == maximo?.dia && d.importe > 0 ? Color.error : Color.clarityPrimary)
             }
@@ -91,6 +125,9 @@ struct GraficasPage: View {
                 }
             }
             .chartYAxis(.hidden)
+            // Escala fija al máximo real: sin ella el eje crecería con las barras
+            // y parecerían llenas desde el primer frame.
+            .chartYScale(domain: 0...max(maximo?.importe ?? 1, 1))
             .frame(height: 110)
 
             if let d = viewModel.resumen.diaMasCaro, d.importe > 0 {
@@ -123,18 +160,19 @@ struct GraficasPage: View {
                 Label { Text(viewModel.nombreMesAnterior.capitalized) } icon: { Capsule().fill(Color.primary.opacity(0.28)).frame(width: 10, height: 6) }
             }
             .font(.caption).foregroundStyle(Color.textSecondary)
-            ForEach(filas, id: \.categoria) { f in
+            ForEach(Array(filas.enumerated()), id: \.element.categoria) { i, f in
                 let delta = f.actual - f.anterior
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
                         Text(f.categoria.nombreSinEmoji).font(.footnote)
                         Spacer()
-                        Text("\(delta > 0 ? "+" : "−")\(Formatters.currency(abs(delta)))")
+                        // Sin cambio no es ahorro: "igual", en gris.
+                        Text(abs(delta) < 0.5 ? "igual" : "\(delta > 0 ? "+" : "−")\(Formatters.currency(abs(delta)))")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(delta > 0 ? Color.error : Color.success)
+                            .foregroundStyle(abs(delta) < 0.5 ? Color.textSecondary : (delta > 0 ? Color.error : Color.success))
                     }
-                    barra(f.actual / maximo, UserDataManager.shared.color(for: f.categoria))
-                    barra(f.anterior / maximo, Color.primary.opacity(0.28))
+                    barra(f.actual / maximo * dibujado, UserDataManager.shared.color(for: f.categoria), retardo: Double(i) * 0.07)
+                    barra(f.anterior / maximo * dibujado, Color.primary.opacity(0.28), retardo: Double(i) * 0.07 + 0.04)
                 }
             }
         }
@@ -142,15 +180,37 @@ struct GraficasPage: View {
         .glassCard()
     }
 
-    private func barra(_ p: Double, _ color: Color) -> some View {
+    private func barra(_ p: Double, _ color: Color, retardo: Double = 0) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.primary.opacity(0.08))
                 Capsule().fill(color).frame(width: geo.size.width * p)
-                    .animation(.spring(response: 0.6, dampingFraction: 0.7), value: p)
+                    .animation(.spring(response: 0.7, dampingFraction: 0.72).delay(retardo), value: p)
             }
         }
         .frame(height: 6)
+    }
+
+    /// Cinco categorías y el resto juntas en "Otras": así el anillo y la leyenda
+    /// suman siempre el 100 % del total que se enseña en el centro.
+    private func gruposParaAnillo(_ grupos: [CategoryGroup]) -> [CategoryGroup] {
+        guard grupos.count > 6 else { return grupos }
+        let resto = grupos.dropFirst(5)
+        let otras = CategoryGroup(
+            name: "Otras", emoji: "", color: Color.primary.opacity(0.35),
+            totalAmount: resto.reduce(0) { $0 + $1.totalAmount },
+            expenseCount: resto.reduce(0) { $0 + $1.expenseCount },
+            subcategories: []
+        )
+        return Array(grupos.prefix(5)) + [otras]
+    }
+
+    /// Los sectores del anillo más el relleno transparente que falta hasta
+    /// completarlo mientras se dibuja.
+    private func porciones(datos: [CategoryGroup], total: Double) -> [Porcion] {
+        var out = datos.map { Porcion(id: $0.id, valor: $0.totalAmount * dibujado, color: $0.color, relleno: false) }
+        out.append(Porcion(id: "_relleno", valor: max(total, 1) * (1 - dibujado), color: .clear, relleno: true))
+        return out
     }
 
     // Últimos seis meses
@@ -165,14 +225,17 @@ struct GraficasPage: View {
                 Text("Media \(Formatters.currencyCompact(media))").font(.caption).foregroundStyle(Color.textSecondary)
             }
             Chart(evo) { m in
-                BarMark(x: .value("Mes", m.label), y: .value("€", m.total), width: .ratio(0.55))
+                BarMark(x: .value("Mes", m.label), y: .value("€", m.total * dibujado), width: .ratio(0.55))
                     .cornerRadius(6)
                     .foregroundStyle(m.key == clave ? Color.clarityPrimary : Color.primary.opacity(0.22))
                     .annotation(position: .top, spacing: 4) {
-                        Text(Formatters.currencyCompact(m.total)).font(.caption2).foregroundStyle(m.key == clave ? .primary : Color.textSecondary)
+                        Text(Formatters.currencyCompact(m.total)).font(.caption2)
+                            .foregroundStyle(m.key == clave ? .primary : Color.textSecondary)
+                            .opacity(dibujado)
                     }
             }
             .chartYAxis(.hidden)
+            .chartYScale(domain: 0...max(evo.map(\.total).max() ?? 1, 1) * 1.18)
             .frame(height: 150)
         }
         .padding(16)
@@ -198,7 +261,8 @@ extension GraficasPage {
                 ForEach(Array(filas.enumerated()), id: \.offset) { _, f in
                     VStack(spacing: 3) {
                         Text(f.etiqueta).font(.caption2).foregroundStyle(Color.textSecondary)
-                        Text(Formatters.currencyCompact(f.importe))
+                        Text(Formatters.currencyCompact(f.importe * dibujado))
+                            .contentTransition(.numericText(value: f.importe * dibujado))
                             .font(.callout.weight(.semibold))
                             .foregroundStyle(maximo > 0 && f.importe == maximo ? Color.error : .primary)
                             .lineLimit(1).minimumScaleFactor(0.7)
@@ -209,6 +273,23 @@ extension GraficasPage {
         }
         .padding(16)
         .glassCard()
+    }
+}
+
+private struct Porcion: Identifiable {
+    let id: String
+    let valor: Double
+    let color: Color
+    let relleno: Bool
+}
+
+private extension View {
+    /// Cada tarjeta entra desde el lado del swipe, una tras otra.
+    func aparece(_ progreso: Double, orden: Int) -> some View {
+        self
+            .opacity(progreso)
+            .offset(x: (1 - progreso) * 44)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(orden) * 0.06), value: progreso)
     }
 }
 

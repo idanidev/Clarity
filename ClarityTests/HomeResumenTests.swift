@@ -76,6 +76,32 @@ struct HomeResumenTests {
         #expect(clases.contains("hucha"))
     }
 
+    @Test("Una hucha a 0 € no ocupa hueco: entra lo siguiente de la cola")
+    func huchaVaciaNoCuenta() {
+        let metas = [Goal(name: "Moto", type: .savingsTarget, targetAmount: 3000, currentAmount: 0)]
+        let r = HomeResumen.build(gastos: [gasto(10, "Ocio", dia: 1), gasto(20, "Ocio", dia: 8)], gastosMesAnterior: [],
+                                  metas: metas, recurrentes: [], presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: cal)
+        #expect(!r.slots.values.map(\.clase).contains("hucha"))
+        #expect(r.slots[HomeResumen.Slot.e] != nil)
+    }
+
+    @Test("Esta semana se compara con la anterior hasta el mismo día")
+    func semanaMismoTramo() {
+        // hoy = viernes 10 de abril de 2026. Semana actual lun 6 – vie 10.
+        // Anterior hasta el mismo día: lun 30 mar – vie 3 abr. El sáb 4 no cuenta.
+        let gastos = [
+            gasto(50, "Ocio", dia: 7),               // esta semana
+            gasto(40, "Ocio", dia: 1),               // semana anterior, antes del viernes
+            gasto(500, "Ocio", dia: 4),              // sábado de la semana anterior: fuera
+        ]
+        var c = Calendar(identifier: .gregorian); c.firstWeekday = 2; c.timeZone = cal.timeZone
+        let r = HomeResumen.build(gastos: gastos, gastosMesAnterior: [], metas: [], recurrentes: [],
+                                  presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: c)
+        let semana = r.slots.values.compactMap { if case .semana(let s) = $0 { s } else { nil } }.first
+        #expect(semana?.anterior == 40)
+        #expect(semana?.actual == 50)
+    }
+
     @Test("Un límite superado se marca como tal")
     func limiteSuperado() {
         let metas = [Goal(name: "Coche-Moto", type: .spendingLimit, targetAmount: 400, linkedCategoryId: "Coche-Moto")]

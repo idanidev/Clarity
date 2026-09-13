@@ -33,7 +33,7 @@ struct ResumenPage: View {
                     .entrada()
                 }
 
-                CategoriasCard(grupos: viewModel.categoryGroups, gastos: viewModel.gastosDelMes, total: r.total, numero: r.numeroGastos, onVerGastos: onVerGastos)
+                CategoriasCard(grupos: viewModel.gruposDelMes, gastos: viewModel.gastosDelMes, total: r.total, numero: r.numeroGastos, onVerGastos: onVerGastos)
                     .entrada()
 
                 UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
@@ -367,7 +367,7 @@ private struct SlotCard: View {
                 .font(.title3.weight(.bold))
                 .foregroundStyle(s.porcentaje > 0 ? Color.error : Color.success)
             Text("\(Formatters.currency(s.actual)) frente a \(Formatters.currency(s.anterior))").font(.caption).foregroundStyle(Color.textSecondary)
-            Text(s.porcentaje > 0 ? "Vas por encima de la semana pasada." : "Vas por debajo de la semana pasada.")
+            Text(s.porcentaje > 0 ? "Más que la semana pasada a estas alturas." : "Menos que la semana pasada a estas alturas.")
                 .font(.caption).foregroundStyle(Color.textSecondary).padding(.top, 8)
         }
     }

@@ -772,6 +772,17 @@ final class HomeViewModel {
     }
 
     private func buildCategoryGroups(from expenses: [Expense]) {
+        self.categoryGroups = agrupar(expenses)
+    }
+
+    /// Las categorías del mes entero, sin el filtro de la lista. Resumen y
+    /// Gráficas cuentan sobre el total del mes; si sus categorías salieran
+    /// filtradas, los porcentajes dejarían de sumar y faltarían categorías
+    /// —con el filtro Favs activo desaparecía Vivienda, la de 650 €—.
+    /// El filtro sigue aplicando a la página de Gastos.
+    var gruposDelMes: [CategoryGroup] { agrupar(gastosDelMes) }
+
+    private func agrupar(_ expenses: [Expense]) -> [CategoryGroup] {
         var groups: [String: CategoryGroup] = [:]
 
         for expense in expenses {
@@ -812,7 +823,7 @@ final class HomeViewModel {
             }
         }
 
-        self.categoryGroups = Array(groups.values).sorted {
+        return Array(groups.values).sorted {
             if $0.totalAmount == $1.totalAmount {
                 return $0.name < $1.name
             }
