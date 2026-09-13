@@ -14,4 +14,13 @@ extension String {
             .joined()
             .trimmingCharacters(in: .whitespaces)
     }
+
+    /// Solo los emojis del texto. Para el círculo cuando el emoji viene dentro
+    /// del nombre y no en su campo.
+    var soloEmoji: String {
+        unicodeScalars
+            .filter { $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value > 0x238C) }
+            .map(String.init)
+            .joined()
+    }
 }

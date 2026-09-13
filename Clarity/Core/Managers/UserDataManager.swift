@@ -437,8 +437,18 @@ final class UserDataManager {
             }
             return remote
         }
-        guard let userId else { return false }
-        return UserDefaults.standard.bool(forKey: Self.onboardingCacheKey(userId))
+        guard let uid = userId ?? Auth.auth().currentUser?.uid else { return false }
+        return UserDefaults.standard.bool(forKey: Self.onboardingCacheKey(uid))
+    }
+
+    /// Si ya hay con qué decidir: el documento cargado, o la caché local de un
+    /// arranque anterior. Mientras sea `false`, `hasCompletedOnboarding` está
+    /// devolviendo un `false` por defecto, no una respuesta: enseñar el
+    /// onboarding en ese hueco es el parpadeo que se veía al iniciar sesión.
+    var onboardingResuelto: Bool {
+        if userDocument?.settings?.hasCompletedOnboarding != nil { return true }
+        guard let uid = userId ?? Auth.auth().currentUser?.uid else { return false }
+        return UserDefaults.standard.object(forKey: Self.onboardingCacheKey(uid)) != nil
     }
     
     func completeOnboarding() {

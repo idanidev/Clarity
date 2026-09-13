@@ -15,6 +15,11 @@ struct HomeView: View {
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
+    /// El buscador se abre desde la barra y ocupa su fila encima del carrusel:
+    /// el `.searchable` nativo se abría encima de la primera tarjeta porque el
+    /// carrusel horizontal no le hacía hueco.
+    @State private var buscando = false
+    @FocusState private var buscadorEnfocado: Bool
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
     @State private var speechManager = SpeechRecognitionManager.shared
 
@@ -78,11 +83,6 @@ struct HomeView: View {
             .task { await viewModel.loadMetas() }
             .task { await viewModel.loadMesAnterior() }
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(
-                text: $viewModel.searchText,
-                placement: .navigationBarDrawer(displayMode: .automatic),
-                prompt: "Buscar gastos"
-            )
             .toolbar { barra }
             // Un toque al encajar cada página, como al pasar de pantalla de inicio.
             .sensoryFeedback(.selection, trigger: pagina)
@@ -91,19 +91,48 @@ struct HomeView: View {
     // MARK: - Contenido
 
     private var contenido: some View {
-        ZStack(alignment: .bottom) {
-            if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
-                loadingView
-            } else if case .error(let error) = viewModel.state {
-                errorView(error.localizedDescription)
-            } else if viewModel.gastosDelMes.isEmpty && viewModel.searchText.isEmpty {
-                emptyStateView
-            } else {
-                carrusel
-            }
+        VStack(spacing: 0) {
+            if buscando { barraBusqueda }
 
-            botonDeVoz
+            ZStack(alignment: .bottom) {
+                if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
+                    loadingView
+                } else if case .error(let error) = viewModel.state {
+                    errorView(error.localizedDescription)
+                } else if viewModel.gastosDelMes.isEmpty && viewModel.searchText.isEmpty {
+                    emptyStateView
+                } else {
+                    carrusel
+                }
+
+                botonDeVoz
+            }
         }
+        .animation(.snappy(duration: 0.3), value: buscando)
+    }
+
+    private var barraBusqueda: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Buscar gastos", text: $viewModel.searchText)
+                .focused($buscadorEnfocado)
+                .submitLabel(.search)
+                .autocorrectionDisabled()
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Borrar búsqueda")
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 9)
+        .glassCard(cornerRadius: CornerRadius.small)
+        .padding(.horizontal, Spacing.sm)
+        .padding(.bottom, Spacing.xs)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .onAppear { buscadorEnfocado = true }
     }
 
     /// Las tres páginas, a lo ancho, encajando de una en una. Es un
@@ -111,39 +140,49 @@ struct HomeView: View {
     /// `TabView` de las pestañas y anidar otro es justo lo que iOS 26 rehízo con
     /// Liquid Glass —en el iPhone con 26 no pintaba nada—.
     private var carrusel: some View {
-        VStack(spacing: 0) {
-            ScrollView(.horizontal) {
-                LazyHStack(spacing: 0) {
-                    ForEach(HomePagina.allCases) { p in
-                        pagina(p)
-                            .containerRelativeFrame([.horizontal, .vertical])
-                            .id(p)
+        // El carrusel horizontal extiende su contenido bajo la barra de
+        // navegación y no se lo inseta, así que la barra pisaba la primera
+        // tarjeta. Aquí se mide el área segura superior —estado más barra— y
+        // cada página deja ese margen en su propio desplazamiento: la primera
+        // tarjeta nace debajo de la barra y, al desplazar, pasa por debajo.
+        GeometryReader { geo in
+            let margen = geo.safeAreaInsets.top + Spacing.xs
+            VStack(spacing: 0) {
+                ScrollView(.horizontal) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(HomePagina.allCases) { p in
+                            pagina(p, margenSuperior: margen)
+                                .frame(width: geo.size.width, height: geo.size.height + geo.safeAreaInsets.top - 22)
+                                .id(p)
+                        }
                     }
+                    .scrollTargetLayout()
                 }
-                .scrollTargetLayout()
-            }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $pagina)
-            .scrollIndicators(.hidden)
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $pagina)
+                .scrollIndicators(.hidden)
 
-            HomePuntos(actual: pagina ?? .resumen)
-                .padding(.bottom, Spacing.xs)
+                HomePuntos(actual: pagina ?? .resumen)
+                    .frame(height: 22)
+            }
+            .ignoresSafeArea(edges: .top)
         }
     }
 
     @ViewBuilder
-    private func pagina(_ p: HomePagina) -> some View {
+    private func pagina(_ p: HomePagina, margenSuperior: CGFloat) -> some View {
         switch p {
         case .resumen:
             ResumenPage(
                 viewModel: viewModel,
+                margenSuperior: margenSuperior,
                 onEditar: { expenseToEdit = $0 },
                 onVerGastos: { withAnimation(.snappy) { pagina = .gastos } }
             )
         case .graficas:
-            GraficasPage(viewModel: viewModel)
+            GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior)
         case .gastos:
-            GastosPage(viewModel: viewModel, onEditar: { expenseToEdit = $0 })
+            GastosPage(viewModel: viewModel, margenSuperior: margenSuperior, onEditar: { expenseToEdit = $0 })
         }
     }
 
@@ -161,10 +200,19 @@ struct HomeView: View {
     @ToolbarContentBuilder
     private var barra: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            MonthSelectorView(currentMonth: $viewModel.selectedMonth)
+            HomeMesControl(mes: $viewModel.selectedMonth)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            HStack(spacing: Spacing.xxs) {
+            HStack(spacing: Spacing.xs) {
+                Button {
+                    buscando.toggle()
+                    if !buscando { viewModel.searchText = "" }
+                    HapticManager.shared.selection()
+                } label: {
+                    Image(systemName: buscando ? "magnifyingglass.circle.fill" : "magnifyingglass")
+                }
+                .accessibilityLabel(buscando ? "Cerrar búsqueda" : "Buscar")
+
                 if viewModel.selectedFilter.hasActiveFilters {
                     Button {
                         viewModel.selectedFilter = ExpenseFilter()
@@ -253,6 +301,67 @@ struct HomeView: View {
                 Task { await viewModel.loadExpenses() }
             }
         }
+    }
+}
+
+// MARK: - Mes en la barra
+
+/// El mes, compacto para caber en una barra de navegación: flechas a los lados
+/// y el nombre como menú para saltar a cualquiera de los últimos doce.
+private struct HomeMesControl: View {
+    @Binding var mes: Date
+    private let cal = Calendar.current
+
+    private var esActual: Bool { cal.isDate(mes, equalTo: Date(), toGranularity: .month) }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Button { cambiar(-1) } label: {
+                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold)).frame(width: 30, height: 30)
+            }
+            .accessibilityLabel("Mes anterior")
+
+            Menu {
+                ForEach(0..<12, id: \.self) { offset in
+                    if let m = cal.date(byAdding: .month, value: -offset, to: Date()) {
+                        Button {
+                            withAnimation(.snappy) { mes = m }
+                            HapticManager.shared.selection()
+                        } label: {
+                            if cal.isDate(m, equalTo: mes, toGranularity: .month) {
+                                Label(Formatters.monthYear(from: m).capitalized, systemImage: "checkmark")
+                            } else {
+                                Text(Formatters.monthYear(from: m).capitalized)
+                            }
+                        }
+                    }
+                }
+            } label: {
+                VStack(spacing: 0) {
+                    Text(Formatters.monthYear(from: mes).capitalized)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .contentTransition(.numericText())
+                    if esActual {
+                        Text("mes actual").font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                .frame(minWidth: 150)
+            }
+
+            Button { cambiar(1) } label: {
+                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).frame(width: 30, height: 30)
+            }
+            .disabled(esActual)
+            .accessibilityLabel("Mes siguiente")
+        }
+        .tint(.primary)
+    }
+
+    private func cambiar(_ delta: Int) {
+        guard let nuevo = cal.date(byAdding: .month, value: delta, to: mes), nuevo <= Date() || delta < 0 else { return }
+        withAnimation(.snappy) { mes = nuevo }
+        HapticManager.shared.selection()
     }
 }
 

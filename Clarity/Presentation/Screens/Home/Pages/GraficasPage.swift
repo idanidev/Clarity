@@ -6,6 +6,8 @@ import Charts
 
 struct GraficasPage: View {
     @Bindable var viewModel: HomeViewModel
+    /// Hueco de la barra de navegación, medido por quien presenta la página.
+    var margenSuperior: CGFloat = 0
     @State private var evolucionMeses = 6
 
     var body: some View {
@@ -22,6 +24,7 @@ struct GraficasPage: View {
             .padding(.horizontal, Spacing.sm)
             .padding(.top, Spacing.xs)
         }
+        .contentMargins(.top, margenSuperior, for: .scrollContent)
         .scrollIndicators(.hidden)
         .trackScreen("home_graficas")
     }

@@ -10,6 +10,8 @@ import SwiftUI
 
 struct GastosPage: View {
     @Bindable var viewModel: HomeViewModel
+    /// Hueco de la barra de navegación, medido por quien presenta la página.
+    var margenSuperior: CGFloat = 0
     let onEditar: (Expense) -> Void
 
     /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
@@ -63,6 +65,7 @@ struct GastosPage: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .contentMargins(.top, margenSuperior, for: .scrollContent)
         .scrollIndicators(.hidden)
         .trackScreen("home_gastos")
     }
@@ -89,7 +92,7 @@ private struct CabeceraCategoria: View {
                 ZStack {
                     Circle().fill(grupo.color.opacity(0.22))
                     Circle().strokeBorder(grupo.color.opacity(0.5), lineWidth: 0.5)
-                    Text(grupo.emoji).font(.system(size: 16))
+                    EmojiDeCategoria(emoji: grupo.emoji, nombre: grupo.name, color: grupo.color, tamano: 16)
                 }
                 .frame(width: 34, height: 34)
 

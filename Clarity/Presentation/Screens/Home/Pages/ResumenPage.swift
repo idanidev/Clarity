@@ -5,6 +5,8 @@ import SwiftUI
 
 struct ResumenPage: View {
     @Bindable var viewModel: HomeViewModel
+    /// Hueco de la barra de navegación, medido por quien presenta la página.
+    var margenSuperior: CGFloat = 0
     let onEditar: (Expense) -> Void
     let onVerGastos: () -> Void
 
@@ -39,6 +41,7 @@ struct ResumenPage: View {
             .padding(.horizontal, Spacing.sm)
             .padding(.top, Spacing.xs)
         }
+        .contentMargins(.top, margenSuperior, for: .scrollContent)
         .scrollIndicators(.hidden)
         .trackScreen("home")
     }
@@ -52,8 +55,8 @@ private extension View {
     func entrada() -> some View {
         scrollTransition(.interactive) { content, phase in
             content
-                .opacity(phase.isIdentity ? 1 : 0.4)
-                .scaleEffect(phase.isIdentity ? 1 : 0.97)
+                .opacity(phase.isIdentity ? 1 : 0.6)
+                .scaleEffect(phase.isIdentity ? 1 : 0.985)
         }
     }
 }
@@ -128,6 +131,9 @@ private struct HeroCard: View {
             let baja = c.delta <= 0
             Label("\(abs(c.porcentaje)) % \(baja ? "menos" : "más") que el mes pasado",
                   systemImage: baja ? "arrow.down.right" : "arrow.up.right")
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(baja ? Color.success : Color.error)
                 .padding(.horizontal, 9).padding(.vertical, 4)
@@ -411,7 +417,7 @@ private struct CategoriasCard: View {
                         ZStack {
                             Circle().fill(g.color.opacity(0.2))
                             Circle().strokeBorder(g.color.opacity(0.45), lineWidth: 0.5)
-                            Text(g.emoji).font(.system(size: 15))
+                            EmojiDeCategoria(emoji: g.emoji, nombre: g.name, color: g.color, tamano: 15)
                         }
                         .frame(width: 32, height: 32)
                         VStack(alignment: .leading, spacing: 6) {
@@ -491,5 +497,22 @@ private struct CategoriaDetalleView: View {
         }
         .navigationTitle("\(grupo.emoji) \(grupo.name.nombreSinEmoji)")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// El emoji de la categoría, o un punto de su color si no tiene ninguno.
+struct EmojiDeCategoria: View {
+    let emoji: String
+    let nombre: String
+    let color: Color
+    var tamano: CGFloat = 15
+
+    var body: some View {
+        let e = emoji.isEmpty ? nombre.soloEmoji : emoji
+        if e.isEmpty {
+            Circle().fill(color).frame(width: tamano * 0.55, height: tamano * 0.55)
+        } else {
+            Text(e).font(.system(size: tamano))
+        }
     }
 }

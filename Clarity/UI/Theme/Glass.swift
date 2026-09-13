@@ -27,10 +27,11 @@ private struct GlassCardModifier: ViewModifier {
             // El material a secas sale casi negro sobre fondo oscuro y la tarjeta
             // parece un rectángulo opaco: el velo blanco es lo que la lee como vidrio.
             content
+                .background(Color.white.opacity(0.035), in: shape)
+                .background(Color.black.opacity(0.22), in: shape)
                 .background(.ultraThinMaterial, in: shape)
-                .background(Color.white.opacity(0.07), in: shape)
                 .overlay {
-                    shape.strokeBorder(Color.white.opacity(0.16), lineWidth: 0.5)
+                    shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
                 }
                 .overlay {
                     if let tint {
