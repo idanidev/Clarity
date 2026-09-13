@@ -10,8 +10,8 @@ struct HomeView: View {
     @State private var viewModel: HomeViewModel
     private var userDataManager = UserDataManager.shared
 
-    /// Página visible del carrusel. Opcional porque `scrollPosition` lo pide.
-    @State private var pagina: HomePagina? = .resumen
+    /// Página visible del carrusel.
+    @State private var pagina: HomePagina = .resumen
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
@@ -193,25 +193,20 @@ struct HomeView: View {
     /// `TabView` de las pestañas y anidar otro es justo lo que iOS 26 rehízo con
     /// Liquid Glass —en el iPhone con 26 no pintaba nada—.
     private var carrusel: some View {
-        GeometryReader { geo in
-            VStack(spacing: 0) {
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: 0) {
-                        ForEach(HomePagina.allCases) { p in
-                            pagina(p, margenSuperior: Spacing.xxs)
-                                .frame(width: geo.size.width, height: geo.size.height - 22)
-                                .id(p)
-                        }
-                    }
-                    .scrollTargetLayout()
+        // `TabView` paginado, no dos ScrollView anidados: el TabView bloquea el
+        // eje y solo se mueve a los lados. Con el ScrollView horizontal, un gesto
+        // en diagonal movía las dos cosas a la vez. Lo que rompía iOS 26 no era
+        // el TabView anidado sino los shaders sobre el vidrio (ver Efectos.swift).
+        VStack(spacing: 0) {
+            TabView(selection: $pagina) {
+                ForEach(HomePagina.allCases) { p in
+                    pagina(p, margenSuperior: Spacing.xxs).tag(p)
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $pagina)
-                .scrollIndicators(.hidden)
-
-                HomePuntos(actual: pagina ?? .resumen)
-                    .frame(height: 22)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            HomePuntos(actual: pagina)
+                .frame(height: 22)
         }
     }
 
