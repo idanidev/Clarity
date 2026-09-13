@@ -21,10 +21,12 @@ struct ResumenPage: View {
     /// entero, que es contra el que se mide el presupuesto.
     private var filtrado: HeroCard.Filtrado? {
         guard viewModel.filtroActivo else { return nil }
+        // Los mismos datos que las tarjetas y las gráficas: el mes que se ve.
+        let r = viewModel.resumen
         return HeroCard.Filtrado(
-            total: viewModel.totalFilteredAmount,
-            gastos: viewModel.filteredExpenses.count,
-            nombre: viewModel.selectedFilter.name
+            total: r.totalAnalisis,
+            gastos: r.numeroAnalisis,
+            nombre: viewModel.nombreFiltroActual
         )
     }
 

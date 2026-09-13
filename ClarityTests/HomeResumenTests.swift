@@ -158,4 +158,26 @@ struct HomeResumenTests {
         #expect(r.comparativa?.totalAnterior == 100)
         #expect(r.comparativa?.porcentaje == 20)
     }
+
+    @Test("Con filtro, lo que habla de en qué se gasta mira lo filtrado; total y límites, el mes entero")
+    func filtroSoloEnElAnalisis() {
+        let metas = [Goal(name: "Ocio", type: .spendingLimit, targetAmount: 300, linkedCategoryId: "Ocio")]
+        let gastos = [
+            gasto(100, "Ocio", dia: 2),
+            gasto(40, "Compras", dia: 3, name: "Zapatillas"),
+            gasto(10, "Compras", dia: 9),
+        ]
+        let r = HomeResumen.build(gastos: gastos, gastosMesAnterior: [], metas: metas, recurrentes: [],
+                                  presupuesto: 1000, primerGasto: nil, hoy: hoy, calendar: cal,
+                                  filtro: { $0.category == "Compras" })
+        #expect(r.total == 150)
+        #expect(r.totalAnalisis == 50)
+        #expect(r.numeroAnalisis == 2)
+        // El límite de Ocio cuenta lo gastado en Ocio aunque el filtro lo deje fuera.
+        guard case .limites(let limites) = r.slots[HomeResumen.Slot.a]! else { Issue.record("sin límites"); return }
+        #expect(limites.first?.gastado == 100)
+        // El día más caro sale de lo filtrado: los 40 € de Zapatillas, no los 100 de Ocio.
+        #expect(r.diaMasCaro?.importe == 40)
+        #expect(r.diaMasCaro?.concepto == "Zapatillas")
+    }
 }

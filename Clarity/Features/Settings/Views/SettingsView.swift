@@ -56,7 +56,7 @@ struct SettingsView: View {
                         }
                     } footer: {
                         if !subscriptions.isPro {
-                            Text("Voz sin límites, categorías a medida y exportación.")
+                            Text("Voz sin límites y categorías a medida.")
                         }
                     }
                 }

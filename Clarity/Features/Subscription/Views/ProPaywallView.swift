@@ -38,7 +38,8 @@ struct ProPaywallView: View {
     private let features: [(icon: String, title: String, detail: String)] = [
         ("mic.fill", "Voz sin límites", "Registra todos los gastos que quieras hablando"),
         ("square.grid.2x2.fill", "Categorías a medida", "Crea las que necesites, sin tope"),
-        ("square.and.arrow.up", "Exportar a CSV", "Tus datos son tuyos, siempre"),
+        // Exportar a CSV está desactivado en Ajustes: no se vende lo que no se puede usar.
+        // ("square.and.arrow.up", "Exportar a CSV", "Tus datos son tuyos, siempre"),
         ("chart.line.uptrend.xyaxis", "Análisis completo", "Tendencias y comparativas de todo tu historial"),
     ]
 

@@ -143,6 +143,13 @@ nonisolated struct HomeResumen: Sendable {
     /// Aparte de los huecos: Gráficas lo señala aunque el hueco B lo ocupe otra cosa.
     let diaMasCaro: DiaCaro?
 
+    // Lo que pasa el filtro. Sin filtro coincide con el mes entero.
+    let totalAnalisis: Double
+    let numeroAnalisis: Int
+    let mediaDiariaAnalisis: Double
+    /// La comparativa de lo filtrado frente a lo filtrado del mes anterior.
+    let comparativaAnalisis: Comparativa?
+
     var libres: Double? { presupuesto.map { $0 - total } }
 
     /// Lo que se puede gastar cada día, hoy incluido, sin pasarse del
@@ -162,6 +169,10 @@ nonisolated struct HomeResumen: Sendable {
     ///   - recurrentes: reglas activas.
     ///   - presupuesto: la nómina del mes si está configurada.
     ///   - primerGasto: fecha del primer gasto que apuntó el usuario, para "N días apuntando".
+    ///   - filtro: los filtros puestos en la Home, si hay. Lo que habla de en qué
+    ///     se gasta —reparto, día más caro, semanas, subidas y comparativa de las
+    ///     tarjetas— mira solo lo que lo pasa. Total, ritmo, límites y deudas
+    ///     siguen siendo del mes entero: presupuesto y topes se miden contra todo.
     static func build(
         gastos: [Expense],
         gastosMesAnterior: [Expense],
@@ -170,7 +181,8 @@ nonisolated struct HomeResumen: Sendable {
         presupuesto: Double?,
         primerGasto: Date?,
         hoy: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        filtro: ((Expense) -> Bool)? = nil
     ) -> HomeResumen {
         let total = gastos.reduce(0) { $0 + $1.amount }
         let diaActual = calendar.component(.day, from: hoy)
@@ -190,6 +202,16 @@ nonisolated struct HomeResumen: Sendable {
             : Comparativa(totalAnterior: totalAnterior, totalActual: total,
                           hastaDia: diaActual, parcial: diaActual < diasMes)
 
+        // Lo que pasa el filtro, en este mes y en el anterior.
+        let analisis = filtro.map { gastos.filter($0) } ?? gastos
+        let anteriorAnalisis = filtro.map { gastosMesAnterior.filter($0) } ?? gastosMesAnterior
+        let totalAnalisis = analisis.reduce(0) { $0 + $1.amount }
+        let anteriorAnalisisMismoTramo = Self.mismoTramo(anteriorAnalisis, hastaDia: diaActual, calendar: calendar)
+        let comparativaAnalisis: Comparativa? = anteriorAnalisis.isEmpty
+            ? nil
+            : Comparativa(totalAnterior: anteriorAnalisisMismoTramo.reduce(0) { $0 + $1.amount },
+                          totalActual: totalAnalisis, hastaDia: diaActual, parcial: diaActual < diasMes)
+
         let diasApuntando = primerGasto.map {
             max((calendar.dateComponents([.day], from: $0, to: hoy).day ?? 0) + 1, 1)
         } ?? 0
@@ -197,7 +219,10 @@ nonisolated struct HomeResumen: Sendable {
         // Todo lo que existe, sin decidir aún dónde va.
         var disponibles: [String: Contenido] = [:]
 
+        // Los límites miden todo lo gastado en su categoría, haya filtro o no.
         let porCategoria = Dictionary(grouping: gastos, by: \.category)
+            .mapValues { $0.reduce(0) { $0 + $1.amount } }
+        let porCategoriaAnalisis = Dictionary(grouping: analisis, by: \.category)
             .mapValues { $0.reduce(0) { $0 + $1.amount } }
 
         let limites = metas
@@ -209,10 +234,10 @@ nonisolated struct HomeResumen: Sendable {
             .sorted { $0.progreso > $1.progreso }
         if !limites.isEmpty { disponibles["limites"] = .limites(limites) }
 
-        if total > 0 {
-            let reparto = porCategoria
+        if totalAnalisis > 0 {
+            let reparto = porCategoriaAnalisis
                 .map { Reparto(categoria: $0.key, importe: $0.value,
-                               porcentaje: Int(($0.value / total * 100).rounded())) }
+                               porcentaje: Int(($0.value / totalAnalisis * 100).rounded())) }
                 .sorted { $0.importe > $1.importe }
                 .prefix(3)
             disponibles["reparto"] = .reparto(Array(reparto))
@@ -251,7 +276,7 @@ nonisolated struct HomeResumen: Sendable {
             disponibles["hucha"] = .hucha(Hucha(nombre: meta.name, actual: meta.currentAmount, objetivo: meta.targetAmount))
         }
 
-        let porDia = Dictionary(grouping: gastos, by: \.date)
+        let porDia = Dictionary(grouping: analisis, by: \.date)
         var diaMasCaro: DiaCaro?
         if let (fecha, delDia) = porDia.max(by: { a, b in
             a.value.reduce(0) { $0 + $1.amount } < b.value.reduce(0) { $0 + $1.amount }
@@ -262,21 +287,21 @@ nonisolated struct HomeResumen: Sendable {
             disponibles["diaCaro"] = .diaCaro(diaMasCaro!)
         }
 
-        if let semana = Self.semanaVsAnterior(gastos: gastos, hoy: hoy, calendar: calendar) {
+        if let semana = Self.semanaVsAnterior(gastos: analisis, hoy: hoy, calendar: calendar) {
             disponibles["semana"] = .semana(semana)
         }
 
-        if !gastosMesAnterior.isEmpty {
-            let anteriorPorCat = Dictionary(grouping: anteriorMismoTramo, by: \.category)
+        if !anteriorAnalisis.isEmpty {
+            let anteriorPorCat = Dictionary(grouping: anteriorAnalisisMismoTramo, by: \.category)
                 .mapValues { $0.reduce(0) { $0 + $1.amount } }
-            let deltas = porCategoria.map { ($0.key, $0.value - (anteriorPorCat[$0.key] ?? 0)) }
+            let deltas = porCategoriaAnalisis.map { ($0.key, $0.value - (anteriorPorCat[$0.key] ?? 0)) }
             if let (cat, delta) = deltas.max(by: { $0.1 < $1.1 }), delta > 0 {
                 disponibles["subeFuerte"] = .subeFuerte(Subida(categoria: cat, delta: delta))
             }
-            if let comparativa { disponibles["comparativa"] = .comparativa(comparativa) }
+            if let comparativaAnalisis { disponibles["comparativa"] = .comparativa(comparativaAnalisis) }
         }
 
-        let semanas = Self.totalesPorSemana(gastos: gastos, calendar: calendar)
+        let semanas = Self.totalesPorSemana(gastos: analisis, calendar: calendar)
         if semanas.count >= 2 { disponibles["semanaASemana"] = .semanaASemana(semanas) }
 
         // Reparto: cada hueco toma el primero de su cola que exista y que no
@@ -301,7 +326,11 @@ nonisolated struct HomeResumen: Sendable {
             comparativa: comparativa,
             diasApuntando: diasApuntando,
             slots: slots,
-            diaMasCaro: diaMasCaro
+            diaMasCaro: diaMasCaro,
+            totalAnalisis: totalAnalisis,
+            numeroAnalisis: analisis.count,
+            mediaDiariaAnalisis: diaActual > 0 ? totalAnalisis / Double(diaActual) : 0,
+            comparativaAnalisis: comparativaAnalisis
         )
     }
 

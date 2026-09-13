@@ -60,7 +60,9 @@ struct GraficasPage: View {
     // Reparto por categoría
     private var reparto: some View {
         let datos = gruposParaAnillo(viewModel.gruposDelMes)
-        let total = viewModel.resumen.total
+        // Lo que pasa los filtros: con el total del mes entero y los grupos
+        // filtrados, los porcentajes dejaban de sumar el 100 %.
+        let total = viewModel.resumen.totalAnalisis
         let sectores = porciones(datos: datos, total: total)
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 18) {
@@ -120,7 +122,7 @@ struct GraficasPage: View {
             HStack {
                 Text("Por día").font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("Media \(Formatters.currency(viewModel.resumen.ritmo.mediaDiaria))").font(.caption).foregroundStyle(Color.textSecondary)
+                Text("Media \(Formatters.currency(viewModel.resumen.mediaDiariaAnalisis))").font(.caption).foregroundStyle(Color.textSecondary)
             }
             // El día va como categoría, no como número: con un eje numérico las
             // barras de ancho por ratio se quedaban a cero y el gráfico salía vacío.
@@ -155,7 +157,8 @@ struct GraficasPage: View {
     private var comparativa: some View {
         let filas = viewModel.comparativaPorCategoria
         let maximo = max(filas.map { max($0.actual, $0.anterior) }.max() ?? 1, 1)
-        let c = viewModel.resumen.comparativa
+        // La de lo filtrado: las filas de abajo también lo son.
+        let c = viewModel.resumen.comparativaAnalisis
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -236,7 +239,8 @@ struct GraficasPage: View {
 
     // Últimos seis meses
     private var evolucion: some View {
-        let evo = viewModel.monthlyEvolution(months: evolucionMeses)
+        // Con filtros, cada mes suma solo lo que los pasa.
+        let evo = viewModel.evolucion(meses: evolucionMeses)
         let media = evo.isEmpty ? 0 : evo.map(\.total).reduce(0, +) / Double(evo.count)
         let clave = String(Formatters.localDayString(from: viewModel.selectedMonth).prefix(7))
         return VStack(alignment: .leading, spacing: 12) {
