@@ -18,12 +18,19 @@ nonisolated struct HomeResumen: Sendable {
         let diasRestantes: Int
     }
 
+    /// Frente al mes anterior, pero solo hasta el mismo día: a mediados de mes,
+    /// compararse con el mes anterior entero da siempre "menos" y no dice nada.
     struct Comparativa: Sendable, Equatable {
         let totalAnterior: Double
         /// Negativo cuando se gasta menos que el mes anterior.
         var delta: Double { totalActual - totalAnterior }
         var porcentaje: Int { totalAnterior > 0 ? Int(((delta / totalAnterior) * 100).rounded()) : 0 }
         let totalActual: Double
+        /// Día del mes hasta el que se compara. Si es el mes completo, coincide
+        /// con su último día.
+        let hastaDia: Int
+        /// `true` cuando el tramo es parcial: hay que decirlo en pantalla.
+        let parcial: Bool
     }
 
     struct Limite: Sendable, Equatable, Identifiable {
@@ -168,9 +175,13 @@ nonisolated struct HomeResumen: Sendable {
             diasRestantes: max(diasMes - diaActual, 0)
         )
 
-        let totalAnterior = gastosMesAnterior.reduce(0) { $0 + $1.amount }
+        // Del mes anterior solo cuenta hasta el día en que estamos.
+        let anteriorMismoTramo = Self.mismoTramo(gastosMesAnterior, hastaDia: diaActual, calendar: calendar)
+        let totalAnterior = anteriorMismoTramo.reduce(0) { $0 + $1.amount }
         let comparativa: Comparativa? = gastosMesAnterior.isEmpty
-            ? nil : Comparativa(totalAnterior: totalAnterior, totalActual: total)
+            ? nil
+            : Comparativa(totalAnterior: totalAnterior, totalActual: total,
+                          hastaDia: diaActual, parcial: diaActual < diasMes)
 
         let diasApuntando = primerGasto.map {
             max((calendar.dateComponents([.day], from: $0, to: hoy).day ?? 0) + 1, 1)
@@ -245,7 +256,7 @@ nonisolated struct HomeResumen: Sendable {
         }
 
         if !gastosMesAnterior.isEmpty {
-            let anteriorPorCat = Dictionary(grouping: gastosMesAnterior, by: \.category)
+            let anteriorPorCat = Dictionary(grouping: anteriorMismoTramo, by: \.category)
                 .mapValues { $0.reduce(0) { $0 + $1.amount } }
             let deltas = porCategoria.map { ($0.key, $0.value - (anteriorPorCat[$0.key] ?? 0)) }
             if let (cat, delta) = deltas.max(by: { $0.1 < $1.1 }), delta > 0 {
@@ -284,6 +295,11 @@ nonisolated struct HomeResumen: Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Los gastos de un mes hasta un día incluido. Para comparar como es debido.
+    static func mismoTramo(_ gastos: [Expense], hastaDia: Int, calendar: Calendar) -> [Expense] {
+        gastos.filter { calendar.component(.day, from: $0.dateAsDate) <= hastaDia }
+    }
 
     private static func semanaVsAnterior(gastos: [Expense], hoy: Date, calendar: Calendar) -> Semana? {
         guard let inicioSemana = calendar.dateInterval(of: .weekOfYear, for: hoy)?.start,

@@ -224,3 +224,17 @@ extension View {
         }
     }
 }
+
+// MARK: - Tarjeta pulsable
+
+/// Las tarjetas de la Home son botones: al pulsar se encogen un poco y se
+/// apagan, como los widgets de la pantalla de inicio. Sin fondo propio para no
+/// pisar el vidrio.
+struct TarjetaButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.975 : 1)
+            .opacity(configuration.isPressed ? 0.9 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}

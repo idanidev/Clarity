@@ -20,13 +20,18 @@ struct HomeView: View {
     /// carrusel horizontal no le hacía hueco.
     @State private var buscando = false
     @FocusState private var buscadorEnfocado: Bool
+    /// Pantalla a la que se navega desde una tarjeta.
+    @State private var rutaPush: HomeDestino?
+    /// Para saltar a otra pestaña (Metas). Lo pone MainTabView, que es quien las tiene.
+    var abrirPestana: (Int) -> Void = { _ in }
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
     @State private var speechManager = SpeechRecognitionManager.shared
 
     @MainActor
-    init(viewModel: HomeViewModel? = nil) {
+    init(viewModel: HomeViewModel? = nil, abrirPestana: @escaping (Int) -> Void = { _ in }) {
         let vm = viewModel ?? DependencyContainer.shared.makeHomeViewModel()
         _viewModel = State(initialValue: vm)
+        self.abrirPestana = abrirPestana
     }
 
     var body: some View {
@@ -82,6 +87,13 @@ struct HomeView: View {
         // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
             .task { await viewModel.loadMetas() }
             .task { await viewModel.loadMesAnterior() }
+            .navigationDestination(item: $rutaPush) { destino in
+                switch destino {
+                case .recurrentes: RecurringExpensesView()
+                case .deudas: DebtsView()
+                default: EmptyView()
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             // La barra de navegación del sistema se queda fuera: la del diseño es
             // una píldora de vidrio con el mes y los iconos, y eso se pinta aquí.
@@ -116,50 +128,74 @@ struct HomeView: View {
         .animation(.snappy(duration: 0.3), value: buscando)
     }
 
-    /// La píldora del diseño: mes a la izquierda con sus flechas, buscar y
-    /// filtros a la derecha, todo en un solo vidrio.
+    /// La barra, a la manera de iOS: el mes como título grande a la izquierda
+    /// —y menú para saltar a otro—, y a la derecha los controles agrupados en
+    /// cápsulas de vidrio, flechas en una y acciones en otra.
     private var barraSuperior: some View {
-        HStack(spacing: 4) {
-            HomeMesControl(mes: $viewModel.selectedMonth)
+        HStack(alignment: .center, spacing: Spacing.xs) {
+            HomeTituloMes(mes: $viewModel.selectedMonth)
             Spacer(minLength: 4)
-            Button {
-                buscando.toggle()
-                if !buscando { viewModel.searchText = "" }
-                HapticManager.shared.selection()
-            } label: {
-                Image(systemName: buscando ? "magnifyingglass.circle.fill" : "magnifyingglass")
-                    .font(.body.weight(.medium))
-                    .frame(width: 36, height: 36)
-            }
-            .accessibilityLabel(buscando ? "Cerrar búsqueda" : "Buscar")
 
-            if viewModel.selectedFilter.hasActiveFilters {
-                Button {
-                    viewModel.selectedFilter = ExpenseFilter()
-                    HapticManager.shared.notification(.success)
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.body.weight(.medium))
-                        .frame(width: 36, height: 36)
+            HStack(spacing: 0) {
+                botonBarra("chevron.left", "Mes anterior") { cambiarMes(-1) }
+                botonBarra("chevron.right", "Mes siguiente") { cambiarMes(1) }
+                    .disabled(esMesActual)
+                    .opacity(esMesActual ? 0.35 : 1)
+            }
+            .glassCard(cornerRadius: 21)
+
+            HStack(spacing: 0) {
+                botonBarra(buscando ? "magnifyingglass.circle.fill" : "magnifyingglass", buscando ? "Cerrar búsqueda" : "Buscar") {
+                    buscando.toggle()
+                    if !buscando { viewModel.searchText = "" }
                 }
-                .accessibilityLabel("Limpiar filtros")
+                if viewModel.selectedFilter.hasActiveFilters {
+                    botonBarra("xmark.circle.fill", "Limpiar filtros") {
+                        viewModel.selectedFilter = ExpenseFilter()
+                        HapticManager.shared.notification(.success)
+                    }
+                }
+                botonBarra(viewModel.selectedFilter.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle", "Filtros") {
+                    showFilterSheet = true
+                }
+                .tint(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : .primary)
             }
-            Button {
-                showFilterSheet = true
-                HapticManager.shared.selection()
-            } label: {
-                Image(systemName: viewModel.selectedFilter.hasActiveFilters
-                      ? "line.3.horizontal.decrease.circle.fill"
-                      : "line.3.horizontal.decrease.circle")
-                    .font(.body.weight(.medium))
-                    .frame(width: 36, height: 36)
-            }
-            .accessibilityLabel("Filtros")
+            .glassCard(cornerRadius: 21)
         }
-        .tint(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : .primary)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .glassCard(cornerRadius: 26)
+        .tint(.primary)
+    }
+
+    private func botonBarra(_ icono: String, _ etiqueta: String, accion: @escaping () -> Void) -> some View {
+        Button {
+            accion()
+            HapticManager.shared.selection()
+        } label: {
+            Image(systemName: icono)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 40, height: 42)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(etiqueta)
+    }
+
+    /// Cada tarjeta lleva a donde se gestiona lo que enseña.
+    private func irA(_ destino: HomeDestino) {
+        HapticManager.shared.selection()
+        switch destino {
+        case .graficas: withAnimation(.snappy) { pagina = .graficas }
+        case .gastos: withAnimation(.snappy) { pagina = .gastos }
+        case .metas: abrirPestana(1)
+        case .recurrentes, .deudas: rutaPush = destino
+        }
+    }
+
+    private var esMesActual: Bool { Calendar.current.isDate(viewModel.selectedMonth, equalTo: Date(), toGranularity: .month) }
+
+    private func cambiarMes(_ delta: Int) {
+        guard let nuevo = Calendar.current.date(byAdding: .month, value: delta, to: viewModel.selectedMonth),
+              delta < 0 || nuevo <= Date() else { return }
+        withAnimation(.snappy) { viewModel.selectedMonth = nuevo }
     }
 
     private var barraBusqueda: some View {
@@ -216,7 +252,8 @@ struct HomeView: View {
                 viewModel: viewModel,
                 margenSuperior: margenSuperior,
                 onEditar: { expenseToEdit = $0 },
-                onVerGastos: { withAnimation(.snappy) { pagina = .gastos } }
+                onVerGastos: { withAnimation(.snappy) { pagina = .gastos } },
+                onDestino: irA
             )
         case .graficas:
             GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior)
@@ -295,63 +332,62 @@ struct HomeView: View {
 
 // MARK: - Mes en la barra
 
-/// El mes, compacto para caber en una barra de navegación: flechas a los lados
-/// y el nombre como menú para saltar a cualquiera de los últimos doce.
-private struct HomeMesControl: View {
+/// El mes como título grande, al estilo de las barras de iOS, y menú para
+/// saltar a cualquiera de los últimos doce.
+private struct HomeTituloMes: View {
     @Binding var mes: Date
     private let cal = Calendar.current
 
     private var esActual: Bool { cal.isDate(mes, equalTo: Date(), toGranularity: .month) }
+    private var nombre: String { Formatters.fullMonthName(from: mes).capitalized }
+    private var anio: String { String(cal.component(.year, from: mes)) }
 
     var body: some View {
-        HStack(spacing: 2) {
-            Button { cambiar(-1) } label: {
-                Image(systemName: "chevron.left").font(.subheadline.weight(.semibold)).frame(width: 34, height: 36)
-            }
-            .accessibilityLabel("Mes anterior")
-
-            Menu {
-                ForEach(0..<12, id: \.self) { offset in
-                    if let m = cal.date(byAdding: .month, value: -offset, to: Date()) {
-                        Button {
-                            withAnimation(.snappy) { mes = m }
-                            HapticManager.shared.selection()
-                        } label: {
-                            if cal.isDate(m, equalTo: mes, toGranularity: .month) {
-                                Label(Formatters.monthYear(from: m).capitalized, systemImage: "checkmark")
-                            } else {
-                                Text(Formatters.monthYear(from: m).capitalized)
-                            }
+        Menu {
+            ForEach(0..<12, id: \.self) { offset in
+                if let m = cal.date(byAdding: .month, value: -offset, to: Date()) {
+                    Button {
+                        withAnimation(.snappy) { mes = m }
+                        HapticManager.shared.selection()
+                    } label: {
+                        if cal.isDate(m, equalTo: mes, toGranularity: .month) {
+                            Label(Formatters.monthYear(from: m).capitalized, systemImage: "checkmark")
+                        } else {
+                            Text(Formatters.monthYear(from: m).capitalized)
                         }
                     }
                 }
-            } label: {
-                VStack(spacing: 0) {
-                    Text(Formatters.monthYear(from: mes).capitalized)
-                        .font(.headline)
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 5) {
+                    Text(nombre)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .tracking(-0.6)
                         .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                         .contentTransition(.numericText())
-                    if esActual {
-                        Text("mes actual").font(.caption2).foregroundStyle(.secondary)
-                    }
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(Color.textSecondary)
                 }
-                .frame(minWidth: 132)
+                Text(esActual ? "\(anio) · mes actual" : anio)
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
             }
-
-            Button { cambiar(1) } label: {
-                Image(systemName: "chevron.right").font(.subheadline.weight(.semibold)).frame(width: 34, height: 36)
-            }
-            .disabled(esActual)
-            .accessibilityLabel("Mes siguiente")
+            .padding(.leading, 4)
         }
         .tint(.primary)
+        .accessibilityLabel("Cambiar de mes, ahora \(nombre) \(anio)")
     }
+}
 
-    private func cambiar(_ delta: Int) {
-        guard let nuevo = cal.date(byAdding: .month, value: delta, to: mes), nuevo <= Date() || delta < 0 else { return }
-        withAnimation(.snappy) { mes = nuevo }
-        HapticManager.shared.selection()
-    }
+// MARK: - Destinos
+
+/// A dónde lleva cada tarjeta de la Home.
+enum HomeDestino: Hashable {
+    case graficas, gastos, metas, recurrentes, deudas
 }
 
 // MARK: - Páginas

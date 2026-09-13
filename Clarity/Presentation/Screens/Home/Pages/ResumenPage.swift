@@ -9,21 +9,26 @@ struct ResumenPage: View {
     var margenSuperior: CGFloat = 0
     let onEditar: (Expense) -> Void
     let onVerGastos: () -> Void
+    let onDestino: (HomeDestino) -> Void
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: Spacing.md) {
                 let r = viewModel.resumen
 
-                HeroCard(resumen: r)
-                    .entrada()
+                // El total lleva a Gráficas: es donde se desmenuza.
+                Button { onDestino(.graficas) } label: {
+                    HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior)
+                }
+                .buttonStyle(TarjetaButtonStyle())
+                .entrada()
 
-                if let a = r.slots[.a] { SlotCard(contenido: a).entrada() }
+                if let a = r.slots[.a] { slot(a).entrada() }
 
                 if r.slots[.b] != nil || r.slots[.c] != nil {
                     HStack(alignment: .top, spacing: Spacing.xs) {
-                        if let b = r.slots[.b] { SlotCard(contenido: b, compacta: true) }
-                        if let c = r.slots[.c] { SlotCard(contenido: c, compacta: true) }
+                        if let b = r.slots[.b] { slot(b, compacta: true) }
+                        if let c = r.slots[.c] { slot(c, compacta: true) }
                     }
                     .entrada()
                 }
@@ -34,7 +39,7 @@ struct ResumenPage: View {
                 UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
                     .entrada()
 
-                if let e = r.slots[.e] { SlotCard(contenido: e).entrada() }
+                if let e = r.slots[.e] { slot(e).entrada() }
 
                 Color.clear.frame(height: 16)
             }
@@ -44,6 +49,27 @@ struct ResumenPage: View {
         .contentMargins(.top, margenSuperior, for: .scrollContent)
         .scrollIndicators(.hidden)
         .trackScreen("home")
+    }
+}
+
+// MARK: - Cada hueco lleva a donde se gestiona lo que enseña
+
+private extension ResumenPage {
+    func slot(_ contenido: HomeResumen.Contenido, compacta: Bool = false) -> some View {
+        Button { onDestino(destino(de: contenido)) } label: {
+            SlotCard(contenido: contenido, compacta: compacta)
+        }
+        .buttonStyle(TarjetaButtonStyle())
+    }
+
+    func destino(de contenido: HomeResumen.Contenido) -> HomeDestino {
+        switch contenido {
+        case .limites, .hucha: .metas
+        case .cargos: .recurrentes
+        case .teDeben: .deudas
+        case .reparto, .subeFuerte: .gastos
+        case .diaCaro, .semana, .comparativa, .semanaASemana: .graficas
+        }
     }
 }
 
@@ -65,6 +91,7 @@ private extension View {
 
 private struct HeroCard: View {
     let resumen: HomeResumen
+    let mesAnterior: String
     /// La cifra sube desde cero al aparecer: los dígitos ruedan hasta el total.
     @State private var mostrado = false
 
@@ -132,7 +159,11 @@ private struct HeroCard: View {
     private var chip: some View {
         if let c = resumen.comparativa {
             let baja = c.delta <= 0
-            Label("\(abs(c.porcentaje)) % \(baja ? "menos" : "más") que el mes pasado",
+            // "que agosto a día 13", no "que agosto": a mediados de mes, contra
+            // el mes entero siempre saldría menos y no diría nada.
+            Label(c.parcial
+                  ? "\(abs(c.porcentaje)) % \(baja ? "menos" : "más") que \(mesAnterior) a día \(c.hastaDia)"
+                  : "\(abs(c.porcentaje)) % \(baja ? "menos" : "más") que \(mesAnterior)",
                   systemImage: baja ? "arrow.down.right" : "arrow.up.right")
                 .labelStyle(.titleAndIcon)
                 .lineLimit(1)
@@ -353,7 +384,7 @@ private struct SlotCard: View {
     // Comparativa
     private func comparativaView(_ c: HomeResumen.Comparativa) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            titulo("Frente al mes pasado")
+            titulo(c.parcial ? "Frente al mes pasado, a día \(c.hastaDia)" : "Frente al mes pasado")
             Text("\(c.porcentaje >= 0 ? "+" : "")\(c.porcentaje) %")
                 .font(.title3.weight(.bold))
                 .foregroundStyle(c.delta > 0 ? Color.error : Color.success)

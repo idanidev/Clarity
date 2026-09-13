@@ -57,7 +57,7 @@ struct MainTabView: View {
             VStack(spacing: 0) {
             TabView(selection: $selectedTab) {
                 NavigationStack {
-                    HomeView(viewModel: homeViewModel)
+                    HomeView(viewModel: homeViewModel, abrirPestana: { selectedTab = $0 })
                 }
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem {

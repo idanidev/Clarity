@@ -296,6 +296,12 @@ final class HomeViewModel {
         return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
     }
 
+    /// "agosto", para los textos de la comparativa.
+    var nombreMesAnterior: String {
+        guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return "el mes pasado" }
+        return Formatters.fullMonthName(Calendar.current.component(.month, from: prev)).lowercased()
+    }
+
     func loadMesAnterior() async {
         let cal = Calendar.current
         guard let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth),
@@ -356,7 +362,10 @@ final class HomeViewModel {
     /// Actual frente a anterior por categoría, las cuatro que más pesan este mes.
     var comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)] {
         let actual = Dictionary(grouping: gastosDelMes, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
-        let anterior = Dictionary(grouping: gastosMesAnterior, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
+        // Mismo tramo del mes anterior, igual que la comparativa del resumen.
+        let hastaDia = resumen.comparativa?.hastaDia ?? 31
+        let tramo = HomeResumen.mismoTramo(gastosMesAnterior, hastaDia: hastaDia, calendar: .current)
+        let anterior = Dictionary(grouping: tramo, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
         return actual.sorted { $0.value > $1.value }.prefix(4)
             .map { ($0.key, $0.value, anterior[$0.key] ?? 0) }
     }

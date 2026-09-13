@@ -108,5 +108,17 @@ struct HomeResumenTests {
                                   gastosMesAnterior: [gasto(863, "Ocio", dia: 1, mes: 3)], metas: [],
                                   recurrentes: [], presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: cal)
         #expect(r.comparativa?.porcentaje == -12)
+        #expect(r.comparativa?.parcial == true)
+        #expect(r.comparativa?.hastaDia == 10)
+    }
+
+    @Test("A mediados de mes solo se compara con el mismo tramo del anterior")
+    func comparativaMismoTramo() {
+        // Marzo: 100 € el día 5 (cuenta) y 900 € el día 25 (no cuenta: hoy es 10).
+        let r = HomeResumen.build(gastos: [gasto(120, "Ocio", dia: 3)],
+                                  gastosMesAnterior: [gasto(100, "Ocio", dia: 5, mes: 3), gasto(900, "Ocio", dia: 25, mes: 3)],
+                                  metas: [], recurrentes: [], presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: cal)
+        #expect(r.comparativa?.totalAnterior == 100)
+        #expect(r.comparativa?.porcentaje == 20)
     }
 }

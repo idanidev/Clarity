@@ -108,14 +108,19 @@ struct GraficasPage: View {
         let maximo = max(filas.map { max($0.actual, $0.anterior) }.max() ?? 1, 1)
         let c = viewModel.resumen.comparativa
         return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Frente al mes pasado").font(.subheadline.weight(.semibold))
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Frente a \(viewModel.nombreMesAnterior)").font(.subheadline.weight(.semibold))
+                    if let c, c.parcial {
+                        Text("hasta el día \(c.hastaDia), en los dos meses").font(.caption2).foregroundStyle(Color.textSecondary)
+                    }
+                }
                 Spacer()
                 if let c { Text("\(c.delta > 0 ? "+" : "−")\(Formatters.currency(abs(c.delta))) en total").font(.caption).foregroundStyle(Color.textSecondary) }
             }
             HStack(spacing: 14) {
                 Label { Text("Este mes") } icon: { Capsule().fill(Color.clarityPrimary).frame(width: 10, height: 6) }
-                Label { Text("Anterior") } icon: { Capsule().fill(Color.primary.opacity(0.28)).frame(width: 10, height: 6) }
+                Label { Text(viewModel.nombreMesAnterior.capitalized) } icon: { Capsule().fill(Color.primary.opacity(0.28)).frame(width: 10, height: 6) }
             }
             .font(.caption).foregroundStyle(Color.textSecondary)
             ForEach(filas, id: \.categoria) { f in
