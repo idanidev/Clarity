@@ -26,7 +26,7 @@ struct HomeView: View {
 
     var body: some View {
         contenido
-            .background(DesignTokens.Colors.background)
+            .background(HomeFondo(mes: viewModel.selectedMonth))
             .trackScreen("home")
             .navigationTitle("")
             .toolbar(.hidden, for: .navigationBar)

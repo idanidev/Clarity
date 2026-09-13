@@ -26,7 +26,7 @@ struct ResumenPage: View {
                     .entrada()
                 }
 
-                CategoriasCard(grupos: viewModel.categoryGroups, total: r.total, numero: r.numeroGastos, onVerGastos: onVerGastos)
+                CategoriasCard(grupos: viewModel.categoryGroups, gastos: viewModel.gastosDelMes, total: r.total, numero: r.numeroGastos, onVerGastos: onVerGastos)
                     .entrada()
 
                 UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
@@ -376,9 +376,11 @@ private struct SlotCard: View {
 
 private struct CategoriasCard: View {
     let grupos: [CategoryGroup]
+    let gastos: [Expense]
     let total: Double
     let numero: Int
     let onVerGastos: () -> Void
+    @Namespace private var zoom
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -399,22 +401,32 @@ private struct CategoriasCard: View {
 
             ForEach(Array(grupos.prefix(5).enumerated()), id: \.element.id) { i, g in
                 if i > 0 { Divider().padding(.leading, 44).padding(.vertical, 10) }
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle().fill(g.color.opacity(0.2))
-                        Circle().strokeBorder(g.color.opacity(0.45), lineWidth: 0.5)
-                        Text(g.emoji).font(.system(size: 15))
-                    }
-                    .frame(width: 32, height: 32)
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text(g.name).font(.subheadline.weight(.medium)).lineLimit(1)
-                            Spacer()
-                            Text(Formatters.currency(g.totalAmount)).font(.subheadline.weight(.semibold))
+                // La fila crece hasta ser la pantalla de detalle de la categoría
+                // y vuelve a encogerse al salir (iOS 18; en 17, push normal).
+                NavigationLink {
+                    CategoriaDetalleView(grupo: g, gastos: gastos, total: total)
+                        .transicionZoom(id: g.id, en: zoom)
+                } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().fill(g.color.opacity(0.2))
+                            Circle().strokeBorder(g.color.opacity(0.45), lineWidth: 0.5)
+                            Text(g.emoji).font(.system(size: 15))
                         }
-                        Barra(progreso: total > 0 ? g.totalAmount / total : 0, color: g.color, alto: 3)
+                        .frame(width: 32, height: 32)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(g.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                                Spacer()
+                                Text(Formatters.currency(g.totalAmount)).font(.subheadline.weight(.semibold))
+                            }
+                            Barra(progreso: total > 0 ? g.totalAmount / total : 0, color: g.color, alto: 3)
+                        }
                     }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .origenZoom(id: g.id, en: zoom)
             }
         }
         .padding(16)
@@ -453,3 +465,31 @@ private struct UltimosCard: View {
     }
 }
 
+
+// MARK: - Detalle de una categoría
+
+/// La tabla del #38 —métricas, subcategorías y todos los gastos— como pantalla
+/// propia, a la que se llega con zoom desde la tarjeta.
+private struct CategoriaDetalleView: View {
+    let grupo: CategoryGroup
+    let gastos: [Expense]
+    let total: Double
+
+    var body: some View {
+        ScrollView {
+            CategoryBreakdownTable(
+                category: CategoryChartData(
+                    name: grupo.name,
+                    amount: grupo.totalAmount,
+                    percentage: total > 0 ? grupo.totalAmount / total * 100 : 0,
+                    color: grupo.color
+                ),
+                expenses: gastos
+            )
+            .padding(.horizontal, Spacing.sm)
+            .padding(.top, Spacing.xs)
+        }
+        .navigationTitle("\(grupo.emoji) \(grupo.name)")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}

@@ -46,6 +46,7 @@ struct SimpleVoiceButton: View {
                         .fill(buttonColor)
                         .frame(width: 56, height: 56)
                         .shadow(color: buttonColor.opacity(0.4), radius: 8)
+                        .vidrioDeBoton(tinte: buttonColor)
 
                     // Animación de pulso al grabar
                     if isRecording {
@@ -100,8 +101,7 @@ struct SimpleVoiceButton: View {
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color(.secondarySystemBackground))
-                            .cornerRadius(12)
+                            .vidrioDeBurbuja()
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -116,6 +116,9 @@ struct SimpleVoiceButton: View {
                 .transition(.opacity)
             }
         }
+        // En iOS 26 botón y burbuja son vidrio dentro del mismo contenedor y se
+        // funden al acercarse; en iOS 17 el modificador no hace nada.
+        .contenedorDeVidrio()
         .animation(.spring(response: 0.3), value: isRecording)
         .animation(.spring(response: 0.3), value: isProcessing)
         .animation(.spring(response: 0.3), value: speechManager.interimTranscript)

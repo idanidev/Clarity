@@ -267,9 +267,17 @@ final class HomeViewModel {
         metas = (try? await financialService.fetchGoals()) ?? []
     }
 
-    /// Gastos del mes que se enseña, sin filtros, sacados del histórico.
+    /// Gastos del mes que se enseña, sin filtros.
+    ///
+    /// La fuente principal es `currentMonthExpenses`, que llega de red en cada
+    /// carga. El histórico completo solo está si la caché local lo tenía —en un
+    /// dispositivo con la caché vacía se queda en cero— y la primera versión de
+    /// esta pantalla tiraba de él: por eso no enseñaba nada. Queda como respaldo
+    /// para meses distintos del cargado.
     var gastosDelMes: [Expense] {
         let key = Self.monthKey(selectedMonth)
+        let delMes = currentMonthExpenses.filter { $0.date.hasPrefix(key) }
+        if !delMes.isEmpty { return delMes }
         return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
     }
 

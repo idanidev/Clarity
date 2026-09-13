@@ -116,3 +116,95 @@ extension View {
         .sensoryFeedback(.warning, trigger: disparo)
     }
 }
+
+// MARK: - Fondo aurora
+
+/// El fondo de la Home. Sin él, el vidrio no tiene nada que refractar y parece
+/// un rectángulo gris. Se recoloca al cambiar de mes, con animación, y el
+/// resto del tiempo está quieto: no es un `TimelineView`.
+struct HomeFondo: View {
+    let mes: Date
+
+    private var semilla: Int { Calendar.current.component(.month, from: mes) }
+
+    var body: some View {
+        ZStack {
+            DesignTokens.Colors.background
+            if #available(iOS 18, *) {
+                MeshGradient(width: 3, height: 3, points: puntos, colors: colores)
+                    .blur(radius: 36)
+                    .opacity(0.6)
+                    .animation(.easeInOut(duration: 1.4), value: semilla)
+            } else {
+                Circle().fill(Color.clarityPrimary.opacity(0.35)).frame(width: 340).blur(radius: 90)
+                    .offset(x: -90 + CGFloat(semilla % 3) * 30, y: -160)
+                Circle().fill(Color.clarityAccent.opacity(0.28)).frame(width: 320).blur(radius: 90)
+                    .offset(x: 120, y: 260 + CGFloat(semilla % 4) * 20)
+                    .animation(.easeInOut(duration: 1.4), value: semilla)
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    /// Los dos puntos interiores bailan con el mes; los bordes se quedan.
+    private var puntos: [SIMD2<Float>] {
+        let a = Float(semilla % 5) * 0.06
+        let b = Float(semilla % 3) * 0.08
+        return [
+            [0, 0], [0.5, 0], [1, 0],
+            [0, 0.5], [0.35 + a, 0.45 + b], [1, 0.5],
+            [0, 1], [0.6 - b, 1], [1, 1],
+        ]
+    }
+
+    private var colores: [Color] {
+        let p = Color.clarityPrimary, i = Color.clarityAccent, r = Color(hex: "#EC4899"), n = DesignTokens.Colors.background
+        return semilla.isMultiple(of: 2)
+            ? [p, n, i, n, p, n, r, n, i]
+            : [i, n, p, n, r, n, p, n, i]
+    }
+}
+
+// MARK: - Zoom al detalle
+
+extension View {
+    /// La vista desde la que se hace zoom. En iOS 17 no hace nada.
+    @ViewBuilder
+    func origenZoom(id: String, en ns: Namespace.ID) -> some View {
+        if #available(iOS 18, *) { matchedTransitionSource(id: id, in: ns) } else { self }
+    }
+
+    /// La pantalla que crece desde `origenZoom` y vuelve a encogerse al salir.
+    @ViewBuilder
+    func transicionZoom(id: String, en ns: Namespace.ID) -> some View {
+        if #available(iOS 18, *) { navigationTransition(.zoom(sourceID: id, in: ns)) } else { self }
+    }
+}
+
+// MARK: - Vidrio del micro (iOS 26)
+
+extension View {
+    /// Agrupa botón y burbuja en un solo contenedor de vidrio para que se
+    /// fundan al acercarse, como una gota. Sin iOS 26, no hace nada.
+    @ViewBuilder
+    func contenedorDeVidrio() -> some View {
+        if #available(iOS 26, *) { GlassEffectContainer(spacing: 24) { self } } else { self }
+    }
+
+    /// Botón redondo de vidrio teñido, que se hunde bajo el dedo.
+    @ViewBuilder
+    func vidrioDeBoton(tinte: Color) -> some View {
+        if #available(iOS 26, *) { glassEffect(.regular.tint(tinte).interactive(), in: Circle()) } else { self }
+    }
+
+    /// Burbuja de vidrio; en iOS 17 el fondo plano de siempre.
+    @ViewBuilder
+    func vidrioDeBurbuja() -> some View {
+        if #available(iOS 26, *) {
+            glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            background(Color(.secondarySystemBackground)).cornerRadius(12)
+        }
+    }
+}
