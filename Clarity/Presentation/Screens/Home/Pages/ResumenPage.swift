@@ -36,7 +36,7 @@ struct ResumenPage: View {
 
                 if let e = r.slots[.e] { SlotCard(contenido: e).entrada() }
 
-                Color.clear.frame(height: 90)
+                Color.clear.frame(height: 16)
             }
             .padding(.horizontal, Spacing.sm)
             .padding(.top, Spacing.xs)

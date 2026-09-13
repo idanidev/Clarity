@@ -111,8 +111,6 @@ struct HomeView: View {
                 } else {
                     carrusel
                 }
-
-                botonDeVoz
             }
         }
         .animation(.snappy(duration: 0.3), value: buscando)
@@ -226,17 +224,6 @@ struct HomeView: View {
             GastosPage(viewModel: viewModel, margenSuperior: margenSuperior, onEditar: { expenseToEdit = $0 })
         }
     }
-
-    private var botonDeVoz: some View {
-        HStack {
-            Spacer()
-            SimpleVoiceButton(viewModel: viewModel, categories: userDataManager.categories)
-        }
-        .padding(.trailing, Spacing.md)
-        .padding(.bottom, Spacing.xl)
-    }
-
-    // MARK: - Barra de navegación: mes en el centro, filtros a la derecha
 
     // MARK: - View States
     private var loadingView: some View {

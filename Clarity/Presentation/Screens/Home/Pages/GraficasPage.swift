@@ -19,7 +19,7 @@ struct GraficasPage: View {
                 evolucion
                 calendario
                 semanas
-                Color.clear.frame(height: 90)
+                Color.clear.frame(height: 16)
             }
             .padding(.horizontal, Spacing.sm)
             .padding(.top, Spacing.xs)

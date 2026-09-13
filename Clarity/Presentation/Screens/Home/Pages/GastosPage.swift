@@ -62,7 +62,7 @@ struct GastosPage: View {
                 }
             }
 
-            Color.clear.frame(height: 90).fila()
+            Color.clear.frame(height: 16).fila()
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)

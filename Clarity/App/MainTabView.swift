@@ -50,11 +50,16 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack {
-            // TabView
+            // La barra de pestañas del diseño —píldora de vidrio con los cuatro
+            // iconos y el micro al lado— ocupa su sitio debajo del TabView. Se
+            // probó como inset del área segura y en iOS 26 el contenido de la
+            // pestaña no lo respetaba: pisaba la última fila y los puntos.
+            VStack(spacing: 0) {
             TabView(selection: $selectedTab) {
                 NavigationStack {
                     HomeView(viewModel: homeViewModel)
                 }
+                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Image(systemName: "list.bullet")
                     Text("Gastos")
@@ -64,6 +69,7 @@ struct MainTabView: View {
                 NavigationStack {
                     FinancialDashboardView()
                 }
+                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Image(systemName: "target")
                     Text("Metas")
@@ -72,6 +78,7 @@ struct MainTabView: View {
 
                 // Espacio para botón central
                 Color.clear
+                    .toolbar(.hidden, for: .tabBar)
                     .tabItem {
                         Image(systemName: "plus")
                         Text("Añadir")
@@ -87,6 +94,7 @@ struct MainTabView: View {
                 NavigationStack {
                     SettingsView()
                 }
+                .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Image(systemName: "gearshape.fill")
                     Text("Ajustes")
@@ -96,6 +104,11 @@ struct MainTabView: View {
             .tint(Color.clarityPrimary)
             .modifier(iPadTabViewModifier())
 
+            barraInferior
+            }
+            // Detrás de todo, la aurora: el vidrio de la píldora necesita algo que
+            // refractar también en las pestañas con fondo propio.
+            .background(HomeFondo(mes: homeViewModel.selectedMonth))
         }
         // Sheets and alerts
         .sheet(isPresented: $showManualExpense) {
@@ -233,7 +246,51 @@ struct MainTabView: View {
             }
         }
     }
+    // MARK: - Barra inferior
+
+    private var barraInferior: some View {
+        HStack(alignment: .center, spacing: 10) {
+            HStack(spacing: 0) {
+                pestana(0, "list.bullet", "Gastos")
+                pestana(1, "target", "Metas")
+                pestana(2, "plus", "Añadir")
+                pestana(3, "gearshape.fill", "Ajustes")
+            }
+            .padding(5)
+            .glassCard(cornerRadius: 30)
+            .frame(maxWidth: .infinity)
+
+            SimpleVoiceButton(viewModel: homeViewModel, categories: UserDataManager.shared.categories)
+        }
+        .padding(.horizontal, Spacing.sm)
+        .padding(.bottom, Spacing.xxs)
+    }
+
+    private func pestana(_ tag: Int, _ icono: String, _ nombre: String) -> some View {
+        let activa = selectedTab == tag
+        return Button {
+            selectedTab = tag  // la 2 la intercepta el onChange y abre el formulario
+            HapticManager.shared.selection()
+        } label: {
+            Image(systemName: icono)
+                .font(.system(size: 20, weight: activa ? .semibold : .regular))
+                .foregroundStyle(activa ? Color.clarityPrimary : Color.textSecondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 48)
+                .background {
+                    if activa {
+                        Capsule().fill(Color.clarityPrimary.opacity(0.18))
+                    }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(nombre)
+        .accessibilityAddTraits(activa ? .isSelected : [])
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedTab)
+    }
 }
+
 
 // MARK: - Widget Add Expense Flag
 
