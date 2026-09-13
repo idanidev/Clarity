@@ -336,6 +336,8 @@ struct RecurringExpenseRow: View {
         .padding(.vertical, 4)
         .background(frequencyColor.opacity(0.15))
         .clipShape(Capsule())
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var dayBadge: some View {

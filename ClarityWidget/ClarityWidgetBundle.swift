@@ -8,5 +8,7 @@ import SwiftUI
 struct ClarityWidgetBundle: WidgetBundle {
     var body: some Widget {
         ClaritySpendingWidget()
+        DictarGastoControl()
+        DictadoLiveActivity()
     }
 }

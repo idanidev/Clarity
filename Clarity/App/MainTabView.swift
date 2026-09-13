@@ -8,6 +8,8 @@ struct MainTabView: View {
     @State private var selectedTab = 0
     @State private var previousTab = 0
     @State private var showManualExpense = false
+    /// Sube cuando el control "Dictar gasto" abre la app: el micro arranca solo.
+    @State private var arrancarVoz = 0
     @State private var showRecurring = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
@@ -214,6 +216,9 @@ struct MainTabView: View {
                 .presentationCornerRadius(CornerRadius.large)
             }
         }
+        // En un arranque en frío desde el control no hay cambio de fase que
+        // escuchar: se mira también al aparecer.
+        .onAppear { checkWidgetAddExpenseFlag() }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
                 checkWidgetAddExpenseFlag()
@@ -260,7 +265,7 @@ struct MainTabView: View {
             .glassCard(cornerRadius: 30)
             .frame(maxWidth: .infinity)
 
-            SimpleVoiceButton(viewModel: homeViewModel, categories: UserDataManager.shared.categories)
+            SimpleVoiceButton(viewModel: homeViewModel, categories: UserDataManager.shared.categories, disparoGrabar: arrancarVoz)
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.bottom, Spacing.xxs)
@@ -296,8 +301,18 @@ struct MainTabView: View {
 
 private extension MainTabView {
     func checkWidgetAddExpenseFlag() {
-        guard let defaults = UserDefaults(suiteName: "group.com.idanidev.clarity"),
-              defaults.bool(forKey: "widget_open_add_expense") else { return }
+        guard let defaults = UserDefaults(suiteName: "group.com.idanidev.clarity") else { return }
+        // Control "Dictar gasto" (Centro de Control, pantalla bloqueada, Botón de Acción).
+        if defaults.bool(forKey: "widget_start_voice") {
+            defaults.removeObject(forKey: "widget_start_voice")
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(500))
+                selectedTab = 0
+                arrancarVoz += 1
+            }
+            return
+        }
+        guard defaults.bool(forKey: "widget_open_add_expense") else { return }
         defaults.removeObject(forKey: "widget_open_add_expense")
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))

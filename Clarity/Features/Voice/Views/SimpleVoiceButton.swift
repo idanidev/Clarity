@@ -10,6 +10,9 @@ import SwiftUI
 struct SimpleVoiceButton: View {
     var viewModel: HomeViewModel
     let categories: [Category]
+    /// Cambia cuando algo de fuera —el control del Botón de Acción— pide
+    /// empezar a escuchar sin que nadie toque el botón.
+    var disparoGrabar: Int = 0
 
     @State private var speechManager = SpeechRecognitionManager.shared
     @State private var isRecording = false
@@ -122,6 +125,25 @@ struct SimpleVoiceButton: View {
         // En iOS 26 botón y burbuja son vidrio dentro del mismo contenedor y se
         // funden al acercarse; en iOS 17 el modificador no hace nada.
         .contenedorDeVidrio()
+        .onChange(of: disparoGrabar) { _, _ in
+            if !isRecording && !isProcessing { handleTap() }
+        }
+        // La isla dinámica sigue al botón: escucha, apunta y se va.
+        .onChange(of: isRecording) { _, grabando in
+            if grabando {
+                DictadoActividad.shared.empezar()
+            } else {
+                DictadoActividad.shared.procesando(texto: speechManager.transcript + " " + speechManager.interimTranscript)
+            }
+        }
+        .onChange(of: speechManager.interimTranscript) { _, texto in
+            if isRecording { DictadoActividad.shared.actualizar(texto: texto) }
+        }
+        .onChange(of: isProcessing) { antes, ahora in
+            if antes && !ahora {
+                DictadoActividad.shared.terminar(texto: speechManager.transcript, importe: pendingExpenses.first?.amount)
+            }
+        }
         .animation(.spring(response: 0.3), value: isRecording)
         .animation(.spring(response: 0.3), value: isProcessing)
         .animation(.spring(response: 0.3), value: speechManager.interimTranscript)
