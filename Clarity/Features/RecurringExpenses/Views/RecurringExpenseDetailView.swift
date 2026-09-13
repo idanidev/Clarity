@@ -45,48 +45,11 @@ struct RecurringExpenseDetailView: View {
     
     var body: some View {
         Form {
-            // Hero Section
+            // Cabecera: la tarjeta de la regla en la lista, en grande.
             Section {
-                VStack(spacing: 20) {
-                    // Large icon
-                    ZStack {
-                        Circle()
-                            .fill(categoryColor.gradient)
-                            .frame(width: 100, height: 100)
-                            .shadow(color: categoryColor.opacity(0.3), radius: 20)
-                        
-                        Text(emoji)
-                            .scaledFont(size: 50)
-                    }
-                    
-                    // Name and amount
-                    VStack(spacing: 8) {
-                        Text(expense.name)
-                            .font(.title.bold())
-                        
-                        Text(Formatters.currency(expense.amount))
-                            .font(.title2.monospacedDigit())
-                            .foregroundStyle(DesignTokens.Colors.textSecondary)
-                    }
-                    
-                    // Status badge
-                    HStack(spacing: 8) {
-                        Image(systemName: expense.active ? "checkmark.circle.fill" : "pause.circle.fill")
-                            .foregroundStyle(expense.active ? .green : .orange)
-                        Text(expense.active ? "Activo" : "Pausado")
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        (expense.active ? Color.green : Color.orange).opacity(0.15)
-                    )
-                    .clipShape(Capsule())
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                TarjetaDetalleRecurrente(expense: expense, emoji: emoji, color: categoryColor)
+                    .filaTarjetaClarity(arriba: 0, abajo: 0, lados: 0)
             }
-            .listRowBackground(Color.clear)
             
             // Details
             Section("Información") {
@@ -123,7 +86,7 @@ struct RecurringExpenseDetailView: View {
                         if let p = RecurringScheduler.plazos(de: expense, hoy: Date()) {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text("Plazo \(min(p.hechos, p.total)) de \(p.total)").fontWeight(.medium)
-                                Text("último \(Formatters.displayDate(fin))").font(.caption).foregroundStyle(.secondary)
+                                Text("último \(Formatters.displayDate(fin))").font(.caption).foregroundStyle(Color.textSecondary)
                             }
                         } else {
                             Text(Formatters.displayDate(fin))
@@ -158,7 +121,7 @@ struct RecurringExpenseDetailView: View {
                         expense.active ? "Pausar" : "Reanudar",
                         systemImage: expense.active ? "pause.circle" : "play.circle"
                     )
-                    .foregroundStyle(expense.active ? .orange : .green)
+                    .foregroundStyle(expense.active ? Color.warning : Color.success)
                 }
                 .disabled(isProcessing)
             }
@@ -181,7 +144,7 @@ struct RecurringExpenseDetailView: View {
                                 .foregroundStyle(DesignTokens.Colors.textSecondary)
                         } label: {
                             Label(Formatters.displayDate(last.date), systemImage: "checkmark.circle")
-                                .foregroundStyle(.green)
+                                .foregroundStyle(Color.success)
                         }
                     }
 
@@ -329,6 +292,144 @@ struct RecurringExpenseDetailView: View {
     }
 }
 
+// MARK: - Cabecera
+
+/// La regla en grande, continuación de su tarjeta en la lista: icono, cifra,
+/// cada cuánto se cobra, el próximo cargo y, si va a plazos, cómo van.
+private struct TarjetaDetalleRecurrente: View {
+    let expense: RecurringExpense
+    let emoji: String
+    let color: Color
+
+    var body: some View {
+        let plazos = RecurringScheduler.plazos(de: expense, hoy: Date())
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 12) {
+                CirculoIconoClarity(icono: emoji, color: color, tamano: 56)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(expense.name)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(2)
+                    Text(detalle)
+                        .font(.subheadline)
+                        .foregroundStyle(expense.isValid ? Color.textSecondary : Color.error)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 8)
+
+                estado
+            }
+
+            Text(Formatters.currency(expense.amount))
+                .estiloCifraClarity()
+                .padding(.top, 16)
+
+            if expense.frequency != .monthly {
+                Text("≈ \(Formatters.currency(alMes))/mes")
+                    .font(.footnote)
+                    .foregroundStyle(Color.textSecondary)
+            }
+
+            if let proximo = proximoCargo {
+                HStack {
+                    Text("Próximo cargo")
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer()
+                    Text(cuando(proximo))
+                        .fontWeight(.medium)
+                }
+                .font(.footnote)
+                .padding(.top, 14)
+            }
+
+            if let plazos {
+                let hechos = min(plazos.hechos, plazos.total)
+
+                BarraProgresoClarity(
+                    progreso: Double(hechos) / Double(max(plazos.total, 1)),
+                    color: color
+                )
+                .padding(.top, 16)
+
+                HStack {
+                    Text("Plazo \(hechos) de \(plazos.total)")
+                        .foregroundStyle(Color.textSecondary)
+                    Spacer()
+                    Text("quedan \(Formatters.currency(Double(plazos.total - hechos) * expense.amount))")
+                        .fontWeight(.medium)
+                        .monospacedDigit()
+                }
+                .font(.footnote)
+                .padding(.top, 8)
+            }
+        }
+        .padding(20)
+        .glassCard(cornerRadius: CornerRadius.xlarge)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var estado: some View {
+        HStack(spacing: 4) {
+            Image(systemName: expense.active ? "checkmark.circle.fill" : "pause.circle.fill")
+            Text(expense.active ? "Activo" : "Pausado")
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(expense.active ? Color.success : Color.warning)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background((expense.active ? Color.success : Color.warning).opacity(0.16), in: Capsule())
+    }
+
+    /// Frecuencia y día, con los mismos textos que la fila de la lista.
+    private var detalle: String {
+        if expense.dayOfMonth == 0 { return "Falta el día de cobro" }
+        if expense.frequency.needsMonthSelection {
+            guard expense.billingMonth > 0 else { return "Falta el mes de cobro" }
+            return "\(expense.frequency.displayName) · \(expense.dayOfMonth) \(Formatters.shortMonthName(expense.billingMonth).lowercased())"
+        }
+        return "\(expense.frequency.displayName) · día \(expense.dayOfMonth)"
+    }
+
+    /// Lo que cuesta repartido por meses: un anual de 120 € son 10 €.
+    private var alMes: Double {
+        expense.amount / Double(RecurringScheduler.mesesEntreCargos(expense.frequency))
+    }
+
+    /// El siguiente cargo de hoy en adelante, sin pasar de la fecha fin. Una
+    /// regla pausada o incompleta no tiene próximo cargo que enseñar.
+    private var proximoCargo: Date? {
+        guard expense.active, expense.isValid else { return nil }
+        let hoy = Date()
+        let hoyTexto = Formatters.localDayString(from: hoy)
+        // Hay reglas guardadas con `endDate` vacío: eso es "sin fin", no un tope.
+        let fin: String? = expense.endDate.flatMap { $0.count >= 10 ? String($0.prefix(10)) : nil }
+        let siguiente: String? = RecurringScheduler.fechasDeCargo(
+            frecuencia: expense.frequency, dia: expense.dayOfMonth, billingMonth: expense.billingMonth,
+            desde: hoy, hasta: fin, limite: 3
+        )
+        .first(where: { $0 >= hoyTexto })
+        return siguiente.flatMap { Self.fechaLocal($0) }
+    }
+
+    private func cuando(_ fecha: Date) -> String {
+        let cal = Calendar.current
+        if cal.isDateInToday(fecha) { return "Hoy" }
+        if cal.isDateInTomorrow(fecha) { return "Mañana" }
+        return fecha.formatted(.dateTime.weekday(.wide).day().month(.wide))
+    }
+
+    /// "yyyy-MM-dd" como medianoche local. `Formatters.date(from:)` da
+    /// medianoche UTC, que al oeste de Greenwich cae en el día anterior.
+    private static func fechaLocal(_ texto: String) -> Date? {
+        let partes = texto.prefix(10).split(separator: "-").compactMap { Int($0) }
+        guard partes.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: partes[0], month: partes[1], day: partes[2]))
+    }
+}
+
 // MARK: - Edit Sheet (reuses AddRecurringExpenseSheet pattern)
 
 struct EditRecurringExpenseSheet: View {
@@ -391,11 +492,15 @@ struct EditRecurringExpenseSheet: View {
                         Button {
                             showEmojiPicker = true
                         } label: {
+                            // Círculo como en la lista; el emoji sigue siendo
+                            // `Text` para que VoiceOver lo lea igual que antes.
                             Text(selectedIcon)
-                                .scaledFont(size: 40)
-                                .padding(8)
-                                .background(Color.clarityPrimary.opacity(0.15))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .scaledFont(size: 30)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.4)
+                                .frame(width: 56, height: 56)
+                                .background(Color.clarityPrimary.opacity(0.22), in: Circle())
+                                .overlay(Circle().strokeBorder(Color.clarityPrimary.opacity(0.5), lineWidth: 0.5))
                         }
                         .buttonStyle(.plain)
                     }
@@ -404,7 +509,7 @@ struct EditRecurringExpenseSheet: View {
                 Section {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
-                        .scaledFont(size: 32, weight: .bold)
+                        .scaledFont(size: 32, weight: .bold, design: .rounded)
                         .focused($focused, equals: .amount)
 
                     TextField("Nombre", text: $name)
@@ -422,7 +527,7 @@ struct EditRecurringExpenseSheet: View {
                             Text("Categoría")
                             Spacer()
                             Text(formatCategorySelection())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                         }
                     }
                     
@@ -472,6 +577,7 @@ struct EditRecurringExpenseSheet: View {
                         billingMonth: billingMonth, desde: inicioPlan)
                 )
             }
+            .fondoClarity()
             .navigationTitle("Editar Recurrente")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)

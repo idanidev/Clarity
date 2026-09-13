@@ -19,8 +19,10 @@ struct OnboardingView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            // Dark premium base
-            Color.black.ignoresSafeArea()
+            // El fondo de la app, fijado en oscuro: el onboarding está pintado
+            // en blanco y con el sistema en modo claro no se leería.
+            HomeFondo()
+                .environment(\.colorScheme, .dark)
 
             // Page content
             TabView(selection: $page) {
@@ -65,18 +67,13 @@ struct OnboardingView: View {
                 } label: {
                     Group {
                         if isSaving {
-                            ProgressView().tint(.black)
+                            ProgressView().tint(.white)
                         } else {
                             Text(ctaLabel)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(.black)
                         }
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 56)
-                    .background(Color.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
+                .buttonStyle(.principalClarity)
                 .disabled(isSaving)
                 .padding(.horizontal, 24)
 
@@ -183,22 +180,9 @@ private struct WelcomePage: View {
     @State private var appear = false
 
     var body: some View {
+        // Sin fondo propio en ninguna página: detrás está el de la app
+        // (`HomeFondo`, en OnboardingView), quieto mientras se pasa de página.
         ZStack {
-            // Glow orbs
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.35))
-                .frame(width: 300)
-                .blur(radius: 80)
-                .offset(x: -60, y: -120)
-                .scaleEffect(appear ? 1 : 0.5)
-
-            Circle()
-                .fill(Color(hex: "#6366F1").opacity(0.25))
-                .frame(width: 250)
-                .blur(radius: 70)
-                .offset(x: 100, y: 100)
-                .scaleEffect(appear ? 1 : 0.5)
-
             VStack(spacing: 0) {
                 Spacer()
 
@@ -208,7 +192,7 @@ private struct WelcomePage: View {
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 110, height: 110)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-                    .shadow(color: Color(hex: "#8B5CF6").opacity(0.6), radius: 30, y: 10)
+                    .shadow(color: Color.clarityPrimary.opacity(0.6), radius: 30, y: 10)
                     .scaleEffect(appear ? 1 : 0.4)
                     .opacity(appear ? 1 : 0)
 
@@ -233,12 +217,7 @@ private struct WelcomePage: View {
                 // Feature badges
                 HStack(spacing: 10) {
                     ForEach(["mic.fill", "repeat", "chart.pie.fill", "sparkles"], id: \.self) { icon in
-                        Image(systemName: icon)
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.white.opacity(0.8))
-                            .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.1))
-                            .clipShape(Circle())
+                        CirculoIconoClarity(icono: icon, tamano: 44, esSimbolo: true)
                     }
                 }
                 .opacity(appear ? 1 : 0)
@@ -247,7 +226,6 @@ private struct WelcomePage: View {
                 Spacer()
             }
         }
-        .background(Color.black)
         .onAppear {
             withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) { appear = true }
         }
@@ -266,15 +244,6 @@ private struct VoiceSiriPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-
-            // Purple glow
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.2))
-                .frame(width: 400)
-                .blur(radius: 100)
-                .offset(y: -80)
-
             VStack(spacing: 0) {
                 Spacer().frame(height: 70)
 
@@ -283,7 +252,7 @@ private struct VoiceSiriPage: View {
                     // Waveform rings
                     ForEach(0..<3) { i in
                         Circle()
-                            .strokeBorder(Color(hex: "#8B5CF6").opacity(0.15 - Double(i) * 0.04), lineWidth: 1.5)
+                            .strokeBorder(Color.clarityPrimary.opacity(0.15 - Double(i) * 0.04), lineWidth: 1.5)
                             .frame(width: CGFloat(100 + i * 50), height: CGFloat(100 + i * 50))
                             .scaleEffect(appear ? 1 : 0.2)
                             .animation(.spring(response: 0.6).delay(Double(i) * 0.08 + 0.1), value: appear)
@@ -293,12 +262,12 @@ private struct VoiceSiriPage: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
+                                colors: [Color.clarityPrimary, Color.clarityAccent],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 88, height: 88)
-                        .shadow(color: Color(hex: "#8B5CF6").opacity(0.7), radius: 24, y: 8)
+                        .shadow(color: Color.clarityPrimary.opacity(0.7), radius: 24, y: 8)
 
                     Image(systemName: "waveform")
                         .font(.system(size: 36, weight: .semibold))
@@ -318,23 +287,18 @@ private struct VoiceSiriPage: View {
                         HStack {
                             Image(systemName: "waveform")
                                 .font(.caption.bold())
-                                .foregroundStyle(Color(hex: "#8B5CF6"))
+                                .foregroundStyle(Color.clarityPrimary)
                             Text("\"Añade 20 euros en gasolina\"")
                                 .font(.system(size: 14, weight: .medium, design: .monospaced))
                                 .foregroundStyle(.white)
                             Spacer()
                         }
                         .padding(12)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .vidrioOnboarding()
 
                         // Result card
                         HStack(spacing: 12) {
-                            Text("⛽")
-                                .font(.title2)
-                                .frame(width: 40, height: 40)
-                                .background(Color(hex: "#F59E0B").opacity(0.15))
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            CirculoIconoClarity(icono: "⛽", color: Color.warning, tamano: 40)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Gasolina")
@@ -342,17 +306,16 @@ private struct VoiceSiriPage: View {
                                     .foregroundStyle(.white)
                                 Text("Transporte · Hoy")
                                     .font(.caption)
-                                    .foregroundStyle(Color.white.opacity(0.5))
+                                    .foregroundStyle(Color.textSecondary)
                             }
                             Spacer()
                             Text("20,00 €")
                                 .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .monospacedDigit()
                                 .foregroundStyle(.white)
                         }
                         .padding(14)
-                        .background(Color.white.opacity(0.06))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.1), lineWidth: 1))
+                        .vidrioOnboarding()
                     }
                     .padding(.horizontal, 28)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -364,10 +327,10 @@ private struct VoiceSiriPage: View {
                         HStack(spacing: 6) {
                             Image(systemName: "mic.fill")
                                 .font(.caption2.bold())
-                                .foregroundStyle(Color(hex: "#8B5CF6"))
+                                .foregroundStyle(Color.clarityPrimary)
                             Text("CON SIRI, DI:")
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundStyle(Color(hex: "#8B5CF6"))
+                                .foregroundStyle(Color.clarityPrimary)
                                 .tracking(1.5)
                         }
 
@@ -379,14 +342,7 @@ private struct VoiceSiriPage: View {
                     .padding(.horizontal, 18)
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(hex: "#8B5CF6").opacity(0.18), Color(hex: "#6366F1").opacity(0.12)],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        )
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                    .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color(hex: "#8B5CF6").opacity(0.4), lineWidth: 1))
+                    .vidrioOnboarding(tinte: Color.clarityPrimary)
                     .padding(.top, 12)
                     .padding(.horizontal, 28)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -423,20 +379,6 @@ private struct AddExpenseTutorialPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#F59E0B").opacity(0.15))
-                .frame(width: 350)
-                .blur(radius: 100)
-                .offset(x: 40, y: -80)
-
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.1))
-                .frame(width: 250)
-                .blur(radius: 80)
-                .offset(x: -60, y: 60)
-
             VStack(spacing: 0) {
                 Spacer().frame(height: 70)
 
@@ -445,7 +387,7 @@ private struct AddExpenseTutorialPage: View {
                     // Pulse rings
                     ForEach(0..<2) { i in
                         Circle()
-                            .strokeBorder(Color(hex: "#8B5CF6").opacity(0.2), lineWidth: 1.5)
+                            .strokeBorder(Color.clarityPrimary.opacity(0.2), lineWidth: 1.5)
                             .frame(width: CGFloat(90 + i * 30), height: CGFloat(90 + i * 30))
                             .scaleEffect(pulseButton ? 1.15 : 1)
                             .opacity(pulseButton ? 0 : 0.6)
@@ -460,12 +402,12 @@ private struct AddExpenseTutorialPage: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
+                                colors: [Color.clarityPrimary, Color.clarityAccent],
                                 startPoint: .topLeading, endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 72, height: 72)
-                        .shadow(color: Color(hex: "#8B5CF6").opacity(0.6), radius: 20, y: 6)
+                        .shadow(color: Color.clarityPrimary.opacity(0.6), radius: 20, y: 6)
 
                     Image(systemName: "plus")
                         .font(.system(size: 30, weight: .bold))
@@ -484,7 +426,7 @@ private struct AddExpenseTutorialPage: View {
                             number: "1",
                             icon: "plus.circle.fill",
                             text: "Pulsa + para crear un gasto",
-                            color: Color(hex: "#8B5CF6")
+                            color: Color.clarityPrimary
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
@@ -494,7 +436,7 @@ private struct AddExpenseTutorialPage: View {
                             number: "2",
                             icon: "eurosign.circle.fill",
                             text: "Escribe el monto y elige categoría",
-                            color: Color(hex: "#F59E0B")
+                            color: Color.warning
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
@@ -504,7 +446,7 @@ private struct AddExpenseTutorialPage: View {
                             number: "3",
                             icon: "checkmark.circle.fill",
                             text: "Confirma y listo — queda registrado",
-                            color: Color(hex: "#10B981")
+                            color: Color.success
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
@@ -516,15 +458,14 @@ private struct AddExpenseTutorialPage: View {
                     HStack(spacing: 8) {
                         Image(systemName: "waveform")
                             .font(.caption.bold())
-                            .foregroundStyle(Color(hex: "#8B5CF6"))
+                            .foregroundStyle(Color.clarityPrimary)
                         Text("O simplemente dilo por voz")
                             .font(.caption.bold())
-                            .foregroundStyle(Color.white.opacity(0.6))
+                            .foregroundStyle(Color.textSecondary)
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.06))
-                    .clipShape(Capsule())
+                    .vidrioOnboarding()
                     .padding(.top, 14)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
@@ -552,14 +493,7 @@ private struct AddExpenseTutorialPage: View {
 
     private func tutorialStep(number: String, icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.15))
-                    .frame(width: 40, height: 40)
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundStyle(color)
-            }
+            CirculoIconoClarity(icono: icon, color: color, tamano: 40, esSimbolo: true)
 
             Text(text)
                 .font(.system(size: 14, weight: .medium))
@@ -569,13 +503,11 @@ private struct AddExpenseTutorialPage: View {
 
             Text(number)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(Color.white.opacity(0.3))
+                .foregroundStyle(Color.textTertiary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+        .vidrioOnboarding()
     }
 }
 
@@ -955,22 +887,11 @@ private struct DonePage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-
-            // Gradient burst
-            RadialGradient(
-                colors: [Color(hex: "#8B5CF6").opacity(0.3), Color.clear],
-                center: .center, startRadius: 0, endRadius: 250
-            )
-            .ignoresSafeArea()
-            .scaleEffect(appear ? 1 : 0)
-            .animation(.easeOut(duration: 0.8), value: appear)
-
             // Floating confetti shapes
             ForEach(0..<8, id: \.self) { i in
                 Text(confettiItems[i % confettiItems.count])
                     .font(.system(size: CGFloat([12, 8, 10, 6][i % 4])))
-                    .foregroundStyle([Color(hex: "#8B5CF6"), Color(hex: "#EC4899"), Color(hex: "#10B981"), Color(hex: "#F59E0B")][i % 4].opacity(0.6))
+                    .foregroundStyle([Color.clarityPrimary, Color(hex: "#EC4899"), Color.success, Color.warning][i % 4].opacity(0.6))
                     .offset(
                         x: CGFloat([-120, 100, -80, 130, -110, 90, -60, 140][i]),
                         y: CGFloat([-180, -200, -120, -160, -80, -100, -220, -140][i])
@@ -985,11 +906,11 @@ private struct DonePage: View {
                 // Check
                 ZStack {
                     Circle()
-                        .fill(Color(hex: "#8B5CF6").opacity(0.15))
+                        .fill(Color.clarityPrimary.opacity(0.15))
                         .frame(width: 120, height: 120)
                     Circle()
                         .strokeBorder(
-                            LinearGradient(colors: [Color(hex: "#8B5CF6"), Color(hex: "#EC4899")], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            LinearGradient(colors: [Color.clarityPrimary, Color(hex: "#EC4899")], startPoint: .topLeading, endPoint: .bottomTrailing),
                             lineWidth: 2.5
                         )
                         .frame(width: 120, height: 120)
@@ -1025,18 +946,16 @@ private struct DonePage: View {
                 if showRows {
                     VStack(spacing: 0) {
                         summaryRow(icon: conGasto ? "checkmark.circle.fill" : "waveform.circle.fill",
-                                   color: Color(hex: "#3B82F6"),
+                                   color: Color.info,
                                    text: conGasto ? "Tu primer gasto ya está dentro" : "Gastos por voz listos")
                         Divider().background(Color.white.opacity(0.06))
-                        summaryRow(icon: "arrow.clockwise.circle.fill", color: Color(hex: "#8B5CF6"),
+                        summaryRow(icon: "arrow.clockwise.circle.fill", color: Color.clarityPrimary,
                                    text: "Gastos fijos en automático")
                         Divider().background(Color.white.opacity(0.06))
-                        summaryRow(icon: "chart.pie.fill", color: Color(hex: "#10B981"),
+                        summaryRow(icon: "chart.pie.fill", color: Color.success,
                                    text: "Tu presupuesto, cuando lo necesites")
                     }
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+                    .vidrioOnboarding()
                     .padding(.horizontal, 28)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -1063,7 +982,7 @@ private struct DonePage: View {
             Spacer()
             Image(systemName: "checkmark")
                 .font(.caption.bold())
-                .foregroundStyle(Color.white.opacity(0.3))
+                .foregroundStyle(Color.textTertiary)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 13)
@@ -1076,7 +995,7 @@ private func pageText(tag: String, title: String, subtitle: String) -> some View
     VStack(spacing: 10) {
         Text(tag)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(Color(hex: "#8B5CF6"))
+            .foregroundStyle(Color.clarityPrimary)
             .tracking(2)
 
         Text(.init(title))
@@ -1090,6 +1009,16 @@ private func pageText(tag: String, title: String, subtitle: String) -> some View
             .multilineTextAlignment(.center)
             .lineSpacing(3)
             .padding(.horizontal, 28)
+    }
+}
+
+private extension View {
+    /// Tarjeta de vidrio siempre en oscuro. El onboarding está pintado en
+    /// blanco sobre fondo oscuro; con el sistema en modo claro el vidrio y el
+    /// texto secundario saldrían claros y no se leerían.
+    func vidrioOnboarding(tinte: Color? = nil) -> some View {
+        glassCard(cornerRadius: CornerRadius.large, tint: tinte)
+            .environment(\.colorScheme, .dark)
     }
 }
 
@@ -1123,14 +1052,6 @@ private struct PrimerGastoPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
-
-            Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.18))
-                .frame(width: 420)
-                .blur(radius: 110)
-                .offset(y: -120)
-
             VStack(spacing: 0) {
                 Spacer().frame(height: 90)
 
@@ -1159,14 +1080,17 @@ private struct PrimerGastoPage: View {
                     VStack(spacing: 22) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 88, weight: .light))
-                            .foregroundStyle(Color(hex: "#10B981"))
-                            .shadow(color: Color(hex: "#10B981").opacity(0.5), radius: 26, y: 8)
+                            .foregroundStyle(Color.success)
+                            .shadow(color: Color.success.opacity(0.5), radius: 26, y: 8)
 
                         // La prueba de que ha funcionado es el gasto, no un icono.
                         if let gasto = viewModel.allExpenses.first {
                             HStack(spacing: 12) {
-                                Text(gasto.category.categoryNameEmoji.emoji ?? "💸")
-                                    .font(.system(size: 22))
+                                CirculoIconoClarity(
+                                    icono: gasto.category.categoryNameEmoji.emoji ?? "💸",
+                                    color: UserDataManager.shared.color(for: gasto.category),
+                                    tamano: 40
+                                )
                                 Text(gasto.name)
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundStyle(.white)
@@ -1174,16 +1098,12 @@ private struct PrimerGastoPage: View {
                                 Spacer(minLength: 12)
                                 Text(Formatters.currency(gasto.amount))
                                     .font(.system(size: 17, weight: .bold))
+                                    .monospacedDigit()
                                     .foregroundStyle(Color(hex: "#C9C3FF"))
                             }
                             .padding(.horizontal, 20)
                             .padding(.vertical, 16)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 18)
-                                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
-                            )
+                            .vidrioOnboarding()
                             .padding(.horizontal, 40)
                         }
                     }
@@ -1196,7 +1116,7 @@ private struct PrimerGastoPage: View {
                         ForEach(0..<3) { i in
                             Circle()
                                 .strokeBorder(
-                                    Color(hex: "#8B5CF6").opacity(0.16 - Double(i) * 0.04),
+                                    Color.clarityPrimary.opacity(0.16 - Double(i) * 0.04),
                                     lineWidth: 1.5
                                 )
                                 .frame(width: CGFloat(150 + i * 58), height: CGFloat(150 + i * 58))
@@ -1223,10 +1143,9 @@ private struct PrimerGastoPage: View {
                         HapticManager.shared.selection()
                     } label: {
                         Text("Prefiero escribirlo")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.75))
-                            .padding(.top, 56)
                     }
+                    .buttonStyle(.secundarioClarity)
+                    .padding(.top, 56)
                     .opacity(appear ? 1 : 0)
                     .animation(.easeOut(duration: 0.4).delay(0.4), value: appear)
                 }

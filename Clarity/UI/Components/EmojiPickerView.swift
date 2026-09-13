@@ -41,10 +41,7 @@ struct EmojiPickerView: View {
                 LazyVStack(alignment: .leading, spacing: 24) {
                     ForEach(filteredCategories, id: \.name) { category in
                         VStack(alignment: .leading, spacing: 12) {
-                            Text(category.name)
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal)
+                            CabeceraSeccionClarity(titulo: category.name)
                             
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 50))], spacing: 12) {
                                 ForEach(category.emojis, id: \.self) { emoji in
@@ -61,16 +58,19 @@ struct EmojiPickerView: View {
                                                 Color.clarityPrimary.opacity(0.2) :
                                                 Color.clear
                                             )
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous))
                                     }
                                 }
                             }
-                            .padding(.horizontal)
+                            .padding(Spacing.sm)
+                            .glassCard(cornerRadius: CornerRadius.large)
                         }
+                        .padding(.horizontal)
                     }
                 }
                 .padding(.vertical)
             }
+            .fondoClarity()
             .searchable(text: $searchText, prompt: "Buscar emoji")
             .navigationTitle("Seleccionar Icono")
             .navigationBarTitleDisplayMode(.inline)

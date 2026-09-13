@@ -6,13 +6,13 @@ import SwiftUI
 struct RegisterView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(AuthViewModel.self) var authViewModel
-    
+
     @State private var name = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var isLoading = false
-    
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -21,61 +21,61 @@ struct RegisterView: View {
                     VStack(spacing: Spacing.sm) {
                         Text("Crear Cuenta")
                             .font(.clarityTitle)
-                        
+
                         Text("Empieza a controlar tus gastos")
                             .font(.claritySubheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     }
                     .padding(.top, Spacing.lg)
-                    
-                    // Form
+
+                    // Form: los campos juntos en una tarjeta de vidrio, como en el login
                     VStack(spacing: Spacing.md) {
                         // Name
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("Nombre")
                                 .font(.clarityCaption)
-                                .foregroundStyle(.secondary)
-                            
+                                .foregroundStyle(Color.textSecondary)
+
                             TextField("Tu nombre", text: $name)
-                                .textFieldStyle(.roundedBorder)
                                 .textContentType(.name)
+                                .campoRegistro()
                         }
-                        
+
                         // Email
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("Email")
                                 .font(.clarityCaption)
-                                .foregroundStyle(.secondary)
-                            
+                                .foregroundStyle(Color.textSecondary)
+
                             TextField("tu@email.com", text: $email)
-                                .textFieldStyle(.roundedBorder)
                                 .textContentType(.emailAddress)
                                 .keyboardType(.emailAddress)
                                 .autocapitalization(.none)
+                                .campoRegistro()
                         }
-                        
+
                         // Password
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("Contraseña")
                                 .font(.clarityCaption)
-                                .foregroundStyle(.secondary)
-                            
+                                .foregroundStyle(Color.textSecondary)
+
                             SecureField("Mínimo 6 caracteres", text: $password)
-                                .textFieldStyle(.roundedBorder)
                                 .textContentType(.newPassword)
+                                .campoRegistro()
                         }
-                        
+
                         // Confirm Password
                         VStack(alignment: .leading, spacing: Spacing.xs) {
                             Text("Confirmar Contraseña")
                                 .font(.clarityCaption)
-                                .foregroundStyle(.secondary)
-                            
+                                .foregroundStyle(Color.textSecondary)
+
                             SecureField("Repite la contraseña", text: $confirmPassword)
-                                .textFieldStyle(.roundedBorder)
                                 .textContentType(.newPassword)
+                                .campoRegistro()
                         }
-                        
+
                         // Password match indicator
                         if !confirmPassword.isEmpty && password != confirmPassword {
                             Text("Las contraseñas no coinciden")
@@ -83,8 +83,10 @@ struct RegisterView: View {
                                 .foregroundStyle(Color.error)
                         }
                     }
+                    .padding(Spacing.md)
+                    .glassCard(cornerRadius: CornerRadius.xlarge)
                     .padding(.horizontal, Spacing.lg)
-                    
+
                     // Error Message
                     if let error = authViewModel.errorMessage {
                         Text(error)
@@ -92,7 +94,7 @@ struct RegisterView: View {
                             .foregroundStyle(Color.error)
                             .padding(.horizontal)
                     }
-                    
+
                     // Register Button
                     Button(action: {
                         register()
@@ -103,18 +105,19 @@ struct RegisterView: View {
                             Text("Crear Cuenta")
                         }
                     }
-                    .buttonStyle(.clarityProminent)
+                    .buttonStyle(.principalClarity)
                     .disabled(!isValidForm || isLoading)
                     .padding(.horizontal, Spacing.lg)
-                    
+
                     // Terms
                     Text("Al registrarte aceptas nuestros Términos de Servicio y Política de Privacidad")
                         .font(.clarityCaption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, Spacing.xl)
                 }
             }
+            .fondoClarity()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -125,14 +128,14 @@ struct RegisterView: View {
             }
         }
     }
-    
+
     private var isValidForm: Bool {
         !name.isEmpty &&
         !email.isEmpty &&
         password.count >= 6 &&
         password == confirmPassword
     }
-    
+
     private func register() {
         isLoading = true
         Task {
@@ -144,6 +147,21 @@ struct RegisterView: View {
             }
             isLoading = false
         }
+    }
+}
+
+private extension View {
+    /// Campo sobre la tarjeta de vidrio: un velo suave en vez del borde
+    /// redondeado del sistema, que encima del vidrio parecía una caja opaca.
+    /// El mismo aspecto que los campos del login.
+    func campoRegistro() -> some View {
+        textFieldStyle(.plain)
+            .padding(.horizontal, Spacing.sm)
+            .frame(height: Spacing.buttonHeight)
+            .background(
+                Color.primary.opacity(0.06),
+                in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous)
+            )
     }
 }
 

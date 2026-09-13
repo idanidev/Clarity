@@ -21,16 +21,8 @@ struct LoginView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                // Fondo: OLED + glow violeta sutil arriba
-                Color.bgPrimary.ignoresSafeArea()
-
-                RadialGradient(
-                    colors: [Color.clarityPrimary.opacity(0.18), Color.clear],
-                    center: .top,
-                    startRadius: 0,
-                    endRadius: 420
-                )
-                .ignoresSafeArea()
+                // El fondo de la app: quien entra ya ve el brillo de la Home.
+                HomeFondo()
 
                 GeometryReader { geo in
                     VStack(spacing: 0) {
@@ -50,7 +42,7 @@ struct LoginView: View {
 
                             Text("Gestión inteligente de gastos")
                                 .font(.claritySubheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                         }
                         .padding(.top, geo.safeAreaInsets.top + Spacing.lg)
                         .opacity(headerVisible ? 1 : 0)
@@ -59,24 +51,28 @@ struct LoginView: View {
 
                         Spacer(minLength: Spacing.xl)
 
-                        // MARK: — Formulario glass
+                        // MARK: — Formulario en tarjeta de vidrio
                         VStack(spacing: Spacing.sm) {
-                            AuthTextField(
-                                icon: "envelope",
-                                placeholder: "tu@email.com",
-                                text: $email,
-                                contentType: .emailAddress,
-                                keyboardType: .emailAddress
-                            )
+                            VStack(spacing: Spacing.sm) {
+                                AuthTextField(
+                                    icon: "envelope",
+                                    placeholder: "tu@email.com",
+                                    text: $email,
+                                    contentType: .emailAddress,
+                                    keyboardType: .emailAddress
+                                )
 
-                            AuthTextField(
-                                icon: "lock",
-                                placeholder: "Contraseña",
-                                text: $password,
-                                contentType: .password,
-                                isSecure: true,
-                                showPassword: $showPassword
-                            )
+                                AuthTextField(
+                                    icon: "lock",
+                                    placeholder: "Contraseña",
+                                    text: $password,
+                                    contentType: .password,
+                                    isSecure: true,
+                                    showPassword: $showPassword
+                                )
+                            }
+                            .padding(Spacing.md)
+                            .glassCard(cornerRadius: CornerRadius.xlarge)
 
                             HStack {
                                 Spacer()
@@ -116,23 +112,24 @@ struct LoginView: View {
                                     }
                                 }
                             }
-                            .buttonStyle(.clarityProminent)
+                            .buttonStyle(.principalClarity)
                             .disabled(!isValidForm || isLoading)
 
                             HStack(spacing: Spacing.sm) {
                                 Rectangle()
                                     .frame(height: 1)
-                                    .foregroundStyle(Color.white.opacity(0.08))
+                                    .foregroundStyle(Color.primary.opacity(0.12))
                                 Text("o continúa con")
                                     .font(.clarityCaption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(Color.textTertiary)
                                     .fixedSize()
                                 Rectangle()
                                     .frame(height: 1)
-                                    .foregroundStyle(Color.white.opacity(0.08))
+                                    .foregroundStyle(Color.primary.opacity(0.12))
                             }
 
-                            // Apple primero
+                            // Apple primero. Su guía deja elegir alto y esquinas:
+                            // los mismos que el botón principal, para que la pila cuadre.
                             SignInWithAppleButton(.signIn) { request in
                                 request.requestedScopes = [.fullName, .email]
                                 request.nonce = authViewModel.prepareAppleSignIn()
@@ -140,10 +137,10 @@ struct LoginView: View {
                                 handleAppleSignIn(result)
                             }
                             .signInWithAppleButtonStyle(.white)
-                            .frame(height: Spacing.buttonHeight)
-                            .clipShape(RoundedRectangle(cornerRadius: Spacing.buttonRadius))
+                            .frame(height: 52)
+                            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
 
-                            // Google después
+                            // Google después: mismo relleno y logo; solo alto y esquinas.
                             Button {
                                 Task {
                                     do {
@@ -159,11 +156,11 @@ struct LoginView: View {
                                         .foregroundStyle(.primary)
                                 }
                                 .frame(maxWidth: .infinity)
-                                .frame(height: Spacing.buttonHeight)
+                                .frame(height: 52)
                                 .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: Spacing.buttonRadius))
+                                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: Spacing.buttonRadius)
+                                    RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
                                         .stroke(Color.white.opacity(0.12), lineWidth: 1)
                                 )
                             }
@@ -178,7 +175,7 @@ struct LoginView: View {
 
                         HStack(spacing: Spacing.xxs) {
                             Text("¿No tienes cuenta?")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                             Button("Regístrate") {
                                 showRegister = true
                             }
@@ -255,7 +252,7 @@ struct LoginView: View {
     }
 }
 
-// MARK: — Campo glass con icono leading
+// MARK: — Campo con icono leading, dentro de la tarjeta de vidrio
 private struct AuthTextField: View {
     let icon: String
     let placeholder: String
@@ -321,12 +318,16 @@ private struct AuthTextField: View {
         }
         .padding(.horizontal, Spacing.md)
         .frame(height: Spacing.buttonHeight)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: Spacing.inputRadius))
+        // Ya va sobre vidrio: un velo en vez de otro material encima, que
+        // oscurecía la tarjeta a parches.
+        .background(
+            Color.primary.opacity(0.06),
+            in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous)
+        )
         .overlay(
-            RoundedRectangle(cornerRadius: Spacing.inputRadius)
+            RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous)
                 .stroke(
-                    focused ? Color.clarityPrimary.opacity(0.6) : Color.white.opacity(0.08),
+                    focused ? Color.clarityPrimary.opacity(0.6) : Color.primary.opacity(0.08),
                     lineWidth: focused ? 1.5 : 1
                 )
                 .animation(.easeInOut(duration: AnimationDuration.fast), value: focused)

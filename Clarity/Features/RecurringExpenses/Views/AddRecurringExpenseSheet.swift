@@ -47,11 +47,15 @@ struct AddRecurringExpenseSheet: View {
                         Button {
                             showEmojiPicker = true
                         } label: {
+                            // Círculo como en la lista; el emoji sigue siendo
+                            // `Text` para que VoiceOver lo lea igual que antes.
                             Text(selectedIcon)
-                                .scaledFont(size: 40)
-                                .padding(8)
-                                .background(Color.clarityPrimary.opacity(0.15))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .scaledFont(size: 30)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.4)
+                                .frame(width: 56, height: 56)
+                                .background(Color.clarityPrimary.opacity(0.22), in: Circle())
+                                .overlay(Circle().strokeBorder(Color.clarityPrimary.opacity(0.5), lineWidth: 0.5))
                         }
                     }
                 }
@@ -59,7 +63,7 @@ struct AddRecurringExpenseSheet: View {
                 Section {
                     TextField("0.00", text: $amountString)
                         .keyboardType(.decimalPad)
-                        .scaledFont(size: 32, weight: .bold)
+                        .scaledFont(size: 32, weight: .bold, design: .rounded)
                         .focused($focused, equals: .amount)
 
                     TextField("Nombre (ej. Netflix)", text: $name)
@@ -77,7 +81,7 @@ struct AddRecurringExpenseSheet: View {
                             Text("Categoría")
                             Spacer()
                             Text(formatCategorySelection())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                         }
                     }
                     
@@ -127,6 +131,7 @@ struct AddRecurringExpenseSheet: View {
                         billingMonth: billingMonth, desde: Date())
                 )
             }
+            .fondoClarity()
             .navigationTitle("Nuevo Recurrente")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
