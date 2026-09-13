@@ -117,6 +117,19 @@ struct RecurringExpenseDetailView: View {
                 }
                 
                 LabeledContent("Método de pago", value: expense.paymentMethod)
+
+                if let fin = expense.endDate {
+                    LabeledContent("Final") {
+                        if let p = RecurringScheduler.plazos(de: expense, hoy: Date()) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text("Plazo \(min(p.hechos, p.total)) de \(p.total)").fontWeight(.medium)
+                                Text("último \(Formatters.displayDate(fin))").font(.caption).foregroundStyle(.secondary)
+                            }
+                        } else {
+                            Text(Formatters.displayDate(fin))
+                        }
+                    }
+                }
             }
             
             // Actions — arriba, antes del historial (acceso rápido)
@@ -206,6 +219,7 @@ struct RecurringExpenseDetailView: View {
                     .font(.caption2)
             }
         }
+        .fondoClarity()
         .navigationTitle(expense.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showEditSheet) {
@@ -334,6 +348,9 @@ struct EditRecurringExpenseSheet: View {
     @State private var selectedIcon: String
     @State private var showEmojiPicker = false
     @State private var isSaving = false
+    @State private var fin: FinRecurrente
+    @State private var fechaFin: Date
+    @State private var numeroPlazos: Int
     
     private let monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -353,7 +370,15 @@ struct EditRecurringExpenseSheet: View {
         _dayOfMonth = State(initialValue: expense.dayOfMonth)
         _billingMonth = State(initialValue: expense.billingMonth > 0 ? expense.billingMonth : Calendar.current.component(.month, from: Date()))
         _selectedIcon = State(initialValue: expense.icon ?? "💰")
+        // Con fecha fin se abre en "Fecha": los plazos se calculan al guardar y
+        // lo que queda en la regla es el último día de cobro.
+        let fechaGuardada = expense.endDate.flatMap { Formatters.date(from: $0) }
+        _fin = State(initialValue: fechaGuardada == nil ? .nunca : .fecha)
+        _fechaFin = State(initialValue: fechaGuardada ?? Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date())
+        _numeroPlazos = State(initialValue: RecurringScheduler.plazos(de: expense, hoy: Date())?.total ?? 12)
     }
+
+    private var inicioPlan: Date { expense.startDate.flatMap { Formatters.date(from: $0) } ?? Date() }
     
     var body: some View {
         NavigationStack {
@@ -438,6 +463,14 @@ struct EditRecurringExpenseSheet: View {
                         Text("Se cobrará el día \(dayOfMonth) de cada mes")
                     }
                 }
+
+                SeccionFinRecurrente(
+                    fin: $fin, fecha: $fechaFin, plazos: $numeroPlazos,
+                    importe: Double(amountString.replacingOccurrences(of: ",", with: ".")) ?? 0,
+                    ultimoCargoPlazos: RecurringScheduler.fechaFin(
+                        plazos: numeroPlazos, frecuencia: frequency, dia: dayOfMonth,
+                        billingMonth: billingMonth, desde: inicioPlan)
+                )
             }
             .navigationTitle("Editar Recurrente")
             .navigationBarTitleDisplayMode(.inline)
@@ -492,7 +525,14 @@ struct EditRecurringExpenseSheet: View {
             active: expense.active,
             icon: selectedIcon,
             startDate: expense.startDate,
-            endDate: expense.endDate,
+            endDate: {
+                switch fin {
+                case .nunca: return nil
+                case .fecha: return Formatters.localDayString(from: fechaFin)
+                case .plazos: return RecurringScheduler.fechaFin(plazos: numeroPlazos, frecuencia: frequency, dia: dayOfMonth,
+                                                                 billingMonth: billingMonth, desde: inicioPlan)
+                }
+            }(),
             lastCreated: expense.lastCreated,
             createdAt: expense.createdAt,
             updatedAt: Formatters.isoString(from: Date())

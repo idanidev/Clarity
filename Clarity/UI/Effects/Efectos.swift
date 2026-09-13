@@ -238,3 +238,15 @@ struct TarjetaButtonStyle: ButtonStyle {
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }
+
+// MARK: - Fondo de la app
+
+extension View {
+    /// La aurora de la Home detrás de listas y formularios. Sin esto cada
+    /// pestaña pintaba su negro liso y la barra de vidrio de abajo contrastaba
+    /// raro al pasar de la Home a Ajustes o Metas.
+    func fondoClarity(mes: Date = Date()) -> some View {
+        scrollContentBackground(.hidden)
+            .background(HomeFondo(mes: mes))
+    }
+}

@@ -189,4 +189,76 @@ enum RecurringScheduler {
             recurringId: rule.id
         )
     }
+
+    // MARK: - Fecha fin y plazos (#64)
+
+    /// Meses que separan dos cargos de una frecuencia.
+    static func mesesEntreCargos(_ frecuencia: RecurringFrequency) -> Int {
+        switch frecuencia {
+        case .monthly: 1
+        case .quarterly: 3
+        case .semestral: 6
+        case .yearly: 12
+        }
+    }
+
+    /// Año y mes del primer cargo contando desde `desde`. Mensual: ese mismo mes
+    /// —si el día ya pasó se cobra al crear la regla—. El resto: el primer mes
+    /// que case con `billingMonth` y la frecuencia, ese mes incluido.
+    static func primerMesDeCargo(frecuencia: RecurringFrequency, billingMonth: Int,
+                                 desde: Date, calendar: Calendar = .current) -> (anio: Int, mes: Int) {
+        let anio = calendar.component(.year, from: desde)
+        let mes = calendar.component(.month, from: desde)
+        let paso = mesesEntreCargos(frecuencia)
+        guard paso > 1, billingMonth >= 1 else { return (anio, mes) }
+        for offset in 0..<12 {
+            let total = (mes - 1) + offset
+            let m = total % 12 + 1
+            if ((m - billingMonth) % paso + paso) % paso == 0 {
+                return (anio + total / 12, m)
+            }
+        }
+        return (anio, mes)
+    }
+
+    /// Los cargos de un plan, en orden, como "yyyy-MM-dd": desde el primero
+    /// hasta `hasta` incluido, o `limite` cargos si no hay fecha.
+    static func fechasDeCargo(frecuencia: RecurringFrequency, dia: Int, billingMonth: Int,
+                              desde: Date, hasta: String? = nil, limite: Int = 600,
+                              calendar: Calendar = .current) -> [String] {
+        let inicio = primerMesDeCargo(frecuencia: frecuencia, billingMonth: billingMonth, desde: desde, calendar: calendar)
+        let paso = mesesEntreCargos(frecuencia)
+        var out: [String] = []
+        var (anio, mes) = inicio
+        while out.count < limite {
+            var comps = DateComponents(); comps.year = anio; comps.month = mes; comps.day = 1
+            let diasMes = calendar.date(from: comps).flatMap { calendar.range(of: .day, in: .month, for: $0)?.count } ?? 28
+            let fecha = String(format: "%04d-%02d-%02d", anio, mes, min(max(dia, 1), diasMes))
+            if let hasta, fecha > hasta { break }
+            out.append(fecha)
+            mes += paso
+            while mes > 12 { mes -= 12; anio += 1 }
+        }
+        return out
+    }
+
+    /// Fecha del último cargo de un plan de `plazos` cargos. Se guarda como
+    /// `endDate`: el scheduler ya deja de cobrar después de ese día.
+    static func fechaFin(plazos: Int, frecuencia: RecurringFrequency, dia: Int, billingMonth: Int,
+                         desde: Date, calendar: Calendar = .current) -> String {
+        fechasDeCargo(frecuencia: frecuencia, dia: dia, billingMonth: billingMonth,
+                      desde: desde, limite: max(plazos, 1), calendar: calendar).last
+            ?? Formatters.localDayString(from: desde)
+    }
+
+    /// Cargos hechos y totales de una regla con fecha fin. `nil` si no tiene.
+    static func plazos(de regla: RecurringExpense, hoy: Date, calendar: Calendar = .current) -> (hechos: Int, total: Int)? {
+        guard let fin = regla.endDate, !fin.isEmpty else { return nil }
+        let inicio = regla.startDate.flatMap { Formatters.date(from: $0) } ?? hoy
+        let todas = fechasDeCargo(frecuencia: regla.frequency, dia: regla.dayOfMonth, billingMonth: regla.billingMonth,
+                                  desde: inicio, hasta: String(fin.prefix(10)), calendar: calendar)
+        guard !todas.isEmpty else { return nil }
+        let hoyStr = Formatters.localDayString(from: hoy)
+        return (todas.filter { $0 <= hoyStr }.count, todas.count)
+    }
 }

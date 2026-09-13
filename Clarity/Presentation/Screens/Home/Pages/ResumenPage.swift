@@ -43,7 +43,6 @@ struct ResumenPage: View {
 
                     if let e = r.slots[.e] { slot(e) }
                 }
-                .entrada()
                 .filaDeTarjeta()
 
                 listaDeGastos(total: r.total)

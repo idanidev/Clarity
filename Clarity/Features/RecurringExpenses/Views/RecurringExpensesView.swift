@@ -42,6 +42,7 @@ struct RecurringExpensesView: View {
                 list
             }
         }
+        .fondoClarity()
         .navigationTitle("Gastos Recurrentes")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -260,6 +261,7 @@ struct RecurringExpenseRow: View {
                     VStack(alignment: .leading, spacing: 4) {
                         frequencyBadge
                         HStack(spacing: 6) {
+                            plazoBadge
                             dayBadge
                             if expense.billingMonth > 0 {
                                 monthBadge(for: expense.billingMonth)
@@ -274,6 +276,7 @@ struct RecurringExpenseRow: View {
                     HStack(spacing: 6) {
                         frequencyBadge
                         dayBadge
+                        plazoBadge
                     }
                 }
             }
@@ -303,6 +306,23 @@ struct RecurringExpenseRow: View {
     }
     
     // MARK: - Badge Views
+
+    /// "3/12" en un plan con plazos; "Terminado" cuando ya no quedan.
+    @ViewBuilder
+    private var plazoBadge: some View {
+        if let p = RecurringScheduler.plazos(de: expense, hoy: Date()) {
+            let terminado = p.hechos >= p.total
+            HStack(spacing: 3) {
+                Image(systemName: terminado ? "checkmark.circle.fill" : "flag.checkered")
+                Text(terminado ? "Terminado" : "\(p.hechos)/\(p.total)")
+            }
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .foregroundStyle(terminado ? Color.success : Color.clarityPrimary)
+            .background((terminado ? Color.success : Color.clarityPrimary).opacity(0.15))
+            .clipShape(Capsule())
+        }
+    }
 
     private var frequencyBadge: some View {
         HStack(spacing: 3) {

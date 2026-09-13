@@ -258,6 +258,7 @@ struct SettingsView: View {
                 }
             }
             .trackScreen("ajustes")
+            .fondoClarity()
             .navigationTitle(String(localized: "settings.navigationTitle", defaultValue: "Ajustes"))
             .sheet(isPresented: $showPaywall) {
                 ProPaywallView(reason: paywallReason)

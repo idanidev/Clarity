@@ -276,4 +276,43 @@ struct RecurringSchedulerTests {
         let expense = RecurringScheduler.currentPeriodExpense(for: rule, today: date(2026, 6, 30), calendar: utc)
         #expect(expense.date == "2026-06-30")
     }
+
+    // MARK: - Fecha fin y plazos (#64)
+
+    private func fecha(_ iso: String) -> Date { Formatters.date(from: iso)! }
+
+    @Test("plazos mensuales: 12 cargos desde septiembre → último en agosto del año siguiente")
+    func fechaFinMensual() {
+        let fin = RecurringScheduler.fechaFin(plazos: 12, frecuencia: .monthly, dia: 5, billingMonth: 0,
+                                              desde: fecha("2026-09-13"))
+        #expect(fin == "2027-08-05")
+    }
+
+    @Test("plazos trimestrales con billingMonth=2: el primero es noviembre, no septiembre")
+    func fechaFinTrimestral() {
+        let cargos = RecurringScheduler.fechasDeCargo(frecuencia: .quarterly, dia: 10, billingMonth: 2,
+                                                      desde: fecha("2026-09-13"), limite: 4)
+        #expect(cargos == ["2026-11-10", "2027-02-10", "2027-05-10", "2027-08-10"])
+    }
+
+    @Test("el día 31 se ajusta al último día de cada mes")
+    func fechaFinDiaClamp() {
+        let cargos = RecurringScheduler.fechasDeCargo(frecuencia: .monthly, dia: 31, billingMonth: 0,
+                                                      desde: fecha("2027-01-15"), limite: 3)
+        #expect(cargos == ["2027-01-31", "2027-02-28", "2027-03-31"])
+    }
+
+    @Test("progreso de un plan: cargos hechos hasta hoy y totales hasta la fecha fin")
+    func progresoPlazos() {
+        let regla = RecurringExpense(
+            id: "r", amount: 45, name: "iPhone", category: "Compras", subcategory: nil, paymentMethod: "Tarjeta",
+            frequency: .monthly, dayOfMonth: 5, billingMonth: 0, active: true, icon: nil,
+            startDate: "2026-01-10", endDate: "2026-12-05", lastCreated: nil, createdAt: nil, updatedAt: nil)
+        let p = RecurringScheduler.plazos(de: regla, hoy: fecha("2026-09-13"))
+        #expect(p?.total == 12)
+        #expect(p?.hechos == 9)
+        let sinFin = makeRule(frequency: .monthly, dayOfMonth: 5)
+        #expect(RecurringScheduler.plazos(de: sinFin, hoy: Date()) == nil)
+    }
+
 }

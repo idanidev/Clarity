@@ -17,7 +17,7 @@ struct FinancialDashboardView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground).ignoresSafeArea()
+                HomeFondo(mes: Date())
 
                 if viewModel.isLoading {
                     ProgressView()

@@ -25,6 +25,9 @@ struct AddRecurringExpenseSheet: View {
     @State private var selectedIcon = "💰"
     @State private var showEmojiPicker = false
     @State private var isSaving = false
+    @State private var fin: FinRecurrente = .nunca
+    @State private var fechaFin: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
+    @State private var numeroPlazos = 12
     
     private let monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -115,6 +118,14 @@ struct AddRecurringExpenseSheet: View {
                         Text("Se cobrará el día \(dayOfMonth) de cada mes")
                     }
                 }
+
+                SeccionFinRecurrente(
+                    fin: $fin, fecha: $fechaFin, plazos: $numeroPlazos,
+                    importe: Double(amountString.replacingOccurrences(of: ",", with: ".")) ?? 0,
+                    ultimoCargoPlazos: RecurringScheduler.fechaFin(
+                        plazos: numeroPlazos, frecuencia: frequency, dia: dayOfMonth,
+                        billingMonth: billingMonth, desde: Date())
+                )
             }
             .navigationTitle("Nuevo Recurrente")
             .navigationBarTitleDisplayMode(.inline)
@@ -164,7 +175,7 @@ struct AddRecurringExpenseSheet: View {
             active: true,
             icon: selectedIcon,
             startDate: Formatters.isoString(from: Date()),
-            endDate: nil,
+            endDate: endDateCalculado,
             lastCreated: nil,
             createdAt: Formatters.isoString(from: Date()),
             updatedAt: Formatters.isoString(from: Date())
@@ -187,6 +198,15 @@ struct AddRecurringExpenseSheet: View {
         }
     }
     
+    private var endDateCalculado: String? {
+        switch fin {
+        case .nunca: nil
+        case .fecha: Formatters.localDayString(from: fechaFin)
+        case .plazos: RecurringScheduler.fechaFin(plazos: numeroPlazos, frecuencia: frequency, dia: dayOfMonth,
+                                                 billingMonth: billingMonth, desde: Date())
+        }
+    }
+
     private func formatCategorySelection() -> String {
         if selectedCategory.isEmpty { return "Requerido" }
         if let sub = selectedSubcategory {
