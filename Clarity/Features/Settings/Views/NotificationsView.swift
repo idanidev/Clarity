@@ -50,12 +50,12 @@ struct NotificationsView: View {
                             UIApplication.shared.open(url)
                         }
                     }
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.clarityPrimary)
                 }
             } footer: {
                 if notificationStatus == .denied {
                     Text(String(localized: "notifications.push.denied", defaultValue: "Las notificaciones están desactivadas. Actívalas en Ajustes."))
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.error)
                 } else {
                     Text(String(localized: "notifications.push.footer", defaultValue: "Permite que Clarity te envíe recordatorios"))
                 }
@@ -96,10 +96,11 @@ struct NotificationsView: View {
                                 .foregroundStyle(.primary)
                             Spacer()
                             Text(String(format: "%02d:%02d", dailyHour, dailyMinute))
-                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .foregroundStyle(Color.textSecondary)
                             Image(systemName: "chevron.right")
                                 .font(.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(Color.textTertiary)
                         }
                     }
                 }
@@ -147,7 +148,7 @@ struct NotificationsView: View {
                         "Recibirás un recordatorio el día 28 de cada mes para configurar tus ingresos del mes siguiente."
                     )
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                 }
             } header: {
                 Text(String(localized: "notifications.alerts.header", defaultValue: "Alertas"))
@@ -156,6 +157,7 @@ struct NotificationsView: View {
             }
 
         }
+        .fondoClarity()
         .navigationTitle(String(localized: "notifications.navigationTitle", defaultValue: "Notificaciones"))
         .navigationBarTitleDisplayMode(.large)
         .sheet(isPresented: $showTimePicker) {

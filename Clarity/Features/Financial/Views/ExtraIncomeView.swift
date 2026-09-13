@@ -37,22 +37,14 @@ struct ExtraIncomeView: View {
         Form {
             // Desglose del mes: nómina + extras = total
             Section {
-                LabeledContent("Nómina") {
-                    Text(Formatters.currency(viewModel.baseSalary))
-                        .foregroundStyle(.secondary)
-                }
-                if !viewModel.extraIncomes.isEmpty {
-                    LabeledContent("Extras") {
-                        Text("+\(Formatters.currency(extrasTotal))")
-                            .foregroundStyle(Color.clarityPrimary)
-                    }
-                    LabeledContent("Total del mes") {
-                        Text(Formatters.currency(viewModel.income))
-                            .fontWeight(.semibold)
-                    }
-                }
-            } header: {
-                Text("\(viewModel.currentMonthName.capitalized) \(String(viewModel.currentYear))")
+                ResumenIngresosMes(
+                    mes: "\(viewModel.currentMonthName.capitalized) \(String(viewModel.currentYear))",
+                    nomina: viewModel.baseSalary,
+                    extras: extrasTotal,
+                    total: viewModel.income,
+                    hayExtras: !viewModel.extraIncomes.isEmpty
+                )
+                .filaTarjetaClarity(arriba: 0, abajo: 0, lados: 0)
             } footer: {
                 if viewModel.currentBudget == nil && !viewModel.isLoading {
                     // Sin budget del mes no hay dónde colgar el ingreso: la nómina va primero.
@@ -76,9 +68,7 @@ struct ExtraIncomeView: View {
                                     HapticManager.shared.selection()
                                     focused = .amount
                                 }
-                                .font(.footnote)
-                                .buttonStyle(.bordered)
-                                .buttonBorderShape(.capsule)
+                                .buttonStyle(.secundarioClarity)
                             }
                         }
                     }
@@ -90,9 +80,13 @@ struct ExtraIncomeView: View {
                         TextField("Importe", text: $amountText)
                             .keyboardType(.decimalPad)
                             .focused($focused, equals: .amount)
-                        Text("€").foregroundStyle(.secondary)
+                        Text("€").foregroundStyle(Color.textSecondary)
                     }
+                }
 
+                // En su propia sección y sin fondo de celda: el botón ancho de marca
+                // no cabe bien dentro del grupo de campos.
+                Section {
                     Button {
                         guard let amount else { return }
                         let conceptName = name
@@ -102,9 +96,10 @@ struct ExtraIncomeView: View {
                         focused = .name
                     } label: {
                         Label("Añadir ingreso", systemImage: "plus.circle.fill")
-                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.principalClarity)
                     .disabled(!canSave)
+                    .filaTarjetaClarity(arriba: 0, abajo: 0, lados: 0)
                 }
             }
 
@@ -120,14 +115,15 @@ struct ExtraIncomeView: View {
                                     Text(entry.name).foregroundStyle(.primary)
                                     Text(Formatters.displayDate(entry.date))
                                         .font(.caption)
-                                        .foregroundStyle(.secondary)
+                                        .foregroundStyle(Color.textSecondary)
                                 }
                                 Spacer()
                                 Text("+\(Formatters.currency(entry.amount))")
+                                    .monospacedDigit()
                                     .foregroundStyle(Color.clarityPrimary)
                                 Image(systemName: "chevron.right")
                                     .font(.caption)
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(Color.textTertiary)
                             }
                             .contentShape(Rectangle())
                         }
@@ -147,6 +143,7 @@ struct ExtraIncomeView: View {
                 }
             }
         }
+        .fondoClarity()
         .sheet(item: $editingEntry) { entry in
             ExtraIncomeEditSheet(entry: entry, viewModel: viewModel)
         }
@@ -171,6 +168,63 @@ struct ExtraIncomeView: View {
         } message: {
             Text(viewModel.error ?? "")
         }
+    }
+}
+
+// MARK: - Resumen del mes
+
+/// El desglose del mes en tarjeta: la cifra grande es el total si hay extras y
+/// la nómina si no; debajo, de qué sale ese total.
+private struct ResumenIngresosMes: View {
+    let mes: String
+    let nomina: Double
+    let extras: Double
+    let total: Double
+    let hayExtras: Bool
+
+    var body: some View {
+        let cifra = hayExtras ? total : nomina
+
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(hayExtras ? "Total del mes" : "Nómina")
+                    .estiloEtiquetaClarity()
+                Spacer(minLength: 8)
+                Text(mes)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.textSecondary)
+            }
+
+            Text(Formatters.currency(cifra))
+                .estiloCifraClarity()
+                .contentTransition(.numericText(value: cifra))
+                .padding(.top, 4)
+
+            if hayExtras {
+                VStack(spacing: 6) {
+                    HStack {
+                        Text("Nómina")
+                            .foregroundStyle(Color.textSecondary)
+                        Spacer()
+                        Text(Formatters.currency(nomina))
+                            .monospacedDigit()
+                    }
+                    HStack {
+                        Text("Extras")
+                            .foregroundStyle(Color.textSecondary)
+                        Spacer()
+                        Text("+\(Formatters.currency(extras))")
+                            .monospacedDigit()
+                            .foregroundStyle(Color.clarityPrimary)
+                    }
+                }
+                .font(.subheadline)
+                .padding(.top, Spacing.sm)
+            }
+        }
+        .padding(20)
+        .glassCard(cornerRadius: CornerRadius.xlarge)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -212,7 +266,7 @@ private struct ExtraIncomeEditSheet: View {
                         TextField("Importe", text: $amountText)
                             .keyboardType(.decimalPad)
                             .focused($amountFocused)
-                        Text("€").foregroundStyle(.secondary)
+                        Text("€").foregroundStyle(Color.textSecondary)
                     }
                 }
 
@@ -226,6 +280,7 @@ private struct ExtraIncomeEditSheet: View {
                     }
                 }
             }
+            .fondoClarity()
             .navigationTitle("Editar ingreso")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

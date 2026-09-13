@@ -40,24 +40,10 @@ struct SettingsView: View {
                             paywallReason = .general
                             showPaywall = true
                         } label: {
-                            HStack {
-                                Label(
-                                    subscriptions.isPro ? "Clarity Pro activo" : "Hazte Pro",
-                                    systemImage: subscriptions.isPro ? "checkmark.seal.fill" : "sparkles"
-                                )
-                                .foregroundStyle(subscriptions.isPro ? Color.success : Color.clarityPrimary)
-                                Spacer()
-                                if !subscriptions.isPro {
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption)
-                                        .foregroundStyle(.tertiary)
-                                }
-                            }
+                            TarjetaProAjustes(isPro: subscriptions.isPro)
                         }
-                    } footer: {
-                        if !subscriptions.isPro {
-                            Text("Voz sin límites y categorías a medida.")
-                        }
+                        .buttonStyle(TarjetaButtonStyle())
+                        .filaTarjetaClarity(arriba: 0, abajo: 0, lados: 0)
                     }
                 }
 
@@ -352,6 +338,49 @@ struct SettingsView: View {
                 // Theme save errors are non-critical; silently ignore
             }
         }
+    }
+}
+
+// MARK: - Tarjeta Pro
+
+/// Pro en Ajustes: tarjeta de vidrio en vez de una fila más, para que se
+/// distinga del resto sin romper la lista. La frase que antes iba en el pie de
+/// la sección va dentro, bajo el título.
+private struct TarjetaProAjustes: View {
+    let isPro: Bool
+
+    var body: some View {
+        HStack(spacing: Spacing.sm) {
+            CirculoIconoClarity(
+                icono: isPro ? "checkmark.seal.fill" : "sparkles",
+                color: isPro ? Color.success : Color.clarityPrimary,
+                tamano: 44,
+                esSimbolo: true
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isPro ? "Clarity Pro activo" : "Hazte Pro")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(isPro ? Color.success : Color.clarityPrimary)
+                if !isPro {
+                    Text("Voz sin límites y categorías a medida.")
+                        .font(.footnote)
+                        .foregroundStyle(Color.textSecondary)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if !isPro {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.textTertiary)
+            }
+        }
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, 14)
+        .glassCard(cornerRadius: CornerRadius.large)
+        .contentShape(Rectangle())
     }
 }
 

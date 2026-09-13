@@ -13,7 +13,9 @@ struct SalaryOnboardingSheet: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
+            // El fondo de la app detrás de las tres páginas; cada página pone
+            // encima solo su brillo de color.
+            HomeFondo()
 
             TabView(selection: $page) {
                 IntroPage().tag(0)
@@ -27,7 +29,7 @@ struct SalaryOnboardingSheet: View {
                 HStack(spacing: 6) {
                     ForEach(0..<3, id: \.self) { i in
                         Capsule()
-                            .fill(i == page ? Color.white : Color.white.opacity(0.3))
+                            .fill(i == page ? Color.primary : Color.textTertiary)
                             .frame(width: i == page ? 22 : 6, height: 6)
                             .animation(.spring(response: 0.3), value: page)
                     }
@@ -43,19 +45,14 @@ struct SalaryOnboardingSheet: View {
                     }
                 } label: {
                     Text(page < 2 ? "Siguiente" : "Configurar nómina")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
                 }
+                .buttonStyle(.principalClarity)
                 .padding(.horizontal, 24)
 
                 if page == 0 {
                     Button("Saltar") { dismiss() }
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.5))
+                        .foregroundStyle(Color.textSecondary)
                 } else {
                     Color.clear.frame(height: 20)
                 }
@@ -71,9 +68,8 @@ private struct IntroPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
             RadialGradient(
-                colors: [Color(hex: "#10B981").opacity(0.3), Color.clear],
+                colors: [Color.success.opacity(0.3), Color.clear],
                 center: .center, startRadius: 0, endRadius: 280
             )
             .ignoresSafeArea()
@@ -81,29 +77,17 @@ private struct IntroPage: View {
             VStack(spacing: 22) {
                 Spacer()
 
-                ZStack {
-                    Circle()
-                        .fill(LinearGradient(
-                            colors: [Color(hex: "#10B981"), Color(hex: "#34D399")],
-                            startPoint: .topLeading, endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 110, height: 110)
-                        .shadow(color: Color(hex: "#10B981").opacity(0.55), radius: 28, y: 10)
-
-                    Image(systemName: "eurosign.circle.fill")
-                        .font(.system(size: 56, weight: .bold))
-                        .foregroundStyle(.white)
-                }
-                .scaleEffect(appear ? 1 : 0.4)
-                .opacity(appear ? 1 : 0)
+                CirculoIconoClarity(icono: "eurosign", color: Color.success, tamano: 110, esSimbolo: true)
+                    .scaleEffect(appear ? 1 : 0.4)
+                    .opacity(appear ? 1 : 0)
 
                 VStack(spacing: 10) {
                     Text("Nóminas")
                         .font(.system(size: 40, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.primary)
                     Text("Tu ingreso mensual,\nhistórico y automático")
                         .font(.title3)
-                        .foregroundStyle(Color.white.opacity(0.6))
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                 }
@@ -126,9 +110,8 @@ private struct RecurringPage: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
             RadialGradient(
-                colors: [Color(hex: "#8B5CF6").opacity(0.22), Color.clear],
+                colors: [Color.clarityPrimary.opacity(0.22), Color.clear],
                 center: .top, startRadius: 0, endRadius: 320
             )
             .ignoresSafeArea()
@@ -136,9 +119,7 @@ private struct RecurringPage: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: 50)
 
-                Image(systemName: "arrow.clockwise.circle.fill")
-                    .font(.system(size: 56, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#8B5CF6"))
+                CirculoIconoClarity(icono: "arrow.clockwise", color: Color.clarityPrimary, tamano: 88, esSimbolo: true)
                     .scaleEffect(appear ? 1 : 0.4)
 
                 Spacer().frame(height: 18)
@@ -146,15 +127,15 @@ private struct RecurringPage: View {
                 VStack(spacing: 8) {
                     Text("COBRO FIJO MENSUAL")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#8B5CF6"))
+                        .foregroundStyle(Color.clarityPrimary)
                         .tracking(2.5)
                     Text("Activa una vez,\nse repite siempre")
                         .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.primary)
                         .multilineTextAlignment(.center)
                     Text("Define tu sueldo neto. Cada mes Clarity crea solo el presupuesto, sin que tengas que hacer nada.")
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                         .padding(.top, 4)
@@ -168,23 +149,20 @@ private struct RecurringPage: View {
                 HStack(spacing: 14) {
                     Image(systemName: toggleOn ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
-                        .foregroundStyle(toggleOn ? Color(hex: "#8B5CF6") : Color.white.opacity(0.3))
+                        .foregroundStyle(toggleOn ? Color.clarityPrimary : Color.textTertiary)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Cobro fijo mensual")
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.primary)
                         Text("1.800 € se aplican cada mes")
                             .font(.caption)
-                            .foregroundStyle(Color.white.opacity(0.5))
+                            .foregroundStyle(Color.textSecondary)
                     }
                     Spacer()
                 }
                 .padding(16)
-                .background(toggleOn ? Color(hex: "#8B5CF6").opacity(0.14) : Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(
-                    toggleOn ? Color(hex: "#8B5CF6").opacity(0.4) : Color.white.opacity(0.08), lineWidth: 1))
+                .glassCard(cornerRadius: CornerRadius.large, tint: toggleOn ? Color.clarityPrimary : nil)
                 .padding(.horizontal, 28)
                 .opacity(appear ? 1 : 0)
                 .offset(y: appear ? 0 : 24)
@@ -205,17 +183,16 @@ private struct HistoryPage: View {
     @State private var showRows = false
 
     private let rows: [(month: String, amount: String, color: Color)] = [
-        ("Abr", "1.950 €", Color(hex: "#10B981")),
-        ("Mar", "1.800 €", Color(hex: "#3B82F6")),
-        ("Feb", "1.800 €", Color(hex: "#3B82F6")),
-        ("Ene", "1.800 €", Color(hex: "#3B82F6")),
+        ("Abr", "1.950 €", Color.success),
+        ("Mar", "1.800 €", Color.info),
+        ("Feb", "1.800 €", Color.info),
+        ("Ene", "1.800 €", Color.info),
     ]
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
             RadialGradient(
-                colors: [Color(hex: "#3B82F6").opacity(0.22), Color.clear],
+                colors: [Color.info.opacity(0.22), Color.clear],
                 center: .top, startRadius: 0, endRadius: 320
             )
             .ignoresSafeArea()
@@ -223,9 +200,7 @@ private struct HistoryPage: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: 50)
 
-                Image(systemName: "calendar")
-                    .font(.system(size: 56, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#3B82F6"))
+                CirculoIconoClarity(icono: "calendar", color: Color.info, tamano: 88, esSimbolo: true)
                     .scaleEffect(appear ? 1 : 0.4)
 
                 Spacer().frame(height: 18)
@@ -233,15 +208,15 @@ private struct HistoryPage: View {
                 VStack(spacing: 8) {
                     Text("HISTORIAL ANUAL")
                         .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#3B82F6"))
+                        .foregroundStyle(Color.info)
                         .tracking(2.5)
                     Text("Edita meses pasados\ny pagas extra")
                         .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.primary)
                         .multilineTextAlignment(.center)
                     Text("Si cobraste paga extra o un mes diferente, edítalo. Se reflejará en tus presupuestos antiguos.")
                         .font(.subheadline)
-                        .foregroundStyle(Color.white.opacity(0.55))
+                        .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 28)
                         .padding(.top, 4)
@@ -258,10 +233,11 @@ private struct HistoryPage: View {
                                 Text(r.month)
                                     .font(.system(size: 14, weight: .bold))
                                     .frame(width: 40, alignment: .leading)
-                                    .foregroundStyle(Color.white.opacity(0.6))
+                                    .foregroundStyle(Color.textSecondary)
                                 Text(r.amount)
                                     .font(.system(size: 16, weight: .semibold, design: .rounded))
-                                    .foregroundStyle(.white)
+                                    .monospacedDigit()
+                                    .foregroundStyle(Color.primary)
                                 Spacer()
                                 Circle()
                                     .fill(r.color)
@@ -269,8 +245,7 @@ private struct HistoryPage: View {
                             }
                             .padding(.horizontal, 14)
                             .padding(.vertical, 12)
-                            .background(Color.white.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .glassCard(cornerRadius: CornerRadius.small)
                             .transition(.move(edge: .leading).combined(with: .opacity))
                             .animation(.spring(response: 0.4).delay(Double(i) * 0.07), value: showRows)
                         }

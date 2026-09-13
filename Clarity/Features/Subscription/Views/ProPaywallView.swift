@@ -56,7 +56,7 @@ struct ProPaywallView: View {
                 .padding(.horizontal, Spacing.md)
                 .padding(.bottom, Spacing.xl)
             }
-            .background(DesignTokens.Colors.background)
+            .fondoClarity()
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -93,46 +93,43 @@ struct ProPaywallView: View {
     }
 
     private var header: some View {
-        VStack(spacing: Spacing.xs) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 40, weight: .semibold))
-                .foregroundStyle(Color.clarityPrimary)
+        VStack(spacing: Spacing.sm) {
+            CirculoIconoClarity(icono: "sparkles", tamano: 76, esSimbolo: true)
                 .padding(.top, Spacing.md)
 
-            Text(reason.headline)
-                .scaledFont(size: 24, weight: .bold)
-                .multilineTextAlignment(.center)
+            VStack(spacing: Spacing.xs) {
+                Text(reason.headline)
+                    .font(.system(.title2, design: .rounded, weight: .bold))
+                    .multilineTextAlignment(.center)
 
-            Text(reason.subheadline)
-                .scaledFont(size: 14)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+                Text(reason.subheadline)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
+                    .multilineTextAlignment(.center)
+            }
         }
+        .frame(maxWidth: .infinity)
     }
 
     private var featureList: some View {
-        VStack(spacing: Spacing.sm) {
+        VStack(alignment: .leading, spacing: Spacing.md) {
             ForEach(features, id: \.title) { feature in
                 HStack(spacing: Spacing.sm) {
-                    Image(systemName: feature.icon)
-                        .font(.system(size: 18))
-                        .foregroundStyle(Color.clarityPrimary)
-                        .frame(width: 28)
+                    CirculoIconoClarity(icono: feature.icon, tamano: 40, esSimbolo: true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(feature.title)
-                            .scaledFont(size: 15, weight: .semibold)
+                            .font(.subheadline.weight(.semibold))
                         Text(feature.detail)
-                            .scaledFont(size: 12)
-                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                            .foregroundStyle(Color.textSecondary)
                     }
-                    Spacer()
+                    Spacer(minLength: 0)
                 }
             }
         }
-        .padding(Spacing.md)
-        .background(Color.glassBackground)
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium))
+        .padding(20)
+        .glassCard(cornerRadius: CornerRadius.xlarge)
     }
 
     @ViewBuilder
@@ -142,7 +139,7 @@ struct ProPaywallView: View {
         } else if subscriptions.sortedProducts.isEmpty {
             Text("Los planes no están disponibles ahora mismo.")
                 .scaledFont(size: 13)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.textSecondary)
                 .multilineTextAlignment(.center)
         } else {
             VStack(spacing: Spacing.xs) {
@@ -177,15 +174,10 @@ struct ProPaywallView: View {
                         ProgressView().tint(.white)
                     } else {
                         Text("Continuar · \(product.displayPrice)")
-                            .scaledFont(size: 16, weight: .semibold)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, Spacing.sm)
-                .background(Color.clarityPrimary)
-                .foregroundStyle(.white)
-                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium))
             }
+            .buttonStyle(.principalClarity)
             .disabled(isPurchasing)
         }
     }
@@ -194,7 +186,7 @@ struct ProPaywallView: View {
         VStack(spacing: Spacing.xxs) {
             Text("La suscripción se renueva automáticamente salvo que la canceles al menos 24 h antes del final del periodo. Puedes gestionarla en los Ajustes de tu Apple ID.")
                 .scaledFont(size: 10)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(Color.textTertiary)
                 .multilineTextAlignment(.center)
 
             HStack(spacing: Spacing.sm) {
@@ -226,30 +218,32 @@ private struct PlanRow: View {
     var body: some View {
         HStack(spacing: Spacing.sm) {
             Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                .foregroundStyle(isSelected ? Color.clarityPrimary : Color.secondary)
-                .font(.system(size: 20))
+                .foregroundStyle(isSelected ? Color.clarityPrimary : Color.textTertiary)
+                .font(.system(size: 22))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(product.displayName)
-                    .scaledFont(size: 15, weight: .semibold)
+                    .font(.body.weight(.semibold))
                 Text(periodLabel)
-                    .scaledFont(size: 12)
-                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
             }
 
             Spacer()
 
+            // El precio en color primario también seleccionado: sobre el vidrio
+            // teñido de morado, un morado encima se leía mal.
             Text(product.displayPrice)
-                .scaledFont(size: 16, weight: .bold)
-                .foregroundStyle(isSelected ? Color.clarityPrimary : Color.primary)
+                .font(.system(.title3, design: .rounded, weight: .bold))
+                .monospacedDigit()
         }
-        .padding(Spacing.sm)
-        .background(isSelected ? Color.clarityPrimary.opacity(0.1) : Color.glassBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: CornerRadius.medium)
-                .stroke(isSelected ? Color.clarityPrimary : Color.clear, lineWidth: 1.5)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.medium))
+        .padding(.horizontal, Spacing.md)
+        .padding(.vertical, 14)
+        .glassCard(cornerRadius: CornerRadius.large, tint: isSelected ? Color.clarityPrimary : nil)
+        .overlay {
+            RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
+                .strokeBorder(isSelected ? Color.clarityPrimary : Color.clear, lineWidth: 1.5)
+        }
         .contentShape(Rectangle())
     }
 }

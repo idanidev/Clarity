@@ -20,8 +20,7 @@ struct DebtsView: View {
                         pending: viewModel.totalPending,
                         paid: viewModel.totalPaid
                     )
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
+                    .filaTarjetaClarity(arriba: 0, abajo: 0, lados: 0)
                 }
             }
 
@@ -48,11 +47,12 @@ struct DebtsView: View {
         }
         .overlay {
             if viewModel.visibleSummaries.isEmpty && !viewModel.isLoading {
-                ContentUnavailableView {
-                    Label("Nadie te debe nada", systemImage: "gift")
-                } description: {
-                    Text("Marca un gasto como «modo regalo» al crearlo y apunta quién te lo tiene que devolver.")
-                }
+                EstadoVacioClarity(
+                    icono: "gift",
+                    titulo: String(localized: "Nadie te debe nada"),
+                    texto: String(localized: "Marca un gasto como «modo regalo» al crearlo y apunta quién te lo tiene que devolver.")
+                )
+                .padding(.horizontal, Spacing.md)
             }
         }
         .task { await viewModel.load() }
@@ -67,27 +67,35 @@ private struct DebtsTotalHeader: View {
     let paid: Double
 
     var body: some View {
-        HStack(spacing: Spacing.md) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Pendiente de cobrar")
-                    .scaledFont(size: 12)
-                    .foregroundStyle(.secondary)
-                Text(Formatters.currency(pending))
-                    .scaledFont(size: 28, weight: .bold)
-                    .foregroundStyle(Color.clarityPrimary)
-                    .contentTransition(.numericText())
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Pendiente de cobrar")
+                .estiloEtiquetaClarity()
+
+            Text(Formatters.currency(pending))
+                .estiloCifraClarity()
+                .contentTransition(.numericText())
+                .padding(.top, 4)
+
+            // Cuánto de lo prestado ha vuelto ya, con los mismos dos importes.
+            if pending + paid > 0 {
+                BarraProgresoClarity(progreso: paid / (pending + paid), color: Color.success)
+                    .padding(.top, Spacing.md)
             }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 4) {
+
+            HStack(alignment: .firstTextBaseline) {
                 Text("Ya cobrado")
-                    .scaledFont(size: 12)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
+                Spacer()
                 Text(Formatters.currency(paid))
-                    .scaledFont(size: 17, weight: .semibold)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
                     .foregroundStyle(Color.success)
             }
+            .font(.footnote)
+            .padding(.top, Spacing.xs)
         }
-        .padding(Spacing.md)
+        .padding(20)
+        .glassCard(cornerRadius: CornerRadius.xlarge)
     }
 }
 
@@ -110,19 +118,20 @@ private struct DebtExpenseSection: View {
                 } label: {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: debtor.isPaid ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(debtor.isPaid ? Color.success : Color.secondary)
-                            .font(.system(size: 20))
+                            .foregroundStyle(debtor.isPaid ? Color.success : Color.textTertiary)
+                            .font(.system(size: 22))
 
                         Text(debtor.name)
                             .scaledFont(size: 15)
-                            .foregroundStyle(.primary)
-                            .strikethrough(debtor.isPaid, color: .secondary)
+                            .foregroundStyle(debtor.isPaid ? Color.textSecondary : Color.primary)
+                            .strikethrough(debtor.isPaid, color: Color.textSecondary)
 
                         Spacer()
 
                         Text(Formatters.currency(debtor.amount))
                             .scaledFont(size: 15, weight: .semibold)
-                            .foregroundStyle(debtor.isPaid ? Color.secondary : Color.clarityPrimary)
+                            .monospacedDigit()
+                            .foregroundStyle(debtor.isPaid ? Color.textSecondary : Color.clarityPrimary)
                     }
                 }
                 .buttonStyle(.plain)
@@ -133,15 +142,15 @@ private struct DebtExpenseSection: View {
                     Task { await viewModel.markAllPaid(expenseId: summary.expense.id ?? "") }
                 } label: {
                     Label("Marcar todo como cobrado", systemImage: "checkmark.circle")
-                        .scaledFont(size: 14, weight: .medium)
                 }
+                .buttonStyle(.secundarioClarity)
             }
         } header: {
             HStack {
                 Text(summary.expense.name)
                 Spacer()
                 Text(Formatters.shortDisplay(summary.expense.date))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.textTertiary)
             }
         } footer: {
             HStack {
@@ -155,6 +164,7 @@ private struct DebtExpenseSection: View {
                         .foregroundStyle(Color.success)
                 }
             }
+            .monospacedDigit()
         }
     }
 }

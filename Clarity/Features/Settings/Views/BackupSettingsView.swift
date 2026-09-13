@@ -26,6 +26,7 @@ struct BackupSettingsView: View {
             exportImportSection
             infoSection
         }
+        .fondoClarity()
         .navigationTitle(String(localized: "backup.navigationTitle", defaultValue: "Copias de Seguridad"))
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -112,11 +113,8 @@ struct BackupSettingsView: View {
                     await createBackup()
                 }
             } label: {
-                HStack {
-                    Image(systemName: "arrow.clockwise.icloud")
-                        .font(.title2)
-                        .foregroundStyle(.blue)
-                        .frame(width: 32)
+                HStack(spacing: Spacing.sm) {
+                    CirculoIconoClarity(icono: "arrow.clockwise.icloud", tamano: 36, esSimbolo: true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(String(localized: "backup.create.title", defaultValue: "Crear Copia de Seguridad"))
@@ -125,7 +123,7 @@ struct BackupSettingsView: View {
 
                         Text(String(localized: "backup.create.subtitle", defaultValue: "Guarda todos tus datos en Firebase"))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     }
 
                     Spacer()
@@ -168,11 +166,8 @@ struct BackupSettingsView: View {
                     await exportToJSON()
                 }
             } label: {
-                HStack {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title2)
-                        .foregroundStyle(.green)
-                        .frame(width: 32)
+                HStack(spacing: Spacing.sm) {
+                    CirculoIconoClarity(icono: "square.and.arrow.up", color: Color.success, tamano: 36, esSimbolo: true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(String(localized: "backup.export.json.title", defaultValue: "Exportar a JSON"))
@@ -181,7 +176,7 @@ struct BackupSettingsView: View {
 
                         Text(String(localized: "backup.export.json.subtitle", defaultValue: "Descarga tus datos localmente"))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     }
 
                     Spacer()
@@ -196,11 +191,8 @@ struct BackupSettingsView: View {
             Button {
                 showImportPicker = true
             } label: {
-                HStack {
-                    Image(systemName: "square.and.arrow.down")
-                        .font(.title2)
-                        .foregroundStyle(.orange)
-                        .frame(width: 32)
+                HStack(spacing: Spacing.sm) {
+                    CirculoIconoClarity(icono: "square.and.arrow.down", color: Color.warning, tamano: 36, esSimbolo: true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(String(localized: "backup.import.json.title", defaultValue: "Importar desde JSON"))
@@ -209,7 +201,7 @@ struct BackupSettingsView: View {
 
                         Text(String(localized: "backup.import.json.subtitle", defaultValue: "Restaura datos desde un archivo"))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     }
 
                     Spacer()
@@ -224,11 +216,8 @@ struct BackupSettingsView: View {
             Button {
                 showCSVImportPicker = true
             } label: {
-                HStack {
-                    Image(systemName: "tablecells")
-                        .font(.title2)
-                        .foregroundStyle(.cyan)
-                        .frame(width: 32)
+                HStack(spacing: Spacing.sm) {
+                    CirculoIconoClarity(icono: "tablecells", color: Color.info, tamano: 36, esSimbolo: true)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(String(localized: "backup.import.csv.title", defaultValue: "Importar desde CSV"))
@@ -237,7 +226,7 @@ struct BackupSettingsView: View {
 
                         Text(String(localized: "backup.import.csv.subtitle", defaultValue: "Importa gastos desde un archivo CSV"))
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                     }
 
                     Spacer()
@@ -260,11 +249,11 @@ struct BackupSettingsView: View {
             if let lastBackup = backupManager.availableBackups.first {
                 HStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.success)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "backup.info.lastBackup", defaultValue: "Ultima copia de seguridad"))
                             .font(.caption.bold())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                         Text(lastBackup.timestamp, style: .date) + Text(" a las ") + Text(lastBackup.timestamp, style: .time)
                             .font(.caption)
                     }
@@ -274,10 +263,10 @@ struct BackupSettingsView: View {
             }
             HStack {
                 Image(systemName: "info.circle")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.clarityPrimary)
                 Text(String(localized: "backup.info.autoBackup", defaultValue: "Los backups automaticos se crean cada 7 dias"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
             }
         }
     }
@@ -423,7 +412,8 @@ struct CSVImportPreviewSheet: View {
                             Spacer()
                             Text(Formatters.currency(totalAmount))
                                 .font(.headline)
-                                .foregroundStyle(.orange)
+                                .monospacedDigit()
+                                .foregroundStyle(Color.clarityPrimary)
                         }
 
                         Divider()
@@ -431,7 +421,7 @@ struct CSVImportPreviewSheet: View {
                         HStack {
                             Text("Rango de fechas")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                             Spacer()
                             Text(dateRange)
                                 .font(.subheadline)
@@ -440,20 +430,21 @@ struct CSVImportPreviewSheet: View {
                         HStack {
                             Text("Categorias")
                                 .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                             Spacer()
                             Text("\(Set(expenses.map(\.category)).count)")
                                 .font(.subheadline)
+                                .monospacedDigit()
                         }
                     }
-                    .padding(Spacing.cardPadding)
-                    .modernGlassCard()
+                    .padding(20)
+                    .glassCard(cornerRadius: CornerRadius.xlarge)
 
                     // Preview list
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("Vista previa")
                             .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.textSecondary)
                             .padding(.horizontal, Spacing.xxs)
 
                         ForEach(Array(expenses.prefix(10).enumerated()), id: \.offset) { _, expense in
@@ -466,11 +457,11 @@ struct CSVImportPreviewSheet: View {
                                     HStack(spacing: Spacing.xs) {
                                         Text(expense.category)
                                             .font(.caption)
-                                            .foregroundStyle(.secondary)
+                                            .foregroundStyle(Color.textSecondary)
 
                                         Text(Formatters.displayDate(expense.date))
                                             .font(.caption)
-                                            .foregroundStyle(.tertiary)
+                                            .foregroundStyle(Color.textTertiary)
                                     }
                                 }
 
@@ -478,23 +469,26 @@ struct CSVImportPreviewSheet: View {
 
                                 Text(Formatters.currency(expense.amount))
                                     .font(.body.weight(.semibold))
+                                    .monospacedDigit()
                                     .foregroundStyle(.primary)
                             }
                             .padding(Spacing.sm)
-                            .background(Color.white.opacity(0.03))
-                            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.small))
+                            .background(
+                                Color.primary.opacity(0.05),
+                                in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous)
+                            )
                         }
 
                         if expenses.count > 10 {
                             Text("y \(expenses.count - 10) gastos mas...")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.textSecondary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, Spacing.xxs)
                         }
                     }
-                    .padding(Spacing.cardPadding)
-                    .modernGlassCard()
+                    .padding(20)
+                    .glassCard(cornerRadius: CornerRadius.large)
 
                     // Action buttons
                     VStack(spacing: Spacing.sm) {
@@ -509,30 +503,23 @@ struct CSVImportPreviewSheet: View {
                                     Image(systemName: "square.and.arrow.down")
                                 }
                                 Text("Importar \(expenses.count) gastos")
-                                    .font(.body.weight(.semibold))
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: Spacing.buttonHeight)
-                            .background(Color.orange)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: Spacing.buttonRadius))
                         }
+                        .buttonStyle(.principalClarity)
                         .disabled(isImporting)
 
                         Button {
                             onCancel()
                         } label: {
                             Text("Cancelar")
-                                .font(.body.weight(.medium))
-                                .frame(maxWidth: .infinity)
-                                .frame(height: Spacing.buttonHeight)
-                                .foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.secundarioClarity)
                         .disabled(isImporting)
                     }
                 }
                 .padding(Spacing.md)
             }
+            .fondoClarity()
             .navigationTitle("Importar CSV")
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(isImporting)
@@ -556,7 +543,7 @@ struct BackupRow: View {
 
                     Text(backup.timestamp, style: .time)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
 
                 Spacer()
@@ -565,28 +552,22 @@ struct BackupRow: View {
                     onRestore()
                 } label: {
                     Text(String(localized: "backup.restore.button", defaultValue: "Restaurar"))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Color.blue)
-                        .clipShape(Capsule())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.secundarioClarity)
             }
 
             HStack(spacing: 16) {
                 Label("\(backup.expenseCount)", systemImage: "dollarsign.circle.fill")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
 
                 Label("\(backup.categoryCount)", systemImage: "folder.fill")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
 
                 Label(ByteCountFormatter.string(fromByteCount: Int64(backup.size), countStyle: .file), systemImage: "doc.fill")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {

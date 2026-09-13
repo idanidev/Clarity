@@ -45,22 +45,23 @@ struct CategoriesManagementView: View {
                 HStack {
                     Text("\(userDataManager.categories.count) categorías")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .textCase(nil)
                     Spacer()
                     let totalSubs = userDataManager.categories.reduce(0) { $0 + $1.subcategories.count }
                     Text("\(totalSubs) subcategorías")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .textCase(nil)
                 }
             } footer: {
                 Text("Mantén pulsado para reordenar. Desliza para eliminar.")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.textTertiary)
             }
         }
         .listStyle(.insetGrouped)
+        .fondoClarity()
         .trackScreen("categorias")
         .navigationTitle(String(localized: "categories.navigationTitle", defaultValue: "Categorías"))
         .navigationBarTitleDisplayMode(.large)
@@ -191,12 +192,14 @@ private struct CategoryRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            // Tile con color + emoji
+            // Círculo con color + emoji, como las categorías de la Home. Dibujado
+            // aquí y no con `CirculoIconoClarity` porque ese oculta el emoji a
+            // VoiceOver y la inicial de respaldo va en el color de la categoría.
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(color.opacity(0.18))
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(color.opacity(0.4), lineWidth: 1)
+                Circle()
+                    .fill(color.opacity(0.22))
+                Circle()
+                    .strokeBorder(color.opacity(0.5), lineWidth: 0.5)
                 if let emoji = parsed.emoji {
                     // Solo el PRIMER emoji-cluster: si la categoría tenía varios
                     // (ej. "Coche-Moto🚗🏍️"), evita overflow + "..." en el tile 44pt.
@@ -226,7 +229,7 @@ private struct CategoryRow: View {
                         .frame(width: 6, height: 6)
                     Text("\(category.subcategories.count) \(category.subcategories.count == 1 ? "subcategoría" : "subcategorías")")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
             }
 

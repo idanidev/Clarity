@@ -50,7 +50,7 @@ struct AddCategoryView: View {
                     if nameContainsForbiddenChars {
                         Label(String(localized: "addCategory.forbiddenChars", defaultValue: "No puedes usar: / ~ * [ ]"), systemImage: "exclamationmark.triangle.fill")
                             .font(.caption)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.error)
                     }
                 }
 
@@ -106,7 +106,7 @@ struct AddCategoryView: View {
                                     }
                                 } label: {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(Color.success)
                                         .font(.title3)
                                 }
                             }
@@ -139,7 +139,7 @@ struct AddCategoryView: View {
                                 }
                             } label: {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Color.success)
                                     .font(.title3)
                             }
                             .disabled(newSubcategoryName.isEmpty)
@@ -151,7 +151,7 @@ struct AddCategoryView: View {
                                 }
                             } label: {
                                 Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Color.textSecondary)
                                     .font(.title3)
                             }
                         }
@@ -167,6 +167,7 @@ struct AddCategoryView: View {
                     }
                 }
             }
+            .fondoClarity()
             .navigationTitle(String(localized: "addCategory.navigationTitle", defaultValue: "Nueva Categoría"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

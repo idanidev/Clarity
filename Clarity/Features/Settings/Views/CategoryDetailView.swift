@@ -50,11 +50,11 @@ struct CategoryDetailView: View {
             // ── Nombre ──
             Section {
                 HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(color.opacity(0.18))
+                    Circle()
+                        .fill(color.opacity(0.22))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .strokeBorder(color.opacity(0.4), lineWidth: 1)
+                            Circle()
+                                .strokeBorder(color.opacity(0.5), lineWidth: 0.5)
                         )
                         .frame(width: 36, height: 36)
 
@@ -76,15 +76,15 @@ struct CategoryDetailView: View {
                     HStack(alignment: .top, spacing: 6) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.warning)
                         Text("Caracteres no permitidos: \(forbiddenCharsInName.map { String($0) }.joined(separator: " "))")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.warning)
                     }
                 } else if nameHasChanged {
                     Text(String(localized: "categoryDetail.nameChanged.info", defaultValue: "Los gastos existentes se actualizarán al nuevo nombre."))
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                 }
             }
 
@@ -93,7 +93,7 @@ struct CategoryDetailView: View {
                 if subcategories.isEmpty {
                     Text("Sin subcategorías. Añade la primera abajo ↓")
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 8)
                         .listRowBackground(Color.clear)
@@ -160,7 +160,7 @@ struct CategoryDetailView: View {
                     Text(String(localized: "categoryDetail.subcategories.header", defaultValue: "Subcategorías"))
                     Spacer()
                     Text("\(subcategories.count)")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                         .monospacedDigit()
                 }
             } footer: {
@@ -186,6 +186,7 @@ struct CategoryDetailView: View {
                     .font(.caption2)
             }
         }
+        .fondoClarity()
         .navigationTitle(String(localized: "categoryDetail.navigationTitle", defaultValue: "Editar Categoría"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -52,7 +52,7 @@ struct SalarySettingsStandaloneView: View {
             .padding(.top, 8)
             .padding(.bottom, 32)
         }
-        .background(Color(.systemGroupedBackground))
+        .fondoClarity()
         .navigationTitle("Nóminas")
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
@@ -60,7 +60,7 @@ struct SalarySettingsStandaloneView: View {
                 if isSaving {
                     ProgressView().scaleEffect(0.8)
                 } else if saveSuccess {
-                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.success)
                 } else {
                     Button("Guardar") { save() }
                         .fontWeight(.bold)
@@ -99,17 +99,15 @@ struct SalarySettingsStandaloneView: View {
         VStack(spacing: 0) {
             VStack(spacing: 6) {
                 Text("Sueldo base mensual")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
+                    .estiloEtiquetaClarity()
 
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
                     Text("€")
                         .scaledFont(size: 28, weight: .semibold, design: .rounded)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.textSecondary)
                     TextField("0", text: $editingIncome)
                         .scaledFont(size: 52, weight: .bold, design: .rounded)
+                        .monospacedDigit()
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.center)
                         .minimumScaleFactor(0.5)
@@ -129,7 +127,7 @@ struct SalarySettingsStandaloneView: View {
                         ? "El presupuesto se crea automáticamente cada mes"
                         : "Te preguntaremos tus ingresos al inicio de cada mes")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -141,8 +139,7 @@ struct SalarySettingsStandaloneView: View {
             }
         }
         .padding(.horizontal, 20)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .glassCard(cornerRadius: CornerRadius.xlarge)
     }
 
     // MARK: - History (year navigator + grid + stats)
@@ -150,8 +147,8 @@ struct SalarySettingsStandaloneView: View {
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Historial").font(.headline)
-                Spacer()
+                // La cabecera ya lleva su propio Spacer: empuja el año a la derecha.
+                CabeceraSeccionClarity(titulo: String(localized: "Historial"))
                 yearNavigator
             }
 
@@ -173,7 +170,7 @@ struct SalarySettingsStandaloneView: View {
                 Image(systemName: "chevron.left")
                     .font(.subheadline.weight(.semibold))
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
+                    .background(Circle().fill(Color.clarityPrimary.opacity(0.16)))
             }
             .disabled(!canGoOlder)
             .opacity(canGoOlder ? 1 : 0.3)
@@ -190,7 +187,7 @@ struct SalarySettingsStandaloneView: View {
                 Image(systemName: "chevron.right")
                     .font(.subheadline.weight(.semibold))
                     .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color(.tertiarySystemGroupedBackground)))
+                    .background(Circle().fill(Color.clarityPrimary.opacity(0.16)))
             }
             .disabled(!canGoNewer)
             .opacity(canGoNewer ? 1 : 0.3)
@@ -224,18 +221,16 @@ struct SalarySettingsStandaloneView: View {
         }
         .padding(.vertical, 14)
         .padding(.horizontal, 8)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassCard(cornerRadius: CornerRadius.large)
     }
 
     private func statItem(label: String, value: String) -> some View {
         VStack(spacing: 4) {
             Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
+                .estiloEtiquetaClarity()
             Text(value)
                 .font(.system(.callout, design: .rounded, weight: .semibold))
+                .monospacedDigit()
                 .minimumScaleFactor(0.6)
                 .lineLimit(1)
         }
@@ -339,49 +334,58 @@ private struct MonthBudgetCell: View {
         return f.shortMonthSymbols[month - 1].capitalized
     }
 
-    private var bgColor: Color {
-        if isCurrent { return Color.clarityPrimary }
-        if budget != nil { return Color(.secondarySystemGroupedBackground) }
-        return Color(.tertiarySystemGroupedBackground)
-    }
-
     private var primaryFg: Color {
-        if isCurrent { return .white }
-        if isFuture { return Color(.tertiaryLabel) }
-        return budget != nil ? .primary : .secondary
+        if isFuture { return Color.textTertiary }
+        return budget != nil ? Color.primary : Color.textSecondary
     }
 
     var body: some View {
-        VStack(spacing: 6) {
+        let contenido = VStack(spacing: 6) {
             Text(monthAbbr)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(isCurrent ? Color.white.opacity(0.9) : .secondary)
+                .foregroundStyle(isCurrent ? Color.clarityPrimary : Color.textSecondary)
 
             if let budget {
                 Text("\(Int(budget.income))€")
                     .font(.system(.subheadline, design: .rounded, weight: .semibold))
+                    .monospacedDigit()
                     .foregroundStyle(primaryFg)
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
             } else {
                 Image(systemName: isFuture ? "lock" : "plus")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isFuture ? Color(.tertiaryLabel) : Color.secondary.opacity(0.7))
+                    .foregroundStyle(isFuture ? Color.textTertiary : Color.textSecondary)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(bgColor)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(
-                    budget == nil && !isFuture && !isCurrent ? Color(.systemGray4).opacity(0.6) : Color.clear,
-                    style: StrokeStyle(lineWidth: 1, dash: [3, 3])
-                )
-        )
+
+        // Mes en curso y meses con nómina, en vidrio (el actual teñido de marca).
+        // Los que faltan, sin vidrio: contorno discontinuo si se pueden rellenar
+        // y un velo apagado si aún no han llegado.
+        Group {
+            if isCurrent {
+                contenido
+                    .glassCard(cornerRadius: CornerRadius.small, tint: Color.clarityPrimary)
+            } else if budget != nil {
+                contenido
+                    .glassCard(cornerRadius: CornerRadius.small)
+            } else {
+                contenido
+                    .background(
+                        RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous)
+                            .fill(isFuture ? Color.primary.opacity(0.05) : Color.clear)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous)
+                            .strokeBorder(
+                                isFuture ? Color.clear : Color.textTertiary,
+                                style: StrokeStyle(lineWidth: 1, dash: [3, 3])
+                            )
+                    )
+            }
+        }
         .opacity(isFuture ? 0.55 : 1.0)
         .contentShape(Rectangle())
     }
