@@ -7,48 +7,147 @@ struct ResumenPage: View {
     @Bindable var viewModel: HomeViewModel
     /// Hueco de la barra de navegación, medido por quien presenta la página.
     var margenSuperior: CGFloat = 0
+    /// Cambia cuando otra tarjeta pide bajar hasta la lista de gastos.
+    var irALista: Int = 0
     let onEditar: (Expense) -> Void
-    let onVerGastos: () -> Void
     let onDestino: (HomeDestino) -> Void
 
+    /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
+    @State private var plegadas: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expenses.collapsedCategories") ?? [])
+
     var body: some View {
-        ScrollView {
-            LazyVStack(spacing: Spacing.md) {
+        // Una sola `List`: las tarjetas arriba y los gastos debajo, en el mismo
+        // desplazamiento. Es `List` y no `ScrollView` para conservar deslizar
+        // para borrar y el menú contextual de cada gasto, que son del sistema.
+        ScrollViewReader { proxy in
+            List {
                 let r = viewModel.resumen
 
-                // El total lleva a Gráficas: es donde se desmenuza.
-                Button { onDestino(.graficas) } label: {
-                    HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior)
-                }
-                .buttonStyle(TarjetaButtonStyle())
-                .entrada()
-
-                if let a = r.slots[.a] { slot(a).entrada() }
-
-                if r.slots[.b] != nil || r.slots[.c] != nil {
-                    HStack(alignment: .top, spacing: Spacing.xs) {
-                        if let b = r.slots[.b] { slot(b, compacta: true) }
-                        if let c = r.slots[.c] { slot(c, compacta: true) }
+                Group {
+                    // El total lleva a Gráficas: es donde se desmenuza.
+                    Button { onDestino(.graficas) } label: {
+                        HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior)
                     }
-                    .entrada()
+                    .buttonStyle(TarjetaButtonStyle())
+
+                    if let a = r.slots[.a] { slot(a) }
+
+                    if r.slots[.b] != nil || r.slots[.c] != nil {
+                        HStack(alignment: .top, spacing: Spacing.xs) {
+                            if let b = r.slots[.b] { slot(b, compacta: true) }
+                            if let c = r.slots[.c] { slot(c, compacta: true) }
+                        }
+                    }
+
+                    UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
+
+                    if let e = r.slots[.e] { slot(e) }
                 }
+                .entrada()
+                .filaDeTarjeta()
 
-                CategoriasCard(grupos: viewModel.gruposDelMes, gastos: viewModel.gastosDelMes, total: r.total, numero: r.numeroGastos, onVerGastos: onVerGastos)
-                    .entrada()
+                listaDeGastos(total: r.total)
 
-                UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
-                    .entrada()
-
-                if let e = r.slots[.e] { slot(e).entrada() }
-
-                Color.clear.frame(height: 16)
+                Color.clear.frame(height: 12).filaDeTarjeta()
             }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.top, Spacing.xs)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .contentMargins(.top, margenSuperior, for: .scrollContent)
+            .scrollIndicators(.hidden)
+            .onChange(of: irALista) { _, _ in
+                withAnimation(.snappy) { proxy.scrollTo("lista", anchor: .top) }
+            }
         }
-        .contentMargins(.top, margenSuperior, for: .scrollContent)
-        .scrollIndicators(.hidden)
         .trackScreen("home")
+    }
+
+    // MARK: - Gastos del mes, por categoría
+
+    @ViewBuilder
+    private func listaDeGastos(total: Double) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Gastos del mes").font(.title3.weight(.bold))
+            Spacer()
+            if viewModel.selectedFilter.hasActiveFilters {
+                Label("Filtrado", systemImage: "line.3.horizontal.decrease.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.clarityPrimary)
+            } else {
+                Text("\(viewModel.filteredExpenses.count) gastos").font(.caption).foregroundStyle(Color.textSecondary)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, Spacing.sm)
+        .id("lista")
+        .filaDeTarjeta()
+
+        if viewModel.categoryGroups.isEmpty {
+            Text("Ningún gasto con este filtro.")
+                .font(.subheadline)
+                .foregroundStyle(Color.textSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Spacing.lg)
+                .filaDeTarjeta()
+        }
+
+        ForEach(viewModel.categoryGroups) { grupo in
+            CabeceraCategoria(grupo: grupo, total: viewModel.totalFilteredAmount, plegada: plegadas.contains(grupo.id)) {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    if plegadas.contains(grupo.id) { plegadas.remove(grupo.id) } else { plegadas.insert(grupo.id) }
+                }
+                UserDefaults.standard.set(Array(plegadas), forKey: "expenses.collapsedCategories")
+                HapticManager.shared.selection()
+            }
+            // Mantener pulsada la categoría enseña su detalle entero sin salir.
+            .contextMenu {
+                Button {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        if plegadas.contains(grupo.id) { plegadas.remove(grupo.id) } else { plegadas.insert(grupo.id) }
+                    }
+                } label: {
+                    Label(plegadas.contains(grupo.id) ? "Desplegar" : "Plegar",
+                          systemImage: plegadas.contains(grupo.id) ? "chevron.down" : "chevron.up")
+                }
+            } preview: {
+                CategoriaDetalleView(grupo: grupo, gastos: viewModel.gastosDelMes, total: total)
+                    .frame(width: 360, height: 520)
+            }
+            .filaDeTarjeta(arriba: 10)
+
+            if !plegadas.contains(grupo.id) {
+                ForEach(grupo.subcategories) { sub in
+                    if grupo.subcategories.count > 1 {
+                        CabeceraSubcategoria(nombre: sub.name, total: sub.totalAmount)
+                            .filaDeTarjeta(arriba: 2, abajo: 0)
+                    }
+                    ForEach(sub.expenses, id: \.stableId) { gasto in
+                        FilaGasto(gasto: gasto, color: grupo.color)
+                            .contentShape(Rectangle())
+                            .onTapGesture { onEditar(gasto) }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button(role: .destructive) {
+                                    Task { await viewModel.deleteExpense(gasto) }
+                                } label: { Label("Borrar", systemImage: "trash") }
+                                Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
+                                    .tint(Color.clarityPrimary)
+                            }
+                            // Mantener pulsado: la ficha del gasto y sus acciones.
+                            .contextMenu {
+                                Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
+                                Button {
+                                    Task { try? await viewModel.duplicateExpense(gasto) }
+                                } label: { Label("Duplicar", systemImage: "plus.square.on.square") }
+                                Button(role: .destructive) {
+                                    Task { await viewModel.deleteExpense(gasto) }
+                                } label: { Label("Borrar", systemImage: "trash") }
+                            } preview: {
+                                GastoPreview(gasto: gasto, color: grupo.color)
+                            }
+                            .filaDeTarjeta(arriba: 3, abajo: 3)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -144,7 +243,13 @@ private struct HeroCard: View {
                 Dato("Media diaria", Formatters.currency(resumen.ritmo.mediaDiaria))
                 Dato(resumen.presupuesto != nil ? "Previsión" : "Gastos",
                      resumen.presupuesto != nil ? Formatters.currency(resumen.ritmo.prevision) : "\(resumen.numeroGastos)")
-                Dato("Quedan", "\(resumen.ritmo.diasRestantes) días")
+                if let porDia = resumen.disponiblePorDia {
+                    // Lo libre repartido entre los días que quedan: es lo que
+                    // sirve para decidir, no cuántos días faltan.
+                    Dato("Al día", Formatters.currency(porDia))
+                } else {
+                    Dato("Quedan", "\(resumen.ritmo.diasRestantes) días")
+                }
             }
         }
         .padding(20)
@@ -414,67 +519,6 @@ private struct SlotCard: View {
 
 // MARK: - Categorías y últimos
 
-private struct CategoriasCard: View {
-    let grupos: [CategoryGroup]
-    let gastos: [Expense]
-    let total: Double
-    let numero: Int
-    let onVerGastos: () -> Void
-    @Namespace private var zoom
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Por categoría").font(.subheadline.weight(.semibold))
-                Spacer()
-                // La lista completa es la tercera página: esta tarjeta es el
-                // resumen y aquella el detalle.
-                Button(action: onVerGastos) {
-                    HStack(spacing: 3) {
-                        Text("\(numero) gastos")
-                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
-                    }
-                    .font(.caption).foregroundStyle(Color.clarityPrimary)
-                }
-            }
-            .padding(.bottom, 12)
-
-            ForEach(Array(grupos.prefix(5).enumerated()), id: \.element.id) { i, g in
-                if i > 0 { Divider().padding(.leading, 44).padding(.vertical, 10) }
-                // La fila crece hasta ser la pantalla de detalle de la categoría
-                // y vuelve a encogerse al salir (iOS 18; en 17, push normal).
-                NavigationLink {
-                    CategoriaDetalleView(grupo: g, gastos: gastos, total: total)
-                        .transicionZoom(id: g.id, en: zoom)
-                } label: {
-                    HStack(spacing: 12) {
-                        ZStack {
-                            Circle().fill(g.color.opacity(0.2))
-                            Circle().strokeBorder(g.color.opacity(0.45), lineWidth: 0.5)
-                            EmojiDeCategoria(emoji: g.emoji, nombre: g.name, color: g.color, tamano: 15)
-                        }
-                        .frame(width: 32, height: 32)
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text(g.name.nombreSinEmoji).font(.subheadline.weight(.medium)).lineLimit(1)
-                                Spacer()
-                                Text(Formatters.currency(g.totalAmount)).font(.subheadline.weight(.semibold))
-                            }
-                            Barra(progreso: total > 0 ? g.totalAmount / total : 0, color: g.color, alto: 3)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .origenZoom(id: g.id, en: zoom)
-            }
-        }
-        .padding(16)
-        .ondaAlTocar()
-        .glassCard()
-    }
-}
-
 private struct UltimosCard: View {
     let gastos: [Expense]
     let onEditar: (Expense) -> Void
@@ -547,6 +591,137 @@ struct EmojiDeCategoria: View {
             Circle().fill(color).frame(width: tamano * 0.55, height: tamano * 0.55)
         } else {
             Text(e).font(.system(size: tamano))
+        }
+    }
+}
+
+// MARK: - Filas de la lista
+
+private extension View {
+    /// Fila sin fondo ni separador: la lista solo pinta lo nuestro.
+    func filaDeTarjeta(arriba: CGFloat = 6, abajo: CGFloat = 6) -> some View {
+        listRowBackground(Color.clear)
+            .listRowSeparator(.hidden)
+            .listRowInsets(EdgeInsets(top: arriba, leading: Spacing.sm, bottom: abajo, trailing: Spacing.sm))
+    }
+}
+
+/// Cabecera de categoría: emoji, nombre, peso en el mes, total y un chevron que
+/// gira al plegar.
+private struct CabeceraCategoria: View {
+    let grupo: CategoryGroup
+    let total: Double
+    let plegada: Bool
+    let onToggle: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle().fill(grupo.color.opacity(0.22))
+                    Circle().strokeBorder(grupo.color.opacity(0.5), lineWidth: 0.5)
+                    EmojiDeCategoria(emoji: grupo.emoji, nombre: grupo.name, color: grupo.color, tamano: 16)
+                }
+                .frame(width: 36, height: 36)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(grupo.name.nombreSinEmoji).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                        Text(grupo.expenseCount == 1 ? "1 gasto" : "\(grupo.expenseCount) gastos")
+                            .font(.caption).foregroundStyle(Color.textSecondary)
+                        Spacer()
+                        Text(Formatters.currency(grupo.totalAmount))
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(grupo.color)
+                            .contentTransition(.numericText(value: grupo.totalAmount))
+                    }
+                    Barra(progreso: total > 0 ? grupo.totalAmount / total : 0, color: grupo.color, alto: 3)
+                }
+
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.textTertiary)
+                    .rotationEffect(.degrees(plegada ? -90 : 0))
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .glassCard(cornerRadius: CornerRadius.medium)
+        }
+        .buttonStyle(TarjetaButtonStyle())
+    }
+}
+
+private struct CabeceraSubcategoria: View {
+    let nombre: String
+    let total: Double
+
+    var body: some View {
+        HStack {
+            Text(nombre.isEmpty ? "Sin subcategoría" : nombre).font(.caption.weight(.medium)).foregroundStyle(Color.textSecondary)
+            Spacer()
+            Text(Formatters.currency(total)).font(.caption).foregroundStyle(Color.textSecondary)
+        }
+        .padding(.horizontal, 10).padding(.top, 4)
+    }
+}
+
+private struct FilaGasto: View {
+    let gasto: Expense
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 12) {
+            RoundedRectangle(cornerRadius: 1.5).fill(color.opacity(0.7)).frame(width: 3, height: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(gasto.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                Text("\(Formatters.shortDisplay(gasto.date)) · \(gasto.paymentMethod)")
+                    .font(.caption).foregroundStyle(Color.textSecondary).lineLimit(1)
+            }
+            Spacer()
+            Text(Formatters.currency(gasto.amount)).font(.subheadline.weight(.semibold))
+        }
+        .padding(.horizontal, 12).padding(.vertical, 10)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous))
+    }
+}
+
+/// La ficha que sale al mantener pulsado un gasto.
+private struct GastoPreview: View {
+    let gasto: Expense
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(gasto.category.nombreSinEmoji.uppercased())
+                    .font(.caption2.weight(.semibold)).tracking(0.6)
+                    .foregroundStyle(color)
+                Spacer()
+                Text(Formatters.shortDisplay(gasto.date)).font(.caption).foregroundStyle(Color.textSecondary)
+            }
+            Text(gasto.name).font(.title3.weight(.semibold)).lineLimit(2)
+            Text(Formatters.currency(gasto.amount))
+                .font(.system(size: 40, weight: .bold, design: .rounded))
+                .tracking(-1)
+            Divider()
+            fila("Subcategoría", gasto.subcategory ?? "—")
+            fila("Pago", gasto.paymentMethod)
+            if let deudores = gasto.debtors, !deudores.isEmpty {
+                fila("Te deben", deudores.filter { !$0.isPaid }.map(\.name).joined(separator: ", "))
+            }
+            if let notas = gasto.notes, !notas.isEmpty {
+                Text(notas).font(.footnote).foregroundStyle(Color.textSecondary).lineLimit(4)
+            }
+        }
+        .padding(20)
+        .frame(width: 320, alignment: .leading)
+        .background(Color(.secondarySystemBackground))
+    }
+
+    private func fila(_ titulo: String, _ valor: String) -> some View {
+        HStack {
+            Text(titulo).font(.footnote).foregroundStyle(Color.textSecondary)
+            Spacer()
+            Text(valor).font(.footnote.weight(.medium)).lineLimit(1)
         }
     }
 }

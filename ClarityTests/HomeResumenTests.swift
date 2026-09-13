@@ -102,6 +102,17 @@ struct HomeResumenTests {
         #expect(semana?.actual == 50)
     }
 
+    @Test("Disponible por día: lo libre repartido entre los días que quedan, hoy incluido")
+    func disponiblePorDia() {
+        let r = HomeResumen.build(gastos: [gasto(759.68, "Ocio", dia: 2)], gastosMesAnterior: [], metas: [],
+                                  recurrentes: [], presupuesto: 2080, primerGasto: nil, hoy: hoy, calendar: cal)
+        // Abril: 30 días, hoy 10 → quedan 20 más hoy = 21.
+        #expect(abs((r.disponiblePorDia ?? 0) - 1320.32 / 21) < 0.01)
+        let sinTope = HomeResumen.build(gastos: [gasto(10, "Ocio", dia: 2)], gastosMesAnterior: [], metas: [],
+                                        recurrentes: [], presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: cal)
+        #expect(sinTope.disponiblePorDia == nil)
+    }
+
     @Test("Un límite superado se marca como tal")
     func limiteSuperado() {
         let metas = [Goal(name: "Coche-Moto", type: .spendingLimit, targetAmount: 400, linkedCategoryId: "Coche-Moto")]

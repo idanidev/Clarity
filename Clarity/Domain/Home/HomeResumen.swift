@@ -144,6 +144,13 @@ nonisolated struct HomeResumen: Sendable {
     let diaMasCaro: DiaCaro?
 
     var libres: Double? { presupuesto.map { $0 - total } }
+
+    /// Lo que se puede gastar cada día, hoy incluido, sin pasarse del
+    /// presupuesto. Es el dato con el que se decide; "quedan 17 días" no lo es.
+    var disponiblePorDia: Double? {
+        guard let libres else { return nil }
+        return max(libres, 0) / Double(ritmo.diasRestantes + 1)
+    }
     var progresoPresupuesto: Double? { presupuesto.flatMap { $0 > 0 ? min(total / $0, 1) : nil } }
 
     // MARK: - Cálculo

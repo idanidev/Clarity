@@ -22,6 +22,8 @@ struct HomeView: View {
     @FocusState private var buscadorEnfocado: Bool
     /// Pantalla a la que se navega desde una tarjeta.
     @State private var rutaPush: HomeDestino?
+    /// Sube para pedir a Resumen que baje hasta la lista de gastos.
+    @State private var irALista = 0
     /// Para saltar a otra pestaña (Metas). Lo pone MainTabView, que es quien las tiene.
     var abrirPestana: (Int) -> Void = { _ in }
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
@@ -184,7 +186,9 @@ struct HomeView: View {
         HapticManager.shared.selection()
         switch destino {
         case .graficas: withAnimation(.snappy) { pagina = .graficas }
-        case .gastos: withAnimation(.snappy) { pagina = .gastos }
+        case .gastos:
+            withAnimation(.snappy) { pagina = .resumen }
+            irALista += 1
         case .metas: abrirPestana(1)
         case .recurrentes, .deudas: rutaPush = destino
         }
@@ -262,14 +266,12 @@ struct HomeView: View {
             ResumenPage(
                 viewModel: viewModel,
                 margenSuperior: margenSuperior,
+                irALista: irALista,
                 onEditar: { expenseToEdit = $0 },
-                onVerGastos: { withAnimation(.snappy) { pagina = .gastos } },
                 onDestino: irA
             )
         case .graficas:
             GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior, activa: pagina == .graficas)
-        case .gastos:
-            GastosPage(viewModel: viewModel, margenSuperior: margenSuperior, onEditar: { expenseToEdit = $0 })
         }
     }
 
@@ -404,7 +406,7 @@ enum HomeDestino: Hashable {
 // MARK: - Páginas
 
 enum HomePagina: CaseIterable, Identifiable, Hashable {
-    case resumen, graficas, gastos
+    case resumen, graficas
     var id: Self { self }
 }
 
