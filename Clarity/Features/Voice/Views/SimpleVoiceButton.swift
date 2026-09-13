@@ -46,7 +46,6 @@ struct SimpleVoiceButton: View {
                         .fill(buttonColor)
                         .frame(width: 56, height: 56)
                         .shadow(color: buttonColor.opacity(0.4), radius: 8)
-                        .vidrioDeBoton(tinte: buttonColor)
 
                     // Animación de pulso al grabar
                     if isRecording {
@@ -73,6 +72,10 @@ struct SimpleVoiceButton: View {
                             .symbolEffect(.variableColor.iterative, isActive: isRecording)
                     }
                 }
+                // El vidrio envuelve al botón entero, icono incluido. Puesto en el
+                // círculo de debajo, en iOS 26 el contenedor lo pintaba por encima
+                // del icono y el micro salía como un disco liso.
+                .vidrioDeBoton(tinte: buttonColor)
             }
             .disabled(isProcessing)
             .accessibilityLabel(

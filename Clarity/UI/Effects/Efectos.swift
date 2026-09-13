@@ -20,13 +20,20 @@ enum Shaders {
 // 2. Dentro de esa capa, `.secondary` y `.tertiary` —estilos vibrantes— se
 //    pintan transparentes. Texto secundario con `Color.textSecondary`, que es
 //    opacidad explícita y no depende de qué haya debajo.
+// 3. En iOS 26, sobre Liquid Glass, TODO el texto es vibrante —también el
+//    principal— y dentro de la capa desaparece entero: cifras, nombres, iconos.
+//    Ahí los shaders se apagan; el vidrio de iOS 26 ya responde al dedo solo.
 
 // MARK: - Onda desde el dedo
 
 extension View {
     /// Al tocar, una onda sale del punto exacto del dedo y la vista se
-    /// estremece. Shader Metal `onda` en Shaders.metal.
-    func ondaAlTocar() -> some View { modifier(OndaAlTocar()) }
+    /// estremece. Shader Metal `onda` en Shaders.metal. En iOS 26 no hace nada:
+    /// ver la regla 3 de arriba.
+    @ViewBuilder
+    func ondaAlTocar() -> some View {
+        if #available(iOS 26, *) { self } else { modifier(OndaAlTocar()) }
+    }
 }
 
 private struct OndaAlTocar: ViewModifier {
@@ -73,9 +80,10 @@ private struct OndaModifier: ViewModifier, Animatable {
 
 extension View {
     /// Un brillo recorre la vista una vez cada vez que `disparo` cambia.
-    /// Shader Metal `destello`.
+    /// Shader Metal `destello`. En iOS 26 no hace nada: regla 3.
+    @ViewBuilder
     func destello<T: Equatable>(cuando disparo: T) -> some View {
-        modifier(Destello(disparo: disparo))
+        if #available(iOS 26, *) { self } else { modifier(Destello(disparo: disparo)) }
     }
 }
 
