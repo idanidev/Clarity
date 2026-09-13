@@ -62,9 +62,11 @@ final class LocalRecurringExpenseManager {
 
             for recurring in activeExpenses {
                 // Verificar si expiró
-                if let endDate = recurring.endDate,
-                   let endDateObj = Formatters.date(from: endDate),
-                   today > endDateObj {
+                // Expira el día DESPUÉS del último cargo. Comparar con la fecha
+                // parseada fallaba: `endDate` es medianoche UTC, a media mañana
+                // `today` ya la había pasado y el último plazo no se cobraba nunca.
+                if let endDate = recurring.endDate, !endDate.isEmpty,
+                   currentDate > String(endDate.prefix(10)) {
                     logger.warning("⚠️ '\(recurring.name)' expirado. Desactivando...")
 
                     var updated = recurring
@@ -164,9 +166,9 @@ final class LocalRecurringExpenseManager {
             // un gasto y, si falta, créalo. Esto recupera trimestrales/semestrales/anuales perdidos.
             for recurring in activeAll {
                 // Verificar si expiró
-                if let endDate = recurring.endDate,
-                   let endDateObj = Formatters.date(from: endDate),
-                   today > endDateObj {
+                // Mismo criterio que al crear: el día del último cargo aún cuenta.
+                if let endDate = recurring.endDate, !endDate.isEmpty,
+                   Formatters.isoString(from: today) > String(endDate.prefix(10)) {
                     continue
                 }
 

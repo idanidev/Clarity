@@ -14,6 +14,19 @@ struct ResumenPage: View {
 
     /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
     @State private var plegadas: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expenses.collapsedCategories") ?? [])
+    @Environment(\.medidaBarraInferior) private var barra
+
+    /// Lo que suman los gastos con los filtros puestos, para enseñarlo bajo el
+    /// total del mes. `nil` sin filtros: el total grande sigue siendo el del mes
+    /// entero, que es contra el que se mide el presupuesto.
+    private var filtrado: HeroCard.Filtrado? {
+        guard viewModel.filtroActivo else { return nil }
+        return HeroCard.Filtrado(
+            total: viewModel.totalFilteredAmount,
+            gastos: viewModel.filteredExpenses.count,
+            nombre: viewModel.selectedFilter.name
+        )
+    }
 
     var body: some View {
         // Una sola `List`: las tarjetas arriba y los gastos debajo, en el mismo
@@ -26,7 +39,7 @@ struct ResumenPage: View {
                 Group {
                     // El total lleva a Gráficas: es donde se desmenuza.
                     Button { onDestino(.graficas) } label: {
-                        HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior)
+                        HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior, filtrado: filtrado)
                     }
                     .buttonStyle(TarjetaButtonStyle())
 
@@ -52,6 +65,9 @@ struct ResumenPage: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .contentMargins(.top, margenSuperior, for: .scrollContent)
+            // Llega hasta el borde y pasa por debajo de la barra de pestañas: el
+            // final deja su hueco y el de los puntos de página.
+            .contentMargins(.bottom, barra.total + 28, for: .scrollContent)
             .scrollIndicators(.hidden)
             .onChange(of: irALista) { _, _ in
                 withAnimation(.snappy) { proxy.scrollTo("lista", anchor: .top) }
@@ -67,7 +83,7 @@ struct ResumenPage: View {
         HStack(alignment: .firstTextBaseline) {
             Text("Gastos del mes").font(.title3.weight(.bold))
             Spacer()
-            if viewModel.selectedFilter.hasActiveFilters {
+            if viewModel.filtroActivo {
                 Label("Filtrado", systemImage: "line.3.horizontal.decrease.circle.fill")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(Color.clarityPrimary)
@@ -188,8 +204,19 @@ private extension View {
 // MARK: - Cabecera: total, presupuesto y ritmo
 
 private struct HeroCard: View {
+    /// Lo que suman los gastos con los filtros puestos.
+    struct Filtrado: Equatable {
+        let total: Double
+        let gastos: Int
+        /// El nombre del filtro guardado, si lo tiene ("Favs").
+        let nombre: String?
+    }
+
     let resumen: HomeResumen
     let mesAnterior: String
+    /// Con filtros, su total va debajo del total del mes. El grande sigue siendo
+    /// el del mes entero: es contra el que se miden el presupuesto y la previsión.
+    let filtrado: Filtrado?
     /// La cifra sube desde cero al aparecer: los dígitos ruedan hasta el total.
     @State private var mostrado = false
 
@@ -215,6 +242,32 @@ private struct HeroCard: View {
                 .animation(.snappy(duration: 0.5), value: resumen.total)
                 .padding(.top, 4)
                 .onAppear { mostrado = true }
+
+            if let filtrado {
+                // Lo filtrado debajo, en pequeño: responde a "¿y de lo que he
+                // filtrado, cuánto?" sin cambiar lo que mide el presupuesto.
+                HStack(spacing: 6) {
+                    Image(systemName: "line.3.horizontal.decrease.circle.fill")
+                        .foregroundStyle(Color.clarityPrimary)
+                    Text(filtrado.nombre ?? "Con tus filtros")
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                    Text("· \(filtrado.gastos == 1 ? "1 gasto" : "\(filtrado.gastos) gastos")")
+                        .foregroundStyle(Color.textSecondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(Formatters.currency(filtrado.total))
+                        .fontWeight(.semibold)
+                        .monospacedDigit()
+                        .contentTransition(.numericText(value: filtrado.total))
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.clarityPrimary.opacity(0.14), in: Capsule())
+                .padding(.top, 10)
+                .transition(.opacity)
+            }
 
             if let progreso = resumen.progresoPresupuesto, let libres = resumen.libres, let presupuesto = resumen.presupuesto {
                 Barra(progreso: progreso, color: .clarityPrimary)

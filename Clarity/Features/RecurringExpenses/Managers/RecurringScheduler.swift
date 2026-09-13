@@ -154,9 +154,9 @@ enum RecurringScheduler {
         guard effectiveDay <= currentDay else { return false }
 
         // ¿Expirada?
-        if let endDate = rule.endDate,
-           let endObj = Formatters.date(from: endDate),
-           today > endObj { return false }
+        // Por día, no por instante: el día del último cargo todavía se cobra.
+        if let endDate = rule.endDate, !endDate.isEmpty,
+           currentDate > String(endDate.prefix(10)) { return false }
 
         return true
     }

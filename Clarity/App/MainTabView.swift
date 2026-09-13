@@ -11,6 +11,9 @@ struct MainTabView: View {
     /// Sube cuando el control "Dictar gasto" abre la app: el micro arranca solo.
     @State private var arrancarVoz = 0
     @State private var showRecurring = false
+    /// Lo que ocupa la barra flotante. Cada pestaña deja ese hueco al final y el
+    /// carrusel de la Home, que llega hasta el borde, lo lee del entorno.
+    @State private var medidaBarra = MedidaBarraInferior(alto: 66, margenInferior: 34)
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     private var userDataManager = UserDataManager.shared
@@ -51,16 +54,18 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        ZStack {
-            // La barra de pestañas del diseño —píldora de vidrio con los cuatro
-            // iconos y el micro al lado— ocupa su sitio debajo del TabView. Se
-            // probó como inset del área segura y en iOS 26 el contenido de la
-            // pestaña no lo respetaba: pisaba la última fila y los puntos.
-            VStack(spacing: 0) {
+        // La barra de pestañas del diseño —píldora de vidrio con los cuatro
+        // iconos y el micro al lado— flota encima de las pestañas. Antes iba en
+        // su propia franja debajo del TabView y el contenido se cortaba en seco
+        // contra ella. Ahora cada pestaña deja su hueco como área segura desde
+        // dentro —puesto por fuera del TabView, iOS 26 no lo respetaba— y lo que
+        // pasa por debajo se funde con el velo.
+        ZStack(alignment: .bottom) {
             TabView(selection: $selectedTab) {
                 NavigationStack {
                     HomeView(viewModel: homeViewModel, abrirPestana: { selectedTab = $0 })
                 }
+                .huecoBarraInferior(medidaBarra.alto)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Image(systemName: "list.bullet")
@@ -71,6 +76,7 @@ struct MainTabView: View {
                 NavigationStack {
                     FinancialDashboardView()
                 }
+                .huecoBarraInferior(medidaBarra.alto)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Image(systemName: "target")
@@ -96,6 +102,7 @@ struct MainTabView: View {
                 NavigationStack {
                     SettingsView()
                 }
+                .huecoBarraInferior(medidaBarra.alto)
                 .toolbar(.hidden, for: .tabBar)
                 .tabItem {
                     Image(systemName: "gearshape.fill")
@@ -106,12 +113,21 @@ struct MainTabView: View {
             .tint(Color.clarityPrimary)
             .modifier(iPadTabViewModifier())
 
+            VeloBarraInferior(alto: medidaBarra.total + 30)
+
             barraInferior
-            }
-            // Detrás de todo, la aurora: el vidrio de la píldora necesita algo que
-            // refractar también en las pestañas con fondo propio.
-            .background(HomeFondo(mes: homeViewModel.selectedMonth))
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { medidaBarra.alto = $0 }
         }
+        // El área segura de abajo, medida desde algo que llega hasta el borde.
+        .background {
+            Color.clear
+                .ignoresSafeArea()
+                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { medidaBarra.margenInferior = $0 }
+        }
+        // Detrás de todo, la aurora: el vidrio de la píldora necesita algo que
+        // refractar también en las pestañas con fondo propio.
+        .background(HomeFondo(mes: homeViewModel.selectedMonth))
+        .environment(\.medidaBarraInferior, medidaBarra)
         // Sheets and alerts
         .sheet(isPresented: $showManualExpense) {
             AddExpenseSheet {

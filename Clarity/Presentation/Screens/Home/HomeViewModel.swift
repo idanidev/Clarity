@@ -22,6 +22,19 @@ enum HomeViewState: Equatable {
     }
 }
 
+/// Lo que la Home saca de los gastos del mes. Se resuelve una vez por cambio de
+/// datos, no en cada pintado: ver `HomeViewModel.derivados`.
+struct HomeDerivados {
+    let gastosDelMes: [Expense]
+    let gastosMesAnterior: [Expense]
+    let resumen: HomeResumen
+    let gruposDelMes: [CategoryGroup]
+    let ultimosGastos: [Expense]
+    let gastosPorDia: [(dia: Int, importe: Double)]
+    let comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)]
+    let semanasDelMes: [(etiqueta: String, importe: Double)]
+}
+
 @MainActor
 @Observable
 final class HomeViewModel {
@@ -44,18 +57,37 @@ final class HomeViewModel {
             guard !Calendar.current.isDate(
                 selectedMonth, equalTo: oldValue, toGranularity: .month) else { return }
 
+            // Un mes ya traído —y el anterior, que se precarga para la
+            // comparativa— se enseña al momento. Sin esto el mes salía vacío
+            // mientras llegaba de red: la Home cambiaba al cartel de "sin
+            // gastos" y se volvía a montar entera, y en Gráficas el anillo se
+            // quedaba con todos los sectores a cero y Swift Charts reventaba
+            // dividiendo entre cero.
+            if let enMemoria = mesesEnMemoria[Self.monthKey(selectedMonth)] {
+                currentMonthExpenses = enMemoria
+                if searchText.isEmpty { allExpenses = enMemoria }
+                cargandoMes = false
+            } else {
+                cargandoMes = true
+            }
+            invalidarDerivados()
+
             updateFilterForSelectedMonth()
 
             // Deslizar rápido varios meses deja peticiones en vuelo; sin
             // cancelar, la del mes que ya abandonaste puede llegar la última
             // y pisar la buena.
             monthChangeTask?.cancel()
+            let mes = selectedMonth
             monthChangeTask = Task { [weak self] in
                 guard let self, !Task.isCancelled else { return }
-                await self.loadMonthlyBudget(for: self.selectedMonth)
-                guard !Task.isCancelled else { return }
+                // Presupuesto y gastos a la vez: en serie, cada cambio de mes
+                // esperaba dos idas y vueltas a red antes de pedir los gastos.
+                async let presupuesto: Void = self.loadMonthlyBudget(for: mes)
                 await self.loadExpenses()
+                await presupuesto
                 guard !Task.isCancelled else { return }
+                self.cargandoMes = false
                 await self.loadMesAnterior()
             }
         }
@@ -85,15 +117,41 @@ final class HomeViewModel {
     var categoryGroups: [CategoryGroup] = []
     var filteredExpenses: [Expense] = []
     var dateFilteredExpenses: [Expense] = []  // For filtered view
-    var currentMonthExpenses: [Expense] = []  // Para cálculo de AHORROS (sin filtros)
-    var income: Double = 0
+    var currentMonthExpenses: [Expense] = [] {  // Para cálculo de AHORROS (sin filtros)
+        didSet { invalidarDerivados() }
+    }
+    var income: Double = 0 {
+        didSet { if income != oldValue { invalidarDerivados() } }
+    }
     var showAddExpense = false  // From DashboardViewModel
-    var currentMonthlyBudget: MonthlyBudget? = nil  // For savingsAllocated
+    var currentMonthlyBudget: MonthlyBudget? = nil {  // For savingsAllocated
+        didSet { invalidarDerivados() }
+    }
     var previousMonthlyBudget: MonthlyBudget? = nil  // Para cálculo de ahorros
 
     // Computed properties (from DashboardViewModel)
     var totalFilteredAmount: Double {
         filteredExpenses.reduce(0) { $0 + $1.amount }
+    }
+
+    /// Filtros de verdad: categorías, métodos de pago, importes o solo
+    /// recurrentes. Ni el rango de fechas ni el orden cuentan: el mes lo mueve
+    /// la barra, y contarlo hacía que la Home dijera "filtrado" en cuanto
+    /// cambiabas de mes.
+    var filtroActivo: Bool {
+        let f = selectedFilter
+        return !f.selectedCategories.isEmpty || !f.selectedPaymentMethods.isEmpty
+            || f.minAmount != nil || f.maxAmount != nil || f.showOnlyRecurring
+    }
+
+    /// Quita los filtros sin moverse del mes que se está viendo. Asignar un
+    /// `ExpenseFilter()` a secas volvía al mes actual aunque enseñaras otro, y
+    /// la lista se quedaba vacía.
+    func limpiarFiltros() {
+        selectedFilter = ExpenseFilter()
+        if !Calendar.current.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) {
+            updateFilterForSelectedMonth()
+        }
     }
 
     var calculatedSavings: Double {
@@ -224,7 +282,10 @@ final class HomeViewModel {
     var allExpenses: [Expense] = []
     /// All historical expenses (from cache, not paginated). Used by MonthComparison, Charts.
     private(set) var allHistoricalExpenses: [Expense] = [] {
-        didSet { _monthlyTotalsByKey = nil }  // invalidar memo
+        didSet {
+            _monthlyTotalsByKey = nil  // invalidar memo
+            invalidarDerivados()
+        }
     }
 
     /// Memo: gasto total agregado por "YYYY-MM". Se reconstruye cuando cambia
@@ -258,15 +319,52 @@ final class HomeViewModel {
         }
         return out
     }
-    var allRecurringRules: [RecurringExpense] = []  // Keep them for reference
+    var allRecurringRules: [RecurringExpense] = [] {  // Keep them for reference
+        didSet { invalidarDerivados() }
+    }
 
     // MARK: - Home nueva (#65)
 
     /// Límites y huchas. Se cargan aparte porque viven en otra colección.
-    private(set) var metas: [Goal] = []
+    private(set) var metas: [Goal] = [] {
+        didSet { invalidarDerivados() }
+    }
 
     func loadMetas() async {
         metas = (try? await financialService.fetchGoals()) ?? []
+    }
+
+    /// El mes anterior, cargado de red igual que el actual. Sin esto la
+    /// comparativa dependía del histórico de caché y en un dispositivo con la
+    /// caché vacía no salía nunca.
+    private(set) var gastosMesAnteriorCargados: [Expense] = [] {
+        didSet { invalidarDerivados() }
+    }
+
+    /// Mientras llegan de red los gastos de un mes que no estaba en memoria. En
+    /// ese rato la Home no cambia al cartel de "aún no has apuntado nada".
+    private(set) var cargandoMes = false
+
+    /// Gastos de cada mes ya traído, por "yyyy-MM".
+    @ObservationIgnored private var mesesEnMemoria: [String: [Expense]] = [:]
+
+    // MARK: Derivados
+
+    /// Sube con cada cambio en lo que alimenta la Home, y las vistas dependen de
+    /// esto. Antes `resumen` y compañía eran computadas: cada pintado recorría
+    /// los gastos varias veces y parseaba la fecha de todo el histórico, y eso
+    /// era buena parte del tirón al deslizar y al cambiar de mes.
+    private(set) var revisionDerivados = 0
+    @ObservationIgnored private var cacheDerivados: (revision: Int, valor: HomeDerivados)?
+
+    private func invalidarDerivados() { revisionDerivados &+= 1 }
+
+    private var derivados: HomeDerivados {
+        let revision = revisionDerivados
+        if let cache = cacheDerivados, cache.revision == revision { return cache.valor }
+        let valor = calcularDerivados()
+        cacheDerivados = (revision, valor)
+        return valor
     }
 
     /// Gastos del mes que se enseña, sin filtros.
@@ -276,25 +374,33 @@ final class HomeViewModel {
     /// dispositivo con la caché vacía se queda en cero— y la primera versión de
     /// esta pantalla tiraba de él: por eso no enseñaba nada. Queda como respaldo
     /// para meses distintos del cargado.
-    var gastosDelMes: [Expense] {
-        let key = Self.monthKey(selectedMonth)
-        let delMes = currentMonthExpenses.filter { $0.date.hasPrefix(key) }
-        if !delMes.isEmpty { return delMes }
-        return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
+    var gastosDelMes: [Expense] { derivados.gastosDelMes }
+
+    var gastosMesAnterior: [Expense] { derivados.gastosMesAnterior }
+
+    /// Todo lo que pinta la primera página, resuelto por `HomeResumen`.
+    var resumen: HomeResumen { derivados.resumen }
+
+    /// Los tres últimos del mes, el más reciente primero.
+    var ultimosGastos: [Expense] { derivados.ultimosGastos }
+
+    /// Importe por día del mes, con ceros en los días sin gasto.
+    var gastosPorDia: [(dia: Int, importe: Double)] { derivados.gastosPorDia }
+
+    /// Actual frente a anterior por categoría, las cuatro que más pesan este mes.
+    var comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)] {
+        derivados.comparativaPorCategoria
     }
 
-    /// El mes anterior, cargado de red igual que el actual. Sin esto la
-    /// comparativa dependía del histórico de caché y en un dispositivo con la
-    /// caché vacía no salía nunca.
-    private(set) var gastosMesAnteriorCargados: [Expense] = []
+    /// Totales por semana del mes, con su etiqueta "1–7".
+    var semanasDelMes: [(etiqueta: String, importe: Double)] { derivados.semanasDelMes }
 
-    var gastosMesAnterior: [Expense] {
-        guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
-        let key = Self.monthKey(prev)
-        let cargados = gastosMesAnteriorCargados.filter { $0.date.hasPrefix(key) }
-        if !cargados.isEmpty { return cargados }
-        return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
-    }
+    /// Las categorías del mes entero, sin el filtro de la lista. Resumen y
+    /// Gráficas cuentan sobre el total del mes; si sus categorías salieran
+    /// filtradas, los porcentajes dejarían de sumar y faltarían categorías
+    /// —con el filtro Favs activo desaparecía Vivienda, la de 650 €—.
+    /// El filtro sigue aplicando a la lista de gastos.
+    var gruposDelMes: [CategoryGroup] { derivados.gruposDelMes }
 
     /// "agosto", para los textos de la comparativa.
     var nombreMesAnterior: String {
@@ -313,14 +419,28 @@ final class HomeViewModel {
         filtro.customStartDate = start
         filtro.customEndDate = end
         let resultado = try? await getExpensesUseCase.executePaginated(page: 0, filter: filtro)
-        gastosMesAnteriorCargados = ExpenseSanitizer.sanitize(expenses: resultado?.expenses ?? [], rules: allRecurringRules)
+        let gastos = ExpenseSanitizer.sanitize(expenses: resultado?.expenses ?? [], rules: allRecurringRules)
+        // Queda en memoria: ir al mes anterior es lo más habitual y ya está aquí.
+        if resultado != nil { mesesEnMemoria[Self.monthKey(prev)] = gastos }
+        gastosMesAnteriorCargados = gastos
     }
 
-    /// Todo lo que pinta la primera página, resuelto por `HomeResumen`.
-    /// Computado a propósito: recalcularlo cuesta una pasada por los gastos del
-    /// mes y así nunca se queda desactualizado respecto a lo que lo alimenta.
-    var resumen: HomeResumen {
+    private func calcularDerivados() -> HomeDerivados {
         let cal = Calendar.current
+        let clave = Self.monthKey(selectedMonth)
+
+        let cargados = currentMonthExpenses.filter { $0.date.hasPrefix(clave) }
+        let gastos = cargados.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) } : cargados
+
+        let anteriores: [Expense] = {
+            guard let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
+            let k = Self.monthKey(prev)
+            let delAnterior = gastosMesAnteriorCargados.filter { $0.date.hasPrefix(k) }
+            if !delAnterior.isEmpty { return delAnterior }
+            if let enMemoria = mesesEnMemoria[k], !enMemoria.isEmpty { return enMemoria }
+            return allHistoricalExpenses.filter { $0.date.hasPrefix(k) }
+        }()
+
         // En un mes pasado no quedan días: el "hoy" del cálculo es su último día.
         let hoy: Date = {
             if cal.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) { return Date() }
@@ -329,10 +449,18 @@ final class HomeViewModel {
             else { return selectedMonth }
             return cal.date(byAdding: .day, value: range.count - 1, to: start) ?? selectedMonth
         }()
-        let primerGasto = allHistoricalExpenses.map(\.dateAsDate).min()
-        return HomeResumen.build(
-            gastos: gastosDelMes,
-            gastosMesAnterior: gastosMesAnterior,
+
+        // Las fechas son "yyyy-MM-dd": la menor como texto es la primera, sin
+        // parsear el histórico entero.
+        let primerGasto = allHistoricalExpenses.lazy
+            .map(\.date)
+            .filter { $0.count >= 10 }
+            .min()
+            .flatMap { Formatters.date(from: String($0.prefix(10))) }
+
+        let resumen = HomeResumen.build(
+            gastos: gastos,
+            gastosMesAnterior: anteriores,
             metas: metas,
             recurrentes: allRecurringRules,
             presupuesto: monthlyIncome > 0 ? monthlyIncome : nil,
@@ -340,47 +468,52 @@ final class HomeViewModel {
             hoy: hoy,
             calendar: cal
         )
-    }
 
-    /// Los tres últimos del mes, el más reciente primero.
-    var ultimosGastos: [Expense] {
-        Array(gastosDelMes.sorted { ($0.date, $0.createdAt ?? .distantPast) > ($1.date, $1.createdAt ?? .distantPast) }.prefix(3))
-    }
+        let ultimos = Array(gastos.sorted {
+            ($0.date, $0.createdAt ?? .distantPast) > ($1.date, $1.createdAt ?? .distantPast)
+        }.prefix(3))
 
-    /// Importe por día del mes, con ceros en los días sin gasto.
-    var gastosPorDia: [(dia: Int, importe: Double)] {
-        let cal = Calendar.current
-        let dias = cal.range(of: .day, in: .month, for: selectedMonth)?.count ?? 30
-        var porDia = [Double](repeating: 0, count: dias + 1)
-        for g in gastosDelMes {
-            let d = cal.component(.day, from: g.dateAsDate)
-            if d >= 1 && d <= dias { porDia[d] += g.amount }
+        // Día sacado del propio texto de la fecha: sin un DateFormatter por gasto.
+        let diasMes = cal.range(of: .day, in: .month, for: selectedMonth)?.count ?? 30
+        var importes = [Double](repeating: 0, count: diasMes + 1)
+        for g in gastos {
+            if let d = Int(g.date.dropFirst(8).prefix(2)), d >= 1, d <= diasMes { importes[d] += g.amount }
         }
-        return (1...dias).map { ($0, porDia[$0]) }
-    }
+        let porDia = (1...diasMes).map { (dia: $0, importe: importes[$0]) }
 
-    /// Actual frente a anterior por categoría, las cuatro que más pesan este mes.
-    var comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)] {
-        let actual = Dictionary(grouping: gastosDelMes, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
         // Mismo tramo del mes anterior, igual que la comparativa del resumen.
+        let actualPorCategoria = Dictionary(grouping: gastos, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
         let hastaDia = resumen.comparativa?.hastaDia ?? 31
-        let tramo = HomeResumen.mismoTramo(gastosMesAnterior, hastaDia: hastaDia, calendar: .current)
-        let anterior = Dictionary(grouping: tramo, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
-        return actual.sorted { $0.value > $1.value }.prefix(4)
-            .map { ($0.key, $0.value, anterior[$0.key] ?? 0) }
-    }
+        let tramo = HomeResumen.mismoTramo(anteriores, hastaDia: hastaDia, calendar: cal)
+        let anteriorPorCategoria = Dictionary(grouping: tramo, by: \.category).mapValues { $0.reduce(0) { $0 + $1.amount } }
+        let comparativa = actualPorCategoria.sorted { $0.value > $1.value }.prefix(4)
+            .map { (categoria: $0.key, actual: $0.value, anterior: anteriorPorCategoria[$0.key] ?? 0) }
 
-    /// Totales por semana del mes, con su etiqueta "1–7".
-    var semanasDelMes: [(etiqueta: String, importe: Double)] {
-        let cal = Calendar.current
-        var porSemana: [Int: (Int, Int, Double)] = [:]
-        for (dia, importe) in gastosPorDia {
-            guard let fecha = cal.date(bySetting: .day, value: dia, of: selectedMonth) else { continue }
-            let w = cal.component(.weekOfMonth, from: fecha)
-            let prev = porSemana[w] ?? (dia, dia, 0)
-            porSemana[w] = (min(prev.0, dia), max(prev.1, dia), prev.2 + importe)
+        // Semanas contadas desde el día 1 del mes. `date(bySetting:of:)` busca la
+        // siguiente fecha con ese día, y para los días anteriores al de
+        // `selectedMonth` saltaba al mes siguiente.
+        var semanas: [Int: (desde: Int, hasta: Int, importe: Double)] = [:]
+        if let inicioMes = cal.date(from: cal.dateComponents([.year, .month], from: selectedMonth)) {
+            for (dia, importe) in porDia {
+                guard let fecha = cal.date(byAdding: .day, value: dia - 1, to: inicioMes) else { continue }
+                let w = cal.component(.weekOfMonth, from: fecha)
+                let prev = semanas[w] ?? (dia, dia, 0)
+                semanas[w] = (min(prev.desde, dia), max(prev.hasta, dia), prev.importe + importe)
+            }
         }
-        return porSemana.keys.sorted().compactMap { porSemana[$0] }.map { ("\($0.0)–\($0.1)", $0.2) }
+        let semanasDelMes = semanas.keys.sorted().compactMap { semanas[$0] }
+            .map { (etiqueta: "\($0.desde)–\($0.hasta)", importe: $0.importe) }
+
+        return HomeDerivados(
+            gastosDelMes: gastos,
+            gastosMesAnterior: anteriores,
+            resumen: resumen,
+            gruposDelMes: agrupar(gastos),
+            ultimosGastos: ultimos,
+            gastosPorDia: porDia,
+            comparativaPorCategoria: Array(comparativa),
+            semanasDelMes: semanasDelMes
+        )
     }
 
     private static func monthKey(_ date: Date) -> String {
@@ -428,6 +561,7 @@ final class HomeViewModel {
                 }
             }
 
+            mesesEnMemoria.removeValue(forKey: String(expense.date.prefix(7)))
             await loadExpenses()
             WidgetDataManager.shared.updateFromExpenses(
                 currentMonthExpenses,
@@ -499,15 +633,24 @@ final class HomeViewModel {
         currentPage = 0
         hasMorePages = true
 
+        // El mes que se pide. Si mientras llega se cambia de mes, esta respuesta
+        // ya no manda: la del mes nuevo está en camino y pisarla enseñaría el
+        // mes equivocado.
+        let mesPedido = selectedMonth
+        func sigueSiendoElMes() -> Bool {
+            Calendar.current.isDate(selectedMonth, equalTo: mesPedido, toGranularity: .month)
+        }
+
         do {
             // Load budget for the SELECTED month (not necessarily current month)
             let calendar = Calendar.current
-            let selectedYear = calendar.component(.year, from: selectedMonth)
-            let selectedMonthNum = calendar.component(.month, from: selectedMonth)
+            let selectedYear = calendar.component(.year, from: mesPedido)
+            let selectedMonthNum = calendar.component(.month, from: mesPedido)
 
             do {
-                self.currentMonthlyBudget = try await financialService.fetchMonthlyBudget(
+                let presupuesto = try await financialService.fetchMonthlyBudget(
                     year: selectedYear, month: selectedMonthNum)
+                if sigueSiendoElMes() { self.currentMonthlyBudget = presupuesto }
             } catch {
                 logger.warning("⚠️ Failed to load monthly budget: \(error)")
             }
@@ -515,11 +658,11 @@ final class HomeViewModel {
             // Build a date-only filter for the selected month (no category/payment filters)
             // This is used ONLY to calculate real savings — unaffected by user filters
             let calendar2 = Calendar.current
-            let monthComponents = calendar2.dateComponents([.year, .month], from: selectedMonth)
-            let monthStart = calendar2.date(from: monthComponents) ?? selectedMonth
+            let monthComponents = calendar2.dateComponents([.year, .month], from: mesPedido)
+            let monthStart = calendar2.date(from: monthComponents) ?? mesPedido
             let monthEnd =
                 calendar2.date(byAdding: DateComponents(month: 1, day: -1), to: monthStart)
-                ?? selectedMonth
+                ?? mesPedido
             let monthOnlyFilter = ExpenseFilter(
                 dateRange: .custom,
                 customStartDate: monthStart,
@@ -549,12 +692,16 @@ final class HomeViewModel {
 
             let monthResult = try await monthExpensesTask
             let rules = (try? await rulesTask) ?? []
-            self.allRecurringRules = rules
 
             let sanitized = ExpenseSanitizer.sanitize(expenses: displayExpenses, rules: rules)
             let sanitizedMonth = ExpenseSanitizer.sanitize(
                 expenses: monthResult.expenses, rules: rules)
 
+            // En memoria aunque ya se haya cambiado de mes: volver será instantáneo.
+            mesesEnMemoria[Self.monthKey(mesPedido)] = sanitizedMonth
+            guard sigueSiendoElMes() else { return }
+
+            self.allRecurringRules = rules
             self.allExpenses = sanitized
             self.currentMonthExpenses = sanitizedMonth
             self.hasMorePages = morePages
@@ -632,6 +779,8 @@ final class HomeViewModel {
         if expense.date.hasPrefix(monthPrefix) {
             currentMonthExpenses.insert(expense, at: 0)
         }
+        // Lo guardado de ese mes ya no está completo: que se vuelva a pedir.
+        mesesEnMemoria.removeValue(forKey: String(expense.date.prefix(7)))
 
         // Keep UserDataManager in sync so GoalCardView / FinancialDashboard see the new expense
         UserDataManager.shared.expenses.insert(expense, at: 0)
@@ -649,6 +798,7 @@ final class HomeViewModel {
     func removeExpense(id: String) {
         allExpenses.removeAll { $0.id == id }
         currentMonthExpenses.removeAll { $0.id == id }
+        mesesEnMemoria.removeAll()
         UserDataManager.shared.expenses.removeAll { $0.id == id }
         applyFilters()
         WidgetDataManager.shared.updateFromExpenses(
@@ -774,13 +924,6 @@ final class HomeViewModel {
     private func buildCategoryGroups(from expenses: [Expense]) {
         self.categoryGroups = agrupar(expenses)
     }
-
-    /// Las categorías del mes entero, sin el filtro de la lista. Resumen y
-    /// Gráficas cuentan sobre el total del mes; si sus categorías salieran
-    /// filtradas, los porcentajes dejarían de sumar y faltarían categorías
-    /// —con el filtro Favs activo desaparecía Vivienda, la de 650 €—.
-    /// El filtro sigue aplicando a la página de Gastos.
-    var gruposDelMes: [CategoryGroup] { agrupar(gastosDelMes) }
 
     private func agrupar(_ expenses: [Expense]) -> [CategoryGroup] {
         var groups: [String: CategoryGroup] = [:]

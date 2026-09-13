@@ -11,25 +11,32 @@ struct GraficasPage: View {
     /// Si es la página visible. Al llegar a ella los gráficos se dibujan desde
     /// cero; al irse se reinician sin animación para dibujarse otra vez al volver.
     var activa: Bool = true
+    @Environment(\.medidaBarraInferior) private var barra
     @State private var evolucionMeses = 6
     /// 0 → 1 al entrar en la página. Todo lo que se dibuja cuelga de aquí.
     @State private var dibujado: Double = 0
 
     var body: some View {
         ScrollView {
+            // Las tarjetas ya no entran deslizándose una a una: moverlas movía su
+            // vidrio, que se recalculaba en cada frame, y era el tirón al llegar
+            // a la página. Lo que se anima es lo de dentro: el anillo se traza,
+            // las barras crecen y las cifras cuentan.
             LazyVStack(spacing: Spacing.md) {
-                reparto.aparece(dibujado, orden: 0)
-                porDia.aparece(dibujado, orden: 1)
-                if !viewModel.gastosMesAnterior.isEmpty { comparativa.aparece(dibujado, orden: 2) }
-                evolucion.aparece(dibujado, orden: 3)
-                calendario.aparece(dibujado, orden: 4)
-                semanas.aparece(dibujado, orden: 5)
-                Color.clear.frame(height: 16)
+                reparto
+                porDia
+                if !viewModel.gastosMesAnterior.isEmpty { comparativa }
+                evolucion
+                calendario
+                semanas
             }
             .padding(.horizontal, Spacing.sm)
             .padding(.top, Spacing.xs)
         }
         .contentMargins(.top, margenSuperior, for: .scrollContent)
+        // Llega hasta el borde y pasa por debajo de la barra de pestañas: el
+        // final deja su hueco y el de los puntos de página.
+        .contentMargins(.bottom, barra.total + 28, for: .scrollContent)
         .scrollIndicators(.hidden)
         .trackScreen("home_graficas")
         .onAppear { if activa { dibujar() } }
@@ -42,38 +49,43 @@ struct GraficasPage: View {
                 withTransaction(t) { dibujado = 0 }
             }
         }
-        // Cambiar de mes también redibuja.
-        .onChange(of: viewModel.selectedMonth) { _, _ in
-            guard activa else { return }
-            var t = Transaction()
-            t.disablesAnimations = true
-            withTransaction(t) { dibujado = 0 }
-            dibujar()
-        }
+        // Cambiar de mes ya no redibuja desde cero: las seis tarjetas a la vez
+        // era medio segundo de tirón con cada flecha.
     }
 
     private func dibujar() {
-        withAnimation(.spring(response: 0.9, dampingFraction: 0.82)) { dibujado = 1 }
+        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) { dibujado = 1 }
     }
 
     // Reparto por categoría
     private var reparto: some View {
         let datos = gruposParaAnillo(viewModel.gruposDelMes)
         let total = viewModel.resumen.total
+        let sectores = porciones(datos: datos, total: total)
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 18) {
                 ZStack {
-                    // El anillo se traza: cada sector crece con `dibujado` y un
-                    // sector transparente ocupa lo que falta hasta la vuelta
-                    // completa. De paso gira un cuarto hasta su posición.
-                    Chart(porciones(datos: datos, total: total)) { p in
-                        SectorMark(angle: .value("€", p.valor), innerRadius: .ratio(0.68), angularInset: p.relleno ? 0 : 1.5)
-                            .cornerRadius(p.relleno ? 0 : 3)
-                            .foregroundStyle(p.color)
+                    if sectores.isEmpty {
+                        // Nada que repartir: un anillo vacío. Un `Chart` con todos
+                        // los sectores a cero divide entre cero y Swift Charts
+                        // revienta ("Double value cannot be converted to Int").
+                        // Pasaba al ir a un mes que aún no había llegado de red.
+                        Circle()
+                            .strokeBorder(Color.primary.opacity(0.1), lineWidth: 24)
+                            .frame(width: 150, height: 150)
+                    } else {
+                        // El anillo se traza: cada sector crece con `dibujado` y un
+                        // sector transparente ocupa lo que falta hasta la vuelta
+                        // completa. De paso gira un cuarto hasta su posición.
+                        Chart(sectores) { p in
+                            SectorMark(angle: .value("€", p.valor), innerRadius: .ratio(0.68), angularInset: p.relleno ? 0 : 1.5)
+                                .cornerRadius(p.relleno ? 0 : 3)
+                                .foregroundStyle(p.color)
+                        }
+                        .chartLegend(.hidden)
+                        .frame(width: 150, height: 150)
+                        .rotationEffect(.degrees((1 - dibujado) * -120))
                     }
-                    .chartLegend(.hidden)
-                    .frame(width: 150, height: 150)
-                    .rotationEffect(.degrees((1 - dibujado) * -120))
                     VStack(spacing: 2) {
                         Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(Color.textSecondary)
                         Text(Formatters.currency(total * dibujado))
@@ -184,7 +196,7 @@ struct GraficasPage: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.primary.opacity(0.08))
-                Capsule().fill(color).frame(width: geo.size.width * p)
+                Capsule().fill(color).frame(width: geo.size.width * min(max(p, 0), 1))
                     .animation(.spring(response: 0.7, dampingFraction: 0.72).delay(retardo), value: p)
             }
         }
@@ -206,11 +218,20 @@ struct GraficasPage: View {
     }
 
     /// Los sectores del anillo más el relleno transparente que falta hasta
-    /// completarlo mientras se dibuja.
+    /// completarlo mientras se dibuja. Vacío cuando no hay nada que repartir.
+    ///
+    /// Las dos guardas son las del cierre al cambiar de mes: la suma de los
+    /// ángulos tiene que ser positiva —si no, Swift Charts divide entre cero—
+    /// y ningún sector negativo —`dibujado` sale de un muelle y puede pasarse
+    /// de 1 un instante—.
     private func porciones(datos: [CategoryGroup], total: Double) -> [Porcion] {
-        var out = datos.map { Porcion(id: $0.id, valor: $0.totalAmount * dibujado, color: $0.color, relleno: false) }
-        out.append(Porcion(id: "_relleno", valor: max(total, 1) * (1 - dibujado), color: .clear, relleno: true))
-        return out
+        let conGasto = datos.filter { $0.totalAmount > 0 && $0.totalAmount.isFinite }
+        guard !conGasto.isEmpty else { return [] }
+        let progreso = min(max(dibujado, 0), 1)
+        var out = conGasto.map { Porcion(id: $0.id, valor: $0.totalAmount * progreso, color: $0.color, relleno: false) }
+        out.append(Porcion(id: "_relleno", valor: max(total, 1) * (1 - progreso), color: .clear, relleno: true))
+        let suma = out.reduce(0) { $0 + $1.valor }
+        return suma > 0 && suma.isFinite ? out : []
     }
 
     // Últimos seis meses
@@ -281,16 +302,6 @@ private struct Porcion: Identifiable {
     let valor: Double
     let color: Color
     let relleno: Bool
-}
-
-private extension View {
-    /// Cada tarjeta entra desde el lado del swipe, una tras otra.
-    func aparece(_ progreso: Double, orden: Int) -> some View {
-        self
-            .opacity(progreso)
-            .offset(x: (1 - progreso) * 44)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(Double(orden) * 0.06), value: progreso)
-    }
 }
 
 private struct Aviso: View {

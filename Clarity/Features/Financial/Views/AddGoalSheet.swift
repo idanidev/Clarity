@@ -245,6 +245,7 @@ struct AddGoalSheet: View {
         .presentationDetents([.large])
         .sheet(isPresented: $showSymbolPicker) {
             SymbolPickerView(selectedSymbol: $selectedSymbol)
+                .sinHuecoBarraInferior()  // hoja sin barra de pestañas debajo
         }
         .sheet(isPresented: $showNewCategory) {
             NewCategorySheet()

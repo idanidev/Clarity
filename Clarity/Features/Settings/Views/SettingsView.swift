@@ -147,22 +147,24 @@ struct SettingsView: View {
                         Label(String(localized: "settings.data.backups", defaultValue: "Copias de Seguridad"), systemImage: "arrow.clockwise.icloud")
                     }
 
-                    Button {
-                        if subscriptions.isPro {
-                            exportCSV()
-                        } else {
-                            paywallReason = .export
-                            showPaywall = true
-                        }
-                    } label: {
-                        HStack {
-                            Label("Exportar a CSV", systemImage: "square.and.arrow.up")
-                            if !subscriptions.isPro {
-                                Spacer()
-                                ProBadge()
-                            }
-                        }
-                    }
+                    // Temporalmente deshabilitado: exportar a CSV hace cosas raras.
+                    // Para volver, descomentar el botón y el ShareLink de abajo.
+                    // Button {
+                    //     if subscriptions.isPro {
+                    //         exportCSV()
+                    //     } else {
+                    //         paywallReason = .export
+                    //         showPaywall = true
+                    //     }
+                    // } label: {
+                    //     HStack {
+                    //         Label("Exportar a CSV", systemImage: "square.and.arrow.up")
+                    //         if !subscriptions.isPro {
+                    //             Spacer()
+                    //             ProBadge()
+                    //         }
+                    //     }
+                    // }
 
                     // Temporalmente deshabilitado — pendiente para siguientes versiones
                     // NavigationLink {
@@ -171,11 +173,11 @@ struct SettingsView: View {
                     //     Label("Importar CSV", systemImage: "square.and.arrow.down")
                     // }
 
-                    if let fileURL = exportedFileURL {
-                        ShareLink(item: fileURL) {
-                            Label("Compartir CSV", systemImage: "square.and.arrow.up")
-                        }
-                    }
+                    // if let fileURL = exportedFileURL {
+                    //     ShareLink(item: fileURL) {
+                    //         Label("Compartir CSV", systemImage: "square.and.arrow.up")
+                    //     }
+                    // }
 
                 }
 

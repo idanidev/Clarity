@@ -43,11 +43,16 @@ private struct OndaAlTocar: ViewModifier {
     func body(content: Content) -> some View {
         content
             .modifier(OndaModifier(origen: origen, tiempo: tiempo))
-            .onTapGesture(coordinateSpace: .local) { punto in
-                origen = punto
-                tiempo = 0
-                withAnimation(.linear(duration: 1.4)) { tiempo = 1.4 }
-            }
+            // Simultáneo, no `onTapGesture`: la vista suele ir dentro de un
+            // `Button`, y un toque propio se quedaba el gesto y el botón nunca
+            // se enteraba — las tarjetas de la Home no llevaban a ningún sitio.
+            .simultaneousGesture(
+                SpatialTapGesture(coordinateSpace: .local).onEnded { toque in
+                    origen = toque.location
+                    tiempo = 0
+                    withAnimation(.linear(duration: 1.4)) { tiempo = 1.4 }
+                }
+            )
     }
 }
 
@@ -147,10 +152,11 @@ struct HomeFondo: View {
         ZStack {
             DesignTokens.Colors.background
             if #available(iOS 18, *) {
+                // Sin `blur`: la malla ya es suave, y un desenfoque a pantalla
+                // completa se recalculaba en cada frame del cambio de mes.
                 MeshGradient(width: 3, height: 3, points: puntos, colors: colores)
-                    .blur(radius: 36)
                     .opacity(0.6)
-                    .animation(.easeInOut(duration: 1.4), value: semilla)
+                    .animation(.easeInOut(duration: 0.8), value: semilla)
             } else {
                 Circle().fill(Color.clarityPrimary.opacity(0.35)).frame(width: 340).blur(radius: 90)
                     .offset(x: -90 + CGFloat(semilla % 3) * 30, y: -160)

@@ -82,6 +82,8 @@ struct ExtraIncomeView: View {
                             }
                         }
                     }
+                    // A lo ancho no hay barra de pestañas que esquivar.
+                    .sinHuecoBarraInferior()
                     .listRowSeparator(.hidden)
 
                     HStack {

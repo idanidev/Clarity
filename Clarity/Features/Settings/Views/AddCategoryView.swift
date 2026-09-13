@@ -87,6 +87,8 @@ struct AddCategoryView: View {
                         .padding(.vertical, 4)
                         .padding(.horizontal, 2)
                     }
+                    // A lo ancho no hay barra de pestañas que esquivar.
+                    .sinHuecoBarraInferior()
                 }
 
                 // Subcategories — inline editing, same pattern as CategoryDetailView

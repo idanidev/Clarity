@@ -241,6 +241,14 @@ struct RecurringSchedulerTests {
         #expect(!RecurringScheduler.isCurrentPeriodChargeDue(for: rule, today: date(2026, 6, 11), calendar: utc))
     }
 
+    @Test("createIfDue: el día del último plazo todavía se cobra; el siguiente ya no")
+    func currentDueOnEndDate() {
+        let rule = makeRule(frequency: .monthly, dayOfMonth: 11, endDate: "2026-06-11")
+        // Mediodía UTC del último día: antes contaba como expirada y el último plazo se perdía.
+        #expect(RecurringScheduler.isCurrentPeriodChargeDue(for: rule, today: date(2026, 6, 11), calendar: utc))
+        #expect(!RecurringScheduler.isCurrentPeriodChargeDue(for: rule, today: date(2026, 6, 12), calendar: utc))
+    }
+
     @Test("createIfDue: regla inactiva → NO due")
     func currentNotDueInactive() {
         let rule = makeRule(frequency: .monthly, dayOfMonth: 9, active: false)

@@ -12,6 +12,8 @@ struct HomeView: View {
 
     /// Página visible del carrusel.
     @State private var pagina: HomePagina = .resumen
+    /// La barra de pestañas flotante: el carrusel llega hasta el borde y deja su hueco.
+    @Environment(\.medidaBarraInferior) private var barra
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
@@ -77,6 +79,9 @@ struct HomeView: View {
                         Task { await viewModel.loadExpenses() }
                     }
                 )
+                // Una hoja no tiene barra de pestañas debajo, y sus filas de
+                // chips a lo ancho crecían con el hueco heredado.
+                .sinHuecoBarraInferior()
             }
             // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
             // VoiceConfirmationSheet is now handled by VoiceExpenseButton directly
@@ -120,10 +125,23 @@ struct HomeView: View {
                     loadingView
                 } else if case .error(let error) = viewModel.state {
                     errorView(error.localizedDescription)
-                } else if viewModel.gastosDelMes.isEmpty && viewModel.searchText.isEmpty {
+                } else if viewModel.gastosDelMes.isEmpty && viewModel.searchText.isEmpty && !viewModel.cargandoMes {
+                    // Solo con el mes ya cargado. Mientras llega uno nuevo se
+                    // queda el carrusel: cambiarlo por este cartel y volver a
+                    // montarlo entero era el tirón de cada cambio de mes.
                     emptyStateView
                 } else {
-                    carrusel
+                    // Las páginas llegan hasta el borde y pasan por debajo de la
+                    // barra de pestañas; cada una deja su hueco al final. Los
+                    // puntos se colocan desde ese mismo borde, justo encima de la
+                    // barra: con el carrusel ignorando el área segura, un relleno
+                    // sobre el área segura los dejaba tapados por ella.
+                    ZStack(alignment: .bottom) {
+                        carrusel
+                        HomePuntos(actual: pagina)
+                            .padding(.bottom, barra.total + 6)
+                    }
+                    .ignoresSafeArea(.container, edges: .bottom)
                 }
             }
         }
@@ -151,16 +169,18 @@ struct HomeView: View {
                     buscando.toggle()
                     if !buscando { viewModel.searchText = "" }
                 }
-                if viewModel.selectedFilter.hasActiveFilters {
+                // Filtros de verdad, no el mes: con `hasActiveFilters` bastaba
+                // cambiar de mes para que saliera la X de limpiar.
+                if viewModel.filtroActivo {
                     botonBarra("xmark.circle.fill", "Limpiar filtros") {
-                        viewModel.selectedFilter = ExpenseFilter()
+                        viewModel.limpiarFiltros()
                         HapticManager.shared.notification(.success)
                     }
                 }
-                botonBarra(viewModel.selectedFilter.hasActiveFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle", "Filtros") {
+                botonBarra(viewModel.filtroActivo ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle", "Filtros") {
                     showFilterSheet = true
                 }
-                .tint(viewModel.selectedFilter.hasActiveFilters ? DesignTokens.Colors.accent : .primary)
+                .tint(viewModel.filtroActivo ? DesignTokens.Colors.accent : .primary)
             }
             .glassCard(cornerRadius: 21)
         }
@@ -196,10 +216,13 @@ struct HomeView: View {
 
     private var esMesActual: Bool { Calendar.current.isDate(viewModel.selectedMonth, equalTo: Date(), toGranularity: .month) }
 
+    /// Sin `withAnimation`: animar el cambio de mes animaba a la vez cada fila
+    /// de la lista, cada barra y cada sector, y se notaba el tirón. Lo que tiene
+    /// que moverse —el título, las cifras— lleva su propia transición.
     private func cambiarMes(_ delta: Int) {
         guard let nuevo = Calendar.current.date(byAdding: .month, value: delta, to: viewModel.selectedMonth),
               delta < 0 || nuevo <= Date() else { return }
-        withAnimation(.snappy) { viewModel.selectedMonth = nuevo }
+        viewModel.selectedMonth = nuevo
     }
 
     private var barraBusqueda: some View {
@@ -226,37 +249,26 @@ struct HomeView: View {
         .onAppear { buscadorEnfocado = true }
     }
 
-    /// Las tres páginas, a lo ancho, encajando de una en una. Es un
-    /// `ScrollView` paginado y no un `TabView`: la Home ya vive dentro del
-    /// `TabView` de las pestañas y anidar otro es justo lo que iOS 26 rehízo con
-    /// Liquid Glass —en el iPhone con 26 no pintaba nada—.
+    /// Las páginas, a lo ancho, encajando de una en una.
+    ///
+    /// `TabView` paginado, no dos ScrollView anidados: el TabView bloquea el
+    /// eje y solo se mueve a los lados. Con el ScrollView horizontal, un gesto
+    /// en diagonal movía las dos cosas a la vez. Lo que rompía iOS 26 no era
+    /// el TabView anidado sino los shaders sobre el vidrio (ver Efectos.swift).
+    ///
+    /// Las páginas ya no se alejan ni se apagan al deslizar: escalar y apagar
+    /// una página llena de vidrio obligaba a recalcular cada tarjeta en cada
+    /// frame del gesto, y era el tirón al pasar a Gráficas.
     private var carrusel: some View {
-        // `TabView` paginado, no dos ScrollView anidados: el TabView bloquea el
-        // eje y solo se mueve a los lados. Con el ScrollView horizontal, un gesto
-        // en diagonal movía las dos cosas a la vez. Lo que rompía iOS 26 no era
-        // el TabView anidado sino los shaders sobre el vidrio (ver Efectos.swift).
-        VStack(spacing: 0) {
-            TabView(selection: $pagina) {
-                ForEach(HomePagina.allCases) { p in
-                    pagina(p, margenSuperior: Spacing.xxs)
-                        // Profundidad al deslizar: la página que se va se aleja y
-                        // se apaga, la que llega se acerca. Solo escala y opacidad,
-                        // que no rasterizan: el vidrio sigue siendo vidrio.
-                        .visualEffect { content, proxy in
-                            let ancho = max(proxy.size.width, 1)
-                            let desplazamiento = min(max(proxy.frame(in: .global).minX / ancho, -1), 1)
-                            return content
-                                .scaleEffect(1 - abs(desplazamiento) * 0.08)
-                                .opacity(1 - abs(desplazamiento) * 0.55)
-                        }
-                        .tag(p)
-                }
+        TabView(selection: $pagina) {
+            ForEach(HomePagina.allCases) { p in
+                pagina(p, margenSuperior: Spacing.xxs)
+                    .tag(p)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            HomePuntos(actual: pagina)
-                .frame(height: 22)
         }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        // El paginado no hereda el hueco de la barra: cada página deja el suyo.
+        .sinHuecoBarraInferior()
     }
 
     @ViewBuilder
@@ -360,7 +372,7 @@ private struct HomeTituloMes: View {
             ForEach(0..<12, id: \.self) { offset in
                 if let m = cal.date(byAdding: .month, value: -offset, to: Date()) {
                     Button {
-                        withAnimation(.snappy) { mes = m }
+                        mes = m
                         HapticManager.shared.selection()
                     } label: {
                         if cal.isDate(m, equalTo: mes, toGranularity: .month) {
@@ -381,6 +393,8 @@ private struct HomeTituloMes: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .contentTransition(.numericText())
+                        // Solo el título se anima al cambiar de mes.
+                        .animation(.snappy, value: nombre)
                     Image(systemName: "chevron.down")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(Color.textSecondary)
@@ -422,6 +436,11 @@ private struct HomePuntos: View {
                     .frame(width: p == actual ? 22 : 5, height: 5)
             }
         }
+        // Una cápsula oscura detrás: los puntos flotan sobre la lista que pasa
+        // por debajo y sin fondo se mezclaban con el texto de las tarjetas.
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.black.opacity(0.35), in: Capsule())
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: actual)
         .accessibilityHidden(true)
     }
