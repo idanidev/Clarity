@@ -19,45 +19,46 @@ struct GastosPage: View {
 
     var body: some View {
         List {
+            // Las cabeceras van como filas y no como `Section(header:)`: las de
+            // sección son pegajosas y flotaban hasta el borde del scroll, que queda
+            // debajo de la barra de navegación.
             ForEach(viewModel.categoryGroups) { grupo in
-                Section {
-                    if !plegadas.contains(grupo.id) {
-                        ForEach(grupo.subcategories) { sub in
-                            if grupo.subcategories.count > 1 {
-                                CabeceraSubcategoria(nombre: sub.name, total: sub.totalAmount)
-                                    .fila()
-                            }
-                            ForEach(sub.expenses, id: \.stableId) { gasto in
-                                FilaGasto(gasto: gasto, color: grupo.color)
-                                    .fila()
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { onEditar(gasto) }
-                                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                        Button(role: .destructive) {
-                                            Task { await viewModel.deleteExpense(gasto) }
-                                        } label: { Label("Borrar", systemImage: "trash") }
-                                        Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
-                                            .tint(Color.clarityPrimary)
-                                    }
-                                    .contextMenu {
-                                        Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
-                                        Button(role: .destructive) {
-                                            Task { await viewModel.deleteExpense(gasto) }
-                                        } label: { Label("Borrar", systemImage: "trash") }
-                                    }
-                            }
+                CabeceraCategoria(grupo: grupo, plegada: plegadas.contains(grupo.id)) {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        if plegadas.contains(grupo.id) { plegadas.remove(grupo.id) } else { plegadas.insert(grupo.id) }
+                    }
+                    UserDefaults.standard.set(Array(plegadas), forKey: "expenses.collapsedCategories")
+                    HapticManager.shared.selection()
+                }
+                .fila()
+                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 4, trailing: 12))
+
+                if !plegadas.contains(grupo.id) {
+                    ForEach(grupo.subcategories) { sub in
+                        if grupo.subcategories.count > 1 {
+                            CabeceraSubcategoria(nombre: sub.name, total: sub.totalAmount)
+                                .fila()
+                        }
+                        ForEach(sub.expenses, id: \.stableId) { gasto in
+                            FilaGasto(gasto: gasto, color: grupo.color)
+                                .fila()
+                                .contentShape(Rectangle())
+                                .onTapGesture { onEditar(gasto) }
+                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                    Button(role: .destructive) {
+                                        Task { await viewModel.deleteExpense(gasto) }
+                                    } label: { Label("Borrar", systemImage: "trash") }
+                                    Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
+                                        .tint(Color.clarityPrimary)
+                                }
+                                .contextMenu {
+                                    Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
+                                    Button(role: .destructive) {
+                                        Task { await viewModel.deleteExpense(gasto) }
+                                    } label: { Label("Borrar", systemImage: "trash") }
+                                }
                         }
                     }
-                } header: {
-                    CabeceraCategoria(grupo: grupo, plegada: plegadas.contains(grupo.id)) {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            if plegadas.contains(grupo.id) { plegadas.remove(grupo.id) } else { plegadas.insert(grupo.id) }
-                        }
-                        UserDefaults.standard.set(Array(plegadas), forKey: "expenses.collapsedCategories")
-                        HapticManager.shared.selection()
-                    }
-                    .textCase(nil)
-                    .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                 }
             }
 

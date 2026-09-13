@@ -61,8 +61,9 @@ struct GraficasPage: View {
             }
         }
         .padding(16)
+        // Sin onda: con un Chart dentro el efecto rasteriza la vista y el vidrio
+        // se vuelve un rectángulo opaco.
         .glassCard()
-        .ondaAlTocar()
     }
 
     // Gasto por día, con el más caro señalado
@@ -75,14 +76,16 @@ struct GraficasPage: View {
                 Spacer()
                 Text("Media \(Formatters.currency(viewModel.resumen.ritmo.mediaDiaria))").font(.caption).foregroundStyle(.secondary)
             }
+            // El día va como categoría, no como número: con un eje numérico las
+            // barras de ancho por ratio se quedaban a cero y el gráfico salía vacío.
             Chart(dias, id: \.dia) { d in
-                BarMark(x: .value("Día", d.dia), y: .value("€", d.importe), width: .ratio(0.6))
+                BarMark(x: .value("Día", String(d.dia)), y: .value("€", d.importe), width: .ratio(0.6))
                     .cornerRadius(2)
                     .foregroundStyle(d.dia == maximo?.dia && d.importe > 0 ? Color.error : Color.clarityPrimary)
             }
             .chartXAxis {
-                AxisMarks(values: [1, 10, 20, dias.count]) { v in
-                    AxisValueLabel { if let n = v.as(Int.self) { Text("\(n)").font(.caption2) } }
+                AxisMarks(values: ["1", "10", "20", String(dias.count)]) { v in
+                    AxisValueLabel { if let n = v.as(String.self) { Text(n).font(.caption2) } }
                 }
             }
             .chartYAxis(.hidden)
