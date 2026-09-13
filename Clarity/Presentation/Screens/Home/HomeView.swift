@@ -10,8 +10,8 @@ struct HomeView: View {
     @State private var viewModel: HomeViewModel
     private var userDataManager = UserDataManager.shared
 
-    /// Página visible del carrusel.
-    @State private var pagina: HomePagina = .resumen
+    /// Página visible del carrusel. Opcional porque `scrollPosition` lo pide.
+    @State private var pagina: HomePagina? = .resumen
     @State private var expenseToEdit: Expense?
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
@@ -29,7 +29,6 @@ struct HomeView: View {
             .background(HomeFondo(mes: viewModel.selectedMonth))
             .trackScreen("home")
             .navigationTitle("")
-            .toolbar(.hidden, for: .navigationBar)
             .refreshable { await viewModel.refresh() }
             .task {
                 await viewModel.loadIfNeeded()
@@ -77,6 +76,7 @@ struct HomeView: View {
             }
         // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
             .task { await viewModel.loadMetas() }
+            .task { await viewModel.loadMesAnterior() }
             .navigationBarTitleDisplayMode(.inline)
             .searchable(
                 text: $viewModel.searchText,
@@ -106,18 +106,27 @@ struct HomeView: View {
         }
     }
 
-    /// Las tres páginas. `TabView` paginado es el carrusel de iOS: solo se
-    /// mueve en horizontal, y cada página desplaza en vertical por su cuenta.
+    /// Las tres páginas, a lo ancho, encajando de una en una. Es un
+    /// `ScrollView` paginado y no un `TabView`: la Home ya vive dentro del
+    /// `TabView` de las pestañas y anidar otro es justo lo que iOS 26 rehízo con
+    /// Liquid Glass —en el iPhone con 26 no pintaba nada—.
     private var carrusel: some View {
         VStack(spacing: 0) {
-            TabView(selection: $pagina) {
-                ForEach(HomePagina.allCases) { p in
-                    pagina(p).tag(p)
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(HomePagina.allCases) { p in
+                        pagina(p)
+                            .containerRelativeFrame([.horizontal, .vertical])
+                            .id(p)
+                    }
                 }
+                .scrollTargetLayout()
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $pagina)
+            .scrollIndicators(.hidden)
 
-            HomePuntos(actual: pagina)
+            HomePuntos(actual: pagina ?? .resumen)
                 .padding(.bottom, Spacing.xs)
         }
     }

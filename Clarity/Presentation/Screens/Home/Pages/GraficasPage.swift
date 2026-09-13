@@ -49,7 +49,7 @@ struct GraficasPage: View {
                     ForEach(Array(datos), id: \.id) { g in
                         HStack(spacing: 8) {
                             Circle().fill(g.color).frame(width: 8, height: 8)
-                            Text(g.name).font(.footnote).lineLimit(1)
+                            Text(g.name.nombreSinEmoji).font(.footnote).lineLimit(1)
                             Spacer()
                             Text("\(total > 0 ? Int((g.totalAmount / total * 100).rounded()) : 0) %").font(.footnote.weight(.semibold))
                         }
@@ -114,7 +114,7 @@ struct GraficasPage: View {
                 let delta = f.actual - f.anterior
                 VStack(alignment: .leading, spacing: 5) {
                     HStack {
-                        Text(f.categoria).font(.footnote)
+                        Text(f.categoria.nombreSinEmoji).font(.footnote)
                         Spacer()
                         Text("\(delta > 0 ? "+" : "−")\(Formatters.currency(abs(delta)))")
                             .font(.caption.weight(.semibold))

@@ -224,7 +224,7 @@ private struct SlotCard: View {
             ForEach(limites.prefix(3)) { l in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(l.categoria).font(.subheadline.weight(.medium))
+                        Text(l.categoria.nombreSinEmoji).font(.subheadline.weight(.medium))
                         Spacer()
                         Text(Formatters.currency(l.gastado)).fontWeight(.semibold).foregroundStyle(l.superado ? Color.error : .primary)
                         + Text(" / \(Formatters.currency(l.tope))").foregroundStyle(.secondary)
@@ -247,7 +247,7 @@ private struct SlotCard: View {
             ForEach(reparto) { r in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
-                        Text(r.categoria).font(.subheadline.weight(.medium))
+                        Text(r.categoria.nombreSinEmoji).font(.subheadline.weight(.medium))
                         Spacer()
                         Text("\(Formatters.currency(r.importe)) · \(r.porcentaje) %").font(.footnote.weight(.semibold))
                     }
@@ -336,7 +336,7 @@ private struct SlotCard: View {
     private func subeView(_ s: HomeResumen.Subida) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             titulo("Sube fuerte")
-            Text(s.categoria).font(.title3.weight(.bold)).lineLimit(1)
+            Text(s.categoria.nombreSinEmoji).font(.title3.weight(.bold)).lineLimit(1)
             Text("+\(Formatters.currency(s.delta)) frente al mes pasado").font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -416,7 +416,7 @@ private struct CategoriasCard: View {
                         .frame(width: 32, height: 32)
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
-                                Text(g.name).font(.subheadline.weight(.medium)).lineLimit(1)
+                                Text(g.name.nombreSinEmoji).font(.subheadline.weight(.medium)).lineLimit(1)
                                 Spacer()
                                 Text(Formatters.currency(g.totalAmount)).font(.subheadline.weight(.semibold))
                             }
@@ -489,7 +489,7 @@ private struct CategoriaDetalleView: View {
             .padding(.horizontal, Spacing.sm)
             .padding(.top, Spacing.xs)
         }
-        .navigationTitle("\(grupo.emoji) \(grupo.name)")
+        .navigationTitle("\(grupo.emoji) \(grupo.name.nombreSinEmoji)")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

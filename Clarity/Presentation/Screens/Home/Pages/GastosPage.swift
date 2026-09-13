@@ -94,7 +94,7 @@ private struct CabeceraCategoria: View {
                 .frame(width: 34, height: 34)
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(grupo.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                    Text(grupo.name.nombreSinEmoji).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
                     Text(grupo.expenseCount == 1 ? "1 gasto" : "\(grupo.expenseCount) gastos")
                         .font(.caption).foregroundStyle(.secondary)
                 }

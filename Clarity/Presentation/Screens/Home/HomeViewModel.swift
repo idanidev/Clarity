@@ -55,6 +55,8 @@ final class HomeViewModel {
                 await self.loadMonthlyBudget(for: self.selectedMonth)
                 guard !Task.isCancelled else { return }
                 await self.loadExpenses()
+                guard !Task.isCancelled else { return }
+                await self.loadMesAnterior()
             }
         }
     }
@@ -281,10 +283,31 @@ final class HomeViewModel {
         return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
     }
 
+    /// El mes anterior, cargado de red igual que el actual. Sin esto la
+    /// comparativa dependía del histórico de caché y en un dispositivo con la
+    /// caché vacía no salía nunca.
+    private(set) var gastosMesAnteriorCargados: [Expense] = []
+
     var gastosMesAnterior: [Expense] {
         guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
         let key = Self.monthKey(prev)
+        let cargados = gastosMesAnteriorCargados.filter { $0.date.hasPrefix(key) }
+        if !cargados.isEmpty { return cargados }
         return allHistoricalExpenses.filter { $0.date.hasPrefix(key) }
+    }
+
+    func loadMesAnterior() async {
+        let cal = Calendar.current
+        guard let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth),
+              let start = cal.date(from: cal.dateComponents([.year, .month], from: prev)),
+              let end = cal.date(byAdding: DateComponents(month: 1, day: -1), to: start)
+        else { return }
+        var filtro = ExpenseFilter()
+        filtro.dateRange = .custom
+        filtro.customStartDate = start
+        filtro.customEndDate = end
+        let resultado = try? await getExpensesUseCase.executePaginated(page: 0, filter: filtro)
+        gastosMesAnteriorCargados = ExpenseSanitizer.sanitize(expenses: resultado?.expenses ?? [], rules: allRecurringRules)
     }
 
     /// Todo lo que pinta la primera página, resuelto por `HomeResumen`.
