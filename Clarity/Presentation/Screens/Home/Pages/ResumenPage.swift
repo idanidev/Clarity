@@ -9,7 +9,10 @@ struct ResumenPage: View {
     var margenSuperior: CGFloat = 0
     /// Cambia cuando otra tarjeta pide bajar hasta la lista de gastos.
     var irALista: Int = 0
-    let onEditar: (Expense) -> Void
+    /// Las transiciones de zoom de la Home: cada fila y cada tarjeta es un origen.
+    let zoom: Namespace.ID
+    /// El gasto y desde dónde se tocó, para que la hoja crezca desde ahí.
+    let onEditar: (Expense, String) -> Void
     let onDestino: (HomeDestino) -> Void
 
     /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
@@ -54,7 +57,7 @@ struct ResumenPage: View {
                         }
                     }
 
-                    UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
+                    UltimosCard(gastos: viewModel.ultimosGastos, zoom: zoom, onEditar: onEditar)
 
                     if let e = r.slots[.e] { slot(e) }
                 }
@@ -138,19 +141,21 @@ struct ResumenPage: View {
                             .filaDeTarjeta(arriba: 2, abajo: 0)
                     }
                     ForEach(sub.expenses, id: \.stableId) { gasto in
+                        let origen = "lista-\(gasto.stableId)"
                         FilaGasto(gasto: gasto, color: grupo.color)
+                            .origenZoom(id: origen, en: zoom)
                             .contentShape(Rectangle())
-                            .onTapGesture { onEditar(gasto) }
+                            .onTapGesture { onEditar(gasto, origen) }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     Task { await viewModel.deleteExpense(gasto) }
                                 } label: { Label("Borrar", systemImage: "trash") }
-                                Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
+                                Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
                                     .tint(Color.clarityPrimary)
                             }
                             // Mantener pulsado: la ficha del gasto y sus acciones.
                             .contextMenu {
-                                Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
+                                Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
                                 Button {
                                     Task { try? await viewModel.duplicateExpense(gasto) }
                                 } label: { Label("Duplicar", systemImage: "plus.square.on.square") }
@@ -172,19 +177,22 @@ struct ResumenPage: View {
 
 private extension ResumenPage {
     func slot(_ contenido: HomeResumen.Contenido, compacta: Bool = false) -> some View {
-        Button { onDestino(destino(de: contenido)) } label: {
+        let destino = destino(de: contenido)
+        return Button { onDestino(destino) } label: {
             SlotCard(contenido: contenido, compacta: compacta)
+                // Recurrentes y Te deben se abren creciendo desde la tarjeta.
+                .origenZoom(id: "destino-\(destino)", en: zoom)
         }
         .buttonStyle(TarjetaButtonStyle())
     }
 
     func destino(de contenido: HomeResumen.Contenido) -> HomeDestino {
         switch contenido {
-        case .limites, .hucha: .metas
+        case .limites, .hucha, .limiteSugerido: .metas
         case .cargos: .recurrentes
         case .teDeben: .deudas
-        case .reparto, .subeFuerte: .gastos
-        case .diaCaro, .semana, .comparativa, .semanaASemana: .graficas
+        case .reparto, .subeFuerte, .sitios, .hormiga, .racha: .gastos
+        case .diaCaro, .semana, .comparativa, .semanaASemana, .fueraDeNormal, .diaSemana, .ahorro, .ranking: .graficas
         }
     }
 }
@@ -272,8 +280,14 @@ private struct HeroCard: View {
             }
 
             if let progreso = resumen.progresoPresupuesto, let libres = resumen.libres, let presupuesto = resumen.presupuesto {
-                Barra(progreso: progreso, color: .clarityPrimary)
-                    .padding(.top, 14)
+                if progreso >= 0.85 {
+                    // Cerca del tope la barra ondula: se nota sin leer la cifra.
+                    BarraOndulada(progreso: progreso, color: progreso >= 1 ? .error : .warning, alto: 6)
+                        .padding(.top, 14)
+                } else {
+                    Barra(progreso: progreso, color: .clarityPrimary)
+                        .padding(.top, 14)
+                }
                 HStack {
                     Text("\(Int((progreso * 100).rounded())) % del presupuesto · \(Formatters.currency(presupuesto))")
                         .foregroundStyle(Color.textSecondary)
@@ -284,6 +298,12 @@ private struct HeroCard: View {
                 }
                 .font(.footnote)
                 .padding(.top, 8)
+            } else if resumen.ritmo.cargosPendientes > 0 {
+                // Con cargos por venir se dice: la previsión no es solo el ritmo.
+                Text("A este ritmo, con **\(Formatters.currency(resumen.ritmo.cargosPendientes))** de cargos pendientes, acabarás en **\(Formatters.currency(resumen.ritmo.prevision))**.")
+                    .font(.footnote)
+                    .foregroundStyle(Color.textSecondary)
+                    .padding(.top, 10)
             } else {
                 Text("A este ritmo acabarás el mes en **\(Formatters.currency(resumen.ritmo.prevision))**.")
                     .font(.footnote)
@@ -392,6 +412,14 @@ private struct SlotCard: View {
             case .subeFuerte(let s): subeView(s)
             case .comparativa(let c): comparativaView(c)
             case .semanaASemana(let semanas): semanaASemanaView(semanas)
+            case .fueraDeNormal(let d): fueraDeNormalView(d)
+            case .sitios(let sitios): sitiosView(sitios)
+            case .diaSemana(let d): diaSemanaView(d)
+            case .hormiga(let h): hormigaView(h)
+            case .ahorro(let a): ahorroView(a)
+            case .ranking(let r): rankingView(r)
+            case .racha(let r): rachaView(r)
+            case .limiteSugerido(let l): limiteSugeridoView(l)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -429,7 +457,11 @@ private struct SlotCard: View {
                         + Text(" / \(Formatters.currency(l.tope))").foregroundStyle(Color.textSecondary)
                     }
                     .font(.footnote)
-                    Barra(progreso: l.progreso, color: l.superado ? .error : (l.progreso > 0.75 ? .warning : .success), alto: 5)
+                    if l.progreso >= 0.85 {
+                        BarraOndulada(progreso: l.progreso, color: l.superado ? .error : .warning, alto: 5)
+                    } else {
+                        Barra(progreso: l.progreso, color: l.superado ? .error : (l.progreso > 0.75 ? .warning : .success), alto: 5)
+                    }
                     Text(l.superado
                          ? "Superado en \(Formatters.currency(-l.restante))"
                          : "Te quedan \(Formatters.currency(l.restante))")
@@ -551,6 +583,123 @@ private struct SlotCard: View {
         }
     }
 
+    // Fuera de lo normal
+    private func fueraDeNormalView(_ d: HomeResumen.Desvio) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Fuera de lo normal")
+            Text("\(d.porcentaje > 0 ? "+" : "\u{2212}")\(abs(d.porcentaje)) %")
+                .font(.title3.weight(.bold))
+                .foregroundStyle(d.porcentaje > 0 ? Color.error : Color.success)
+            Text("\(d.categoria.nombreSinEmoji) · \(Formatters.currency(d.actual))")
+                .font(.footnote.weight(.medium)).lineLimit(1)
+            Text("Tu normal a estas alturas: \(Formatters.currency(d.esperado))")
+                .font(.caption).foregroundStyle(Color.textSecondary).padding(.top, 8)
+        }
+    }
+
+    // Tus sitios
+    private func sitiosView(_ sitios: [HomeResumen.Sitio]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Tus sitios este mes")
+            VStack(spacing: 8) {
+                ForEach(sitios) { s in
+                    HStack(spacing: 8) {
+                        Text(s.nombre).font(.subheadline.weight(.medium)).lineLimit(1)
+                        Text("\(s.veces)× · \(Formatters.currency(s.media))/vez")
+                            .font(.caption).foregroundStyle(Color.textSecondary).lineLimit(1)
+                        Spacer(minLength: 4)
+                        Text(Formatters.currency(s.total)).font(.footnote.weight(.semibold))
+                    }
+                }
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    // Tu día caro
+    private func diaSemanaView(_ d: HomeResumen.DiaSemana) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Tu día caro")
+            Text(Self.nombreDelDia(d.dia)).font(.title3.weight(.bold)).lineLimit(1)
+            Text("\(Formatters.currency(d.media)) de media, frente a \(Formatters.currency(d.mediaResto)) el resto")
+                .font(.caption).foregroundStyle(Color.textSecondary)
+            if d.esHoy {
+                Text("Hoy toca: ojo.").font(.caption.weight(.medium)).foregroundStyle(Color.warning).padding(.top, 8)
+            }
+        }
+    }
+
+    /// "Sábados", "Lunes": el día en plural, como se dice.
+    private static func nombreDelDia(_ dia: Int) -> String {
+        let simbolos = Calendar.current.weekdaySymbols
+        guard dia >= 1, dia <= simbolos.count else { return "" }
+        let nombre = simbolos[dia - 1].capitalized
+        return nombre.hasSuffix("s") ? nombre : nombre + "s"
+    }
+
+    // Gastos hormiga
+    private func hormigaView(_ h: HomeResumen.Hormiga) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Gastos hormiga")
+            Text(Formatters.currency(h.total)).font(.title3.weight(.bold))
+            Text("\(h.cantidad) gastos de menos de \(Formatters.currency(h.umbral))")
+                .font(.caption).foregroundStyle(Color.textSecondary)
+        }
+    }
+
+    // Ahorro previsto
+    private func ahorroView(_ a: HomeResumen.Ahorro) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Ahorro previsto")
+            Text(Formatters.currency(a.previsto))
+                .font(.title3.weight(.bold))
+                .foregroundStyle(a.previsto >= 0 ? Color.success : Color.error)
+            if a.previsto < 0 {
+                Text("Si el mes sigue así, te pasas.").font(.caption).foregroundStyle(Color.textSecondary)
+            } else {
+                Text("\(Int((a.porcentaje * 100).rounded())) % de tus ingresos"
+                     + (a.medio.map { " · tu media \(Int(($0 * 100).rounded())) %" } ?? ""))
+                    .font(.caption).foregroundStyle(Color.textSecondary)
+            }
+        }
+    }
+
+    // Entre tus meses
+    private func rankingView(_ r: HomeResumen.Ranking) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Entre tus últimos meses")
+            Text(r.posicion == 1 ? "El más barato" : (r.posicion == r.de ? "El más caro" : "\(r.posicion).º más barato"))
+                .font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.8)
+            Text("de \(r.de)" + (r.proyectado ? " · si sigue así" : "")).font(.caption).foregroundStyle(Color.textSecondary)
+            Text("entre \(Formatters.currencyCompact(r.minimo)) y \(Formatters.currencyCompact(r.maximo))")
+                .font(.caption).foregroundStyle(Color.textSecondary).padding(.top, 8)
+        }
+    }
+
+    // Racha
+    private func rachaView(_ r: HomeResumen.Racha) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Racha")
+            Text("\(r.dias) días").font(.title3.weight(.bold))
+            Text("seguidos apuntando" + (r.record > r.dias ? " · tu récord: \(r.record)" : " · es tu récord"))
+                .font(.caption).foregroundStyle(Color.textSecondary)
+        }
+    }
+
+    // Límite sugerido
+    private func limiteSugeridoView(_ l: HomeResumen.LimiteSugerido) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            titulo("Un tope para \(l.categoria.nombreSinEmoji)")
+            Text("~\(Formatters.currencyCompact(l.normalMensual)) al mes").font(.title3.weight(.bold))
+            Text("Es lo que sueles gastar. Toca para ponerle un límite.")
+                .font(.caption).foregroundStyle(Color.textSecondary)
+            if l.actual > 0, l.normalMensual > 0 {
+                Barra(progreso: min(l.actual / l.normalMensual, 1), color: .clarityPrimary, alto: 5).padding(.top, 10)
+                Text("Este mes: \(Formatters.currency(l.actual))").font(.caption).foregroundStyle(Color.textSecondary).padding(.top, 4)
+            }
+        }
+    }
+
     // Semana a semana
     private func semanaASemanaView(_ semanas: [Double]) -> some View {
         let maximo = semanas.max() ?? 1
@@ -575,14 +724,15 @@ private struct SlotCard: View {
 
 private struct UltimosCard: View {
     let gastos: [Expense]
-    let onEditar: (Expense) -> Void
+    let zoom: Namespace.ID
+    let onEditar: (Expense, String) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Últimos").font(.subheadline.weight(.semibold)).padding(.bottom, 12)
             ForEach(Array(gastos.enumerated()), id: \.element.stableId) { i, g in
                 if i > 0 { Divider().padding(.vertical, 10) }
-                Button { onEditar(g) } label: {
+                Button { onEditar(g, "ultimos-\(g.stableId)") } label: {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(g.name).font(.subheadline.weight(.medium)).lineLimit(1)
@@ -593,6 +743,7 @@ private struct UltimosCard: View {
                         Text(Formatters.currency(g.amount)).font(.subheadline.weight(.semibold))
                     }
                     .contentShape(Rectangle())
+                    .origenZoom(id: "ultimos-\(g.stableId)", en: zoom)
                 }
                 .buttonStyle(.plain)
             }

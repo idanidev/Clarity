@@ -15,6 +15,10 @@ struct HomeView: View {
     /// La barra de pestañas flotante: el carrusel llega hasta el borde y deja su hueco.
     @Environment(\.medidaBarraInferior) private var barra
     @State private var expenseToEdit: Expense?
+    /// Desde dónde se abrió la edición, para que la hoja crezca desde ahí.
+    @State private var origenEdicion = "gasto"
+    /// Las transiciones de zoom: de una fila a su hoja, de una tarjeta a su pantalla.
+    @Namespace private var zoom
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
     /// El buscador se abre desde la barra y ocupa su fila encima del carrusel:
@@ -43,6 +47,17 @@ struct HomeView: View {
             // Más intenso que en el resto: el brillo cae detrás de la barra del
             // mes y con la intensidad normal apenas se veía.
             .background(HomeFondo(intensidad: .home))
+            // Enhorabuena si el mes anterior se cerró dentro del presupuesto.
+            .overlay {
+                if let cierre = viewModel.cierreDeMesPendiente {
+                    CelebracionClarity(
+                        icono: "checkmark.seal.fill",
+                        titulo: "Cerraste \(cierre.mes) dentro del presupuesto",
+                        detalle: "Te sobraron \(Formatters.currency(cierre.sobrante)). Buen mes.",
+                        onCerrar: { viewModel.marcarCierreCelebrado() }
+                    )
+                }
+            }
             .trackScreen("home")
             .navigationTitle("")
             .refreshable { await viewModel.refresh() }
@@ -65,6 +80,8 @@ struct HomeView: View {
                     Task { await viewModel.refresh() }
                 }
                 .presentationDetents([.large])
+                // Crece desde la fila que se tocó y vuelve a ella al cerrar.
+                .transicionZoom(id: origenEdicion, en: zoom)
             }
             .sheet(isPresented: $showAddExpense) {
                 AddExpenseSheet {
@@ -96,10 +113,16 @@ struct HomeView: View {
         // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
             .task { await viewModel.loadMetas() }
             .task { await viewModel.loadMesAnterior() }
+            .task { await viewModel.loadNormal() }
+            .task { await viewModel.comprobarCierreDeMes() }
             .navigationDestination(item: $rutaPush) { destino in
                 switch destino {
-                case .recurrentes: RecurringExpensesView()
-                case .deudas: DebtsView()
+                case .recurrentes:
+                    RecurringExpensesView()
+                        .transicionZoom(id: "destino-recurrentes", en: zoom)
+                case .deudas:
+                    DebtsView()
+                        .transicionZoom(id: "destino-deudas", en: zoom)
                 default: EmptyView()
                 }
             }
@@ -115,12 +138,18 @@ struct HomeView: View {
 
     private var contenido: some View {
         VStack(spacing: 0) {
-            barraSuperior
-                .padding(.horizontal, Spacing.sm)
-                .padding(.top, Spacing.xxs)
-                .padding(.bottom, Spacing.xs)
+            // Barra y buscador en un mismo contenedor de vidrio: en iOS 26 el
+            // buscador sale de la barra como una gota en vez de aparecer sin más.
+            // Espaciado pequeño para que las cápsulas no se fundan entre sí.
+            VStack(spacing: 0) {
+                barraSuperior
+                    .padding(.horizontal, Spacing.sm)
+                    .padding(.top, Spacing.xxs)
+                    .padding(.bottom, Spacing.xs)
 
-            if buscando { barraBusqueda }
+                if buscando { barraBusqueda }
+            }
+            .contenedorDeVidrio(espaciado: 4)
 
             ZStack(alignment: .bottom) {
                 if viewModel.state == .loading && viewModel.allExpenses.isEmpty {
@@ -164,7 +193,7 @@ struct HomeView: View {
                     .disabled(esMesActual)
                     .opacity(esMesActual ? 0.35 : 1)
             }
-            .glassCard(cornerRadius: 21)
+            .glassCard(cornerRadius: 21, interactivo: true)
 
             HStack(spacing: 0) {
                 botonBarra(buscando ? "magnifyingglass.circle.fill" : "magnifyingglass", buscando ? "Cerrar búsqueda" : "Buscar") {
@@ -184,7 +213,7 @@ struct HomeView: View {
                 }
                 .tint(viewModel.filtroActivo ? DesignTokens.Colors.accent : .primary)
             }
-            .glassCard(cornerRadius: 21)
+            .glassCard(cornerRadius: 21, interactivo: true)
         }
         .tint(.primary)
     }
@@ -196,6 +225,9 @@ struct HomeView: View {
         } label: {
             Image(systemName: icono)
                 .font(.system(size: 16, weight: .semibold))
+                // Al cambiar de icono (lupa abierta, filtro puesto) se transforma
+                // en vez de saltar.
+                .contentTransition(.symbolEffect(.replace))
                 .frame(width: 40, height: 42)
                 .contentShape(Rectangle())
         }
@@ -281,7 +313,11 @@ struct HomeView: View {
                 viewModel: viewModel,
                 margenSuperior: margenSuperior,
                 irALista: irALista,
-                onEditar: { expenseToEdit = $0 },
+                zoom: zoom,
+                onEditar: { gasto, origen in
+                    origenEdicion = origen
+                    expenseToEdit = gasto
+                },
                 onDestino: irA
             )
         case .graficas:
@@ -290,8 +326,10 @@ struct HomeView: View {
     }
 
     // MARK: - View States
+
+    /// Una forma que respira mientras llegan los gastos, en lugar de bloques grises.
     private var loadingView: some View {
-        ExpenseListSkeleton()
+        CargaClarity(texto: "Cargando tus gastos")
     }
 
     /// Qué se encuentra alguien que acaba de terminar el onboarding.

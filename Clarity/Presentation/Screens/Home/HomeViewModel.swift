@@ -89,6 +89,7 @@ final class HomeViewModel {
                 guard !Task.isCancelled else { return }
                 self.cargandoMes = false
                 await self.loadMesAnterior()
+                await self.loadNormal()
             }
         }
     }
@@ -369,6 +370,59 @@ final class HomeViewModel {
     /// Gastos de cada mes ya traído, por "yyyy-MM".
     @ObservationIgnored private var mesesEnMemoria: [String: [Expense]] = [:]
 
+    // MARK: Tu normal
+
+    /// Cuántos meses hacia atrás forman la costumbre del usuario.
+    static let mesesNormal = 6
+
+    /// Los meses anteriores al que se enseña, traídos de red una vez por mes
+    /// visitado, para medir el mes contra la costumbre del usuario y no contra
+    /// el mes pasado a secas.
+    private(set) var historicoNormal: [Expense] = [] {
+        didSet { invalidarDerivados() }
+    }
+    /// Ingresos de esos meses, por "yyyy-MM": para el ahorro medio.
+    private(set) var presupuestosNormal: [String: Double] = [:] {
+        didSet { invalidarDerivados() }
+    }
+    @ObservationIgnored private var mesNormalCargado: String?
+
+    /// Trae el tramo de "tu normal" del mes que se enseña. Mientras no llega,
+    /// los derivados tiran del histórico en caché, que suele bastar.
+    func loadNormal() async {
+        let cal = Calendar.current
+        let clave = Self.monthKey(selectedMonth)
+        guard mesNormalCargado != clave,
+              let inicioMes = cal.date(from: cal.dateComponents([.year, .month], from: selectedMonth)),
+              let desde = cal.date(byAdding: .month, value: -Self.mesesNormal, to: inicioMes),
+              let hasta = cal.date(byAdding: .day, value: -1, to: inicioMes)
+        else { return }
+        var filtro = ExpenseFilter()
+        filtro.dateRange = .custom
+        filtro.customStartDate = desde
+        filtro.customEndDate = hasta
+        let resultado = try? await getExpensesUseCase.executePaginated(page: 0, filter: filtro)
+
+        var presupuestos: [String: Double] = [:]
+        for atras in 1...Self.mesesNormal {
+            guard let mes = cal.date(byAdding: .month, value: -atras, to: inicioMes) else { continue }
+            let presupuesto = try? await financialService.fetchMonthlyBudget(
+                year: cal.component(.year, from: mes), month: cal.component(.month, from: mes))
+            if let ingresos = presupuesto?.totalIncome, ingresos > 0 { presupuestos[Self.monthKey(mes)] = ingresos }
+        }
+
+        // Si mientras llegaba se cambió de mes, este ya no es su tramo.
+        guard Self.monthKey(selectedMonth) == clave, let resultado else { return }
+        let gastos = ExpenseSanitizer.sanitize(expenses: resultado.expenses, rules: allRecurringRules)
+        // Cada mes traído queda en memoria: cambiar a él es instantáneo.
+        for (mes, delMes) in Dictionary(grouping: gastos, by: { String($0.date.prefix(7)) }) {
+            mesesEnMemoria[mes] = delMes
+        }
+        historicoNormal = gastos
+        presupuestosNormal = presupuestos
+        mesNormalCargado = clave
+    }
+
     // MARK: Derivados
 
     /// Sube con cada cambio en lo que alimenta la Home, y las vistas dependen de
@@ -427,6 +481,60 @@ final class HomeViewModel {
     var nombreMesAnterior: String {
         guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return "el mes pasado" }
         return Formatters.fullMonthName(Calendar.current.component(.month, from: prev)).lowercased()
+    }
+
+    // MARK: Cierre del mes anterior
+
+    /// Meses ya celebrados, por "yyyy-MM". Observado: al marcar uno, la tarjeta
+    /// de enhorabuena desaparece.
+    private(set) var cierresCelebrados: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "celebrados.cierreMes") ?? [])
+
+    /// Si el mes anterior se cerró dentro del presupuesto y aún no se ha
+    /// celebrado: su nombre y lo que sobró. Solo mirando el mes actual.
+    var cierreDeMesPendiente: (mes: String, sobrante: Double)? {
+        let cal = Calendar.current
+        guard cal.isDate(selectedMonth, equalTo: Date(), toGranularity: .month),
+              let anterior = cal.date(byAdding: .month, value: -1, to: selectedMonth)
+        else { return nil }
+        let clave = Self.monthKey(anterior)
+        // Por fecha: si los cargados son de otro mes, suman cero y no se celebra.
+        let total = gastosMesAnteriorCargados
+            .filter { $0.date.hasPrefix(clave) }
+            .reduce(0) { $0 + $1.amount }
+        guard let sobrante = CierreDeMes.sobrante(
+            hoy: Date(),
+            totalAnterior: total,
+            presupuestoAnterior: previousMonthlyBudget?.totalIncome,
+            yaCelebrado: cierresCelebrados.contains(clave),
+            calendar: cal
+        ) else { return nil }
+        return (nombreMesAnterior, sobrante)
+    }
+
+    func marcarCierreCelebrado() {
+        guard let anterior = Calendar.current.date(byAdding: .month, value: -1, to: Date()) else { return }
+        cierresCelebrados.insert(Self.monthKey(anterior))
+        UserDefaults.standard.set(Array(cierresCelebrados), forKey: "celebrados.cierreMes")
+    }
+
+    /// Al abrir la app el presupuesto del mes anterior puede no estar aún: se
+    /// pide solo cuando podría tocar celebrar —primera semana, sin celebrar—.
+    func comprobarCierreDeMes() async {
+        let cal = Calendar.current
+        guard cal.component(.day, from: Date()) <= CierreDeMes.diasParaCelebrar,
+              previousMonthlyBudget == nil,
+              let anterior = cal.date(byAdding: .month, value: -1, to: Date()),
+              !cierresCelebrados.contains(Self.monthKey(anterior))
+        else { return }
+        let presupuesto = try? await financialService.fetchMonthlyBudget(
+            year: cal.component(.year, from: anterior),
+            month: cal.component(.month, from: anterior)
+        )
+        // Si mientras llegaba se cambió de mes, ese ya no es el anterior.
+        guard cal.isDate(selectedMonth, equalTo: Date(), toGranularity: .month),
+              previousMonthlyBudget == nil, let presupuesto
+        else { return }
+        previousMonthlyBudget = presupuesto
     }
 
     func loadMesAnterior() async {
@@ -537,6 +645,16 @@ final class HomeViewModel {
         let analisis = criterio.map { gastos.filter($0) } ?? gastos
         let anterioresAnalisis = criterio.map { anteriores.filter($0) } ?? anteriores
 
+        // Tu normal: del tramo traído de red o, hasta que llegue, del
+        // histórico en caché.
+        let normal = HomeNormal.build(
+            historico: historicoNormal.isEmpty ? allHistoricalExpenses : historicoNormal,
+            mes: selectedMonth,
+            meses: Self.mesesNormal,
+            presupuestos: presupuestosNormal,
+            calendar: cal
+        )
+
         let resumen = HomeResumen.build(
             gastos: gastos,
             gastosMesAnterior: anteriores,
@@ -546,6 +664,7 @@ final class HomeViewModel {
             primerGasto: primerGasto,
             hoy: hoy,
             calendar: cal,
+            normal: normal,
             filtro: criterio
         )
 
