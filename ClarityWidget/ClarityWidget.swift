@@ -1,5 +1,10 @@
 // ClarityWidget.swift — Widget Extension Target
 // Supports: Small, Medium, Large, Lock Screen Circular/Rectangular/Inline
+//
+// Estilo nuevo (#65): el de la app. Fondo negro con el brillo violeta arriba,
+// etiquetas en mayúsculas pequeñas, cifras redondeadas, tarjetas de vidrio,
+// importes como "34,50 €" y el "+" como círculo de marca. Los widgets de la
+// pantalla bloqueada los pinta el sistema en monocromo y siguen como estaban.
 
 import WidgetKit
 import SwiftUI
@@ -106,33 +111,182 @@ struct ClarityWidgetEntryView: View {
     }
 }
 
+// MARK: - Estilo
+
+/// Los colores del estilo nuevo, repetidos aquí: el widget es otro target y no
+/// ve `Color.clarityPrimary` ni el resto de tokens de la app.
+enum EstiloWidget {
+    /// #8B5CF6, el `clarityPrimary` de la app.
+    static let marca = Color(red: 0x8B / 255, green: 0x5C / 255, blue: 0xF6 / 255)
+    /// #10B981, `success`.
+    static let exito = Color(red: 0x10 / 255, green: 0xB9 / 255, blue: 0x81 / 255)
+    /// #F59E0B, `warning`.
+    static let aviso = Color(red: 0xF5 / 255, green: 0x9E / 255, blue: 0x0B / 255)
+    /// #EF4444, `error`.
+    static let error = Color(red: 0xEF / 255, green: 0x44 / 255, blue: 0x44 / 255)
+    static let textoSecundario = Color.white.opacity(0.7)
+    static let textoTerciario = Color.white.opacity(0.42)
+}
+
+extension Color {
+    // Los nombres de siempre, ya con la paleta de la app.
+    static let wPurple = EstiloWidget.marca
+    static let wIndigo = EstiloWidget.marca
+    static let wGreen  = EstiloWidget.exito
+    static let wOrange = EstiloWidget.aviso
+    static let wRed    = EstiloWidget.error
+
+    static func budgetAccent(for pct: Double) -> Color {
+        if pct < 0.60 { return .wGreen }
+        if pct < 0.85 { return .wOrange }
+        return .wRed
+    }
+}
+
+/// Importes como en la app: "34,50 €" y no "€34.50".
+@MainActor
+enum FormatoWidget {
+    private static let euros: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .currency
+        f.locale = Locale(identifier: "es_ES")
+        return f
+    }()
+
+    /// Con `sinDecimales` queda "1004 €": para los datos pequeños, donde los
+    /// céntimos no caben.
+    static func importe(_ valor: Double, simbolo: String = "€", sinDecimales: Bool = false) -> String {
+        euros.currencySymbol = simbolo
+        euros.minimumFractionDigits = sinDecimales ? 0 : 2
+        euros.maximumFractionDigits = sinDecimales ? 0 : 2
+        return euros.string(from: NSNumber(value: valor)) ?? "\(valor) \(simbolo)"
+    }
+}
+
+extension String {
+    /// El nombre sin sus emojis. Las categorías llegan como "Vivienda🏡" y el
+    /// emoji ya se enseña aparte: sin esto salía dos veces.
+    var sinEmojiWidget: String {
+        var escalares = String.UnicodeScalarView()
+        for escalar in unicodeScalars {
+            let propiedades = escalar.properties
+            // Los dígitos y "#" o "*" también cuentan como emoji: se conservan.
+            let esEmoji = propiedades.isEmojiPresentation
+                || (propiedades.isEmoji && escalar.value > 0x238C)
+                || escalar.value == 0xFE0F || escalar.value == 0x200D
+            if !esEmoji { escalares.append(escalar) }
+        }
+        let limpio = String(escalares).trimmingCharacters(in: .whitespaces)
+        return limpio.isEmpty ? self : limpio
+    }
+}
+
+// MARK: - Piezas
+
+/// Etiqueta en mayúsculas pequeñas, como "GASTADO ESTE MES" en la Home.
+struct EtiquetaWidget: View {
+    let texto: String
+    var tamano: CGFloat = 10
+
+    var body: some View {
+        Text(texto.uppercased())
+            .font(.system(size: tamano, weight: .medium))
+            .tracking(0.7)
+            .foregroundStyle(EstiloWidget.textoSecundario)
+            .lineLimit(1)
+    }
+}
+
+/// La cifra protagonista, redondeada y en negrita.
+struct CifraWidget: View {
+    let texto: String
+    let tamano: CGFloat
+
+    var body: some View {
+        Text(texto)
+            .font(.system(size: tamano, weight: .bold, design: .rounded))
+            .tracking(tamano >= 26 ? -1 : -0.4)
+            .monospacedDigit()
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .widgetAccentable()
+    }
+}
+
+/// El "+" de la app: círculo de marca con el signo en blanco.
+struct BotonAnadirWidget: View {
+    var tamano: CGFloat = 30
+
+    var body: some View {
+        Button(intent: OpenAddExpenseIntent()) {
+            ZStack {
+                Circle().fill(EstiloWidget.marca)
+                Image(systemName: "plus")
+                    .font(.system(size: tamano * 0.46, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: tamano, height: tamano)
+            .widgetAccentable()
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Añadir gasto")
+    }
+}
+
+/// El emoji en un círculo de marca, como las categorías de la app.
+struct EmojiWidget: View {
+    let emoji: String
+    var tamano: CGFloat = 28
+
+    var body: some View {
+        ZStack {
+            Circle().fill(EstiloWidget.marca.opacity(0.22))
+            Circle().strokeBorder(EstiloWidget.marca.opacity(0.5), lineWidth: 0.5)
+            Text(emoji)
+                .font(.system(size: tamano * 0.5))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+        }
+        .frame(width: tamano, height: tamano)
+    }
+}
+
+extension View {
+    /// La tarjeta de vidrio de la app en versión widget: velo claro y borde fino.
+    func tarjetaWidget(radio: CGFloat = 16) -> some View {
+        let forma = RoundedRectangle(cornerRadius: radio, style: .continuous)
+        return self
+            .background(Color.white.opacity(0.06), in: forma)
+            .overlay(forma.strokeBorder(Color.white.opacity(0.1), lineWidth: 0.5))
+    }
+}
+
 // MARK: - Empty State
 
 struct EmptyWidgetView: View {
     let family: WidgetFamily
 
+    private var pequeno: Bool { family == .systemSmall }
+
     var body: some View {
-        VStack(spacing: family == .systemSmall ? 8 : 12) {
+        VStack(spacing: pequeno ? 8 : 12) {
             ZStack {
-                Circle()
-                    .fill(LinearGradient(
-                        colors: [Color.wPurple.opacity(0.85), Color.wIndigo.opacity(0.85)],
-                        startPoint: .topLeading, endPoint: .bottomTrailing
-                    ))
-                    .frame(width: family == .systemSmall ? 44 : 56,
-                           height: family == .systemSmall ? 44 : 56)
+                Circle().fill(EstiloWidget.marca)
                 Image(systemName: "plus")
-                    .font(.system(size: family == .systemSmall ? 22 : 28, weight: .black))
+                    .font(.system(size: pequeno ? 20 : 26, weight: .bold))
                     .foregroundStyle(.white)
             }
+            .frame(width: pequeno ? 44 : 56, height: pequeno ? 44 : 56)
+            .widgetAccentable()
 
             VStack(spacing: 4) {
                 Text("Sin gastos aún")
-                    .font(.system(size: family == .systemSmall ? 13 : 16, weight: .bold, design: .rounded))
+                    .font(.system(size: pequeno ? 14 : 16, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white)
-                Text(family == .systemSmall ? "Toca para añadir" : "Toca + para registrar tu primer gasto")
-                    .font(.system(size: family == .systemSmall ? 10 : 12, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.55))
+                Text(pequeno ? "Toca para añadir" : "Toca + para registrar tu primer gasto")
+                    .font(.system(size: pequeno ? 11 : 12))
+                    .foregroundStyle(EstiloWidget.textoSecundario)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
@@ -145,32 +299,18 @@ struct EmptyWidgetView: View {
 
 // MARK: - Background
 
+/// El fondo de la app: negro con un brillo violeta arriba que se apaga.
 struct WidgetGradientBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.07, green: 0.07, blue: 0.13),
-                Color(red: 0.12, green: 0.09, blue: 0.20),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-}
-
-// MARK: - Design Tokens
-
-extension Color {
-    static let wPurple = Color(red: 0.686, green: 0.322, blue: 0.871)
-    static let wIndigo = Color(red: 0.345, green: 0.337, blue: 0.839)
-    static let wGreen  = Color(red: 0.204, green: 0.780, blue: 0.349)
-    static let wOrange = Color(red: 1.000, green: 0.584, blue: 0.000)
-    static let wRed    = Color(red: 1.000, green: 0.231, blue: 0.188)
-
-    static func budgetAccent(for pct: Double) -> Color {
-        if pct < 0.60 { return .wGreen }
-        if pct < 0.85 { return .wOrange }
-        return .wRed
+        ZStack {
+            Color.black
+            EllipticalGradient(
+                colors: [EstiloWidget.marca.opacity(0.5), EstiloWidget.marca.opacity(0.14), .clear],
+                center: UnitPoint(x: 0.5, y: 0),
+                startRadiusFraction: 0,
+                endRadiusFraction: 0.8
+            )
+        }
     }
 }
 
@@ -182,68 +322,33 @@ struct SmallWidgetView: View {
     let data: SharedWidgetData
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            VStack(alignment: .leading, spacing: 6) {
-                // HOY — más grande aprovechando el espacio
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text("HOY")
-                            .font(.system(size: 11, weight: .black, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .kerning(1.4)
-                        Text(data.topCategoryEmoji)
-                            .font(.system(size: 14))
-                    }
-                    Text(data.formattedToday)
-                        .font(.system(size: 36, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.5)
-                        .lineLimit(1)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top, spacing: 4) {
+                HStack(spacing: 5) {
+                    EtiquetaWidget(texto: "Hoy")
+                    Text(data.topCategoryEmoji)
+                        .font(.system(size: 12))
                 }
-
+                .padding(.top, 6)
                 Spacer(minLength: 4)
-
-                // Semana + Mes en una línea
-                HStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("SEMANA")
-                            .font(.system(size: 8, weight: .black, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.4))
-                            .kerning(0.6)
-                        Text(data.formattedWeek)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("MES")
-                            .font(.system(size: 8, weight: .black, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.4))
-                            .kerning(0.6)
-                        Text(data.formattedMonth)
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.wIndigo)
-                    }
-                }
-
-                // Budget bar al fondo si hay
-                if let pct = data.budgetPercent {
-                    BudgetBarView(percent: pct, showLabel: false, height: 4)
-                }
+                BotonAnadirWidget(tamano: 28)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 14)
-            .padding(.trailing, 22)  // hueco para botón "+"
 
-            // Botón flotante "+" arriba derecha (no compite con el header)
-            Button(intent: OpenAddExpenseIntent()) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(Color.wPurple)
-                    .background(Circle().fill(.black.opacity(0.001)).frame(width: 28, height: 28))
+            CifraWidget(texto: FormatoWidget.importe(data.todayTotal, simbolo: data.currency), tamano: 30)
+                .padding(.top, 2)
+
+            Spacer(minLength: 6)
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                MiniStatView(label: "Semana", value: FormatoWidget.importe(data.weekTotal, simbolo: data.currency, sinDecimales: true))
+                Spacer(minLength: 4)
+                MiniStatView(label: "Mes", value: FormatoWidget.importe(data.monthTotal, simbolo: data.currency, sinDecimales: true), alineacion: .trailing)
             }
-            .buttonStyle(.plain)
-            .padding(10)
+
+            if let pct = data.budgetPercent {
+                BudgetBarView(percent: pct, showLabel: false, height: 4)
+                    .padding(.top, 8)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hoy \(data.formattedToday), semana \(data.formattedWeek)")
@@ -258,79 +363,48 @@ struct MediumWidgetView: View {
     let data: SharedWidgetData
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
 
-            // Left: Stats
+            // Izquierda: lo de hoy en grande, semana y mes debajo. Ancho fijo:
+            // a partes iguales, la tarjeta de la derecha cortaba los nombres.
             VStack(alignment: .leading, spacing: 0) {
+                EtiquetaWidget(texto: data.monthName)
 
-                HStack(spacing: 4) {
-                    Text(data.monthName.uppercased())
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.4))
-                        .kerning(1.0)
-                    Spacer()
-                    Button(intent: OpenAddExpenseIntent()) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 18))
-                            .foregroundStyle(Color.wPurple)
-                    }
-                    .buttonStyle(.plain)
-                }
+                Spacer(minLength: 4)
 
-                Spacer()
+                EtiquetaWidget(texto: "Hoy", tamano: 9)
+                CifraWidget(texto: FormatoWidget.importe(data.todayTotal, simbolo: data.currency), tamano: 28)
+                    .padding(.top, 1)
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("HOY")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
-                        .kerning(1.0)
-                    Text(data.formattedToday)
-                        .font(.system(size: 24, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .minimumScaleFactor(0.55)
-                        .lineLimit(1)
-                }
+                Spacer(minLength: 6)
 
-                Spacer()
-
-                HStack(spacing: 14) {
-                    MiniStatView(label: "SEMANA", value: data.formattedWeek)
-                    MiniStatView(label: "MES",    value: data.formattedMonth)
+                HStack(spacing: 12) {
+                    MiniStatView(label: "Semana", value: FormatoWidget.importe(data.weekTotal, simbolo: data.currency, sinDecimales: true))
+                    MiniStatView(label: "Mes", value: FormatoWidget.importe(data.monthTotal, simbolo: data.currency, sinDecimales: true))
                 }
 
                 if let pct = data.budgetPercent {
-                    Spacer(minLength: 8)
                     BudgetBarView(percent: pct, showLabel: false)
+                        .padding(.top, 8)
                 }
             }
-            .padding(.leading, 14)
-            .padding(.vertical, 14)
+            .frame(width: 128, alignment: .leading)
 
-            // Divider
-            Rectangle()
-                .fill(.white.opacity(0.07))
-                .frame(width: 1)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 12)
-
-            // Right: Recent expenses
-            VStack(alignment: .leading, spacing: 0) {
-                Text("ÚLTIMOS GASTOS")
-                    .font(.system(size: 8, weight: .black, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35))
-                    .kerning(0.8)
-                    .padding(.bottom, 9)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(data.recentExpenses.prefix(3)) { expense in
-                        ExpenseRowView(expense: expense, compact: true)
-                    }
+            // Derecha: últimos gastos en una tarjeta, con el "+" arriba
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .center, spacing: 4) {
+                    EtiquetaWidget(texto: "Últimos", tamano: 9)
+                    Spacer(minLength: 4)
+                    BotonAnadirWidget(tamano: 24)
                 }
-
-                Spacer()
+                ForEach(data.recentExpenses.prefix(3)) { expense in
+                    ExpenseRowView(expense: expense, compact: true, simbolo: data.currency)
+                }
+                Spacer(minLength: 0)
             }
-            .padding(.trailing, 14)
-            .padding(.vertical, 14)
+            .padding(10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .tarjetaWidget()
         }
     }
 }
@@ -343,92 +417,133 @@ struct LargeWidgetView: View {
     let data: SharedWidgetData
 
     var body: some View {
+        // Todo tiene que caber en el grande de un iPhone de 6,1": el mes y el
+        // "+" van dentro de la tarjeta principal, las categorías en una fila de
+        // fichas y los últimos gastos son cuatro si caben y tres si no.
         VStack(alignment: .leading, spacing: 8) {
+            tarjetaPrincipal
 
-            // Header
-            HStack {
-                Text("\(data.monthName.uppercased())  \(currentYear())")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.5))
-                    .kerning(1.0)
-                Spacer()
-                Button(intent: OpenAddExpenseIntent()) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(Color.wPurple)
-                }
-                .buttonStyle(.plain)
-            }
-
-            // Stats row
-            HStack(spacing: 0) {
-                StatPillView(label: "HOY",    value: data.formattedToday,  accent: Color.wPurple)
-                Spacer()
-                Rectangle().fill(.white.opacity(0.07)).frame(width: 1, height: 36)
-                Spacer()
-                StatPillView(label: "SEMANA", value: data.formattedWeek,   accent: Color.wIndigo)
-                Spacer()
-                Rectangle().fill(.white.opacity(0.07)).frame(width: 1, height: 36)
-                Spacer()
-                StatPillView(label: "MES",    value: data.formattedMonth,  accent: .white.opacity(0.8))
-            }
-
-            // Top 3 categorías del mes
             if !data.topMonthCategories.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("TOP CATEGORÍAS")
-                        .font(.system(size: 9, weight: .black, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.35))
-                        .kerning(0.8)
-                    VStack(spacing: 5) {
-                        ForEach(data.topMonthCategories) { cat in
-                            CategoryBarRow(stat: cat)
+                    EtiquetaWidget(texto: "Top categorías", tamano: 9)
+                    HStack(spacing: 6) {
+                        ForEach(data.topMonthCategories.prefix(3)) { cat in
+                            FichaCategoriaWidget(stat: cat, simbolo: data.currency)
                         }
                     }
                 }
             }
 
-            // Presupuesto
-            if let pct = data.budgetPercent, let budget = data.formattedBudget {
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack {
-                        Label("Presupuesto", systemImage: "target")
-                            .font(.system(size: 10, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-                        Spacer()
-                        Text("\(data.formattedMonth) / \(budget)")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
-                            .foregroundStyle(Color.budgetAccent(for: pct))
-                    }
-                    BudgetBarView(percent: pct, showLabel: false, height: 5)
-                }
-            }
-
-            Rectangle().fill(.white.opacity(0.07)).frame(height: 1)
-
-            // Últimos gastos
             VStack(alignment: .leading, spacing: 5) {
-                Text("ÚLTIMOS GASTOS")
-                    .font(.system(size: 9, weight: .black, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35))
-                    .kerning(0.8)
-                VStack(spacing: 6) {
-                    ForEach(data.recentExpenses.prefix(4)) { expense in
-                        ExpenseRowView(expense: expense, compact: false)
-                    }
+                EtiquetaWidget(texto: "Últimos gastos", tamano: 9)
+                ViewThatFits(in: .vertical) {
+                    ultimos(4)
+                    ultimos(3)
+                    ultimos(2)
                 }
             }
-
-            Spacer(minLength: 0)
+            .frame(maxHeight: .infinity, alignment: .top)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Hoy \(data.formattedToday), semana \(data.formattedWeek), mes \(data.formattedMonth)")
     }
 
-    private func currentYear() -> String {
-        Calendar.current.component(.year, from: Date()).description
+    /// Como la tarjeta de la Home: lo gastado este mes en grande.
+    private var tarjetaPrincipal: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 6) {
+                EtiquetaWidget(texto: "\(data.monthName) · gastado", tamano: 9)
+                Spacer(minLength: 4)
+                BotonAnadirWidget(tamano: 26)
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                CifraWidget(texto: FormatoWidget.importe(data.monthTotal, simbolo: data.currency), tamano: 28)
+                Spacer(minLength: 6)
+                VStack(alignment: .trailing, spacing: 2) {
+                    datoEnLinea("Hoy", FormatoWidget.importe(data.todayTotal, simbolo: data.currency))
+                    datoEnLinea("Semana", FormatoWidget.importe(data.weekTotal, simbolo: data.currency, sinDecimales: true))
+                }
+            }
+            .padding(.top, 2)
+
+            if let pct = data.budgetPercent, let budget = data.monthBudget {
+                BudgetBarView(percent: pct, showLabel: false, height: 5)
+                    .padding(.top, 8)
+                HStack {
+                    Text("\(Int((pct * 100).rounded())) % del presupuesto")
+                        .foregroundStyle(EstiloWidget.textoSecundario)
+                    Spacer(minLength: 4)
+                    Text(FormatoWidget.importe(budget, simbolo: data.currency, sinDecimales: true))
+                        .foregroundStyle(Color.budgetAccent(for: pct))
+                        .monospacedDigit()
+                }
+                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .lineLimit(1)
+                .padding(.top, 5)
+            }
+        }
+        .padding(12)
+        .tarjetaWidget(radio: 18)
+    }
+
+    private func datoEnLinea(_ etiqueta: String, _ valor: String) -> some View {
+        HStack(spacing: 4) {
+            Text(etiqueta.uppercased())
+                .font(.system(size: 8, weight: .medium))
+                .tracking(0.6)
+                .foregroundStyle(EstiloWidget.textoSecundario)
+            Text(valor)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+        .lineLimit(1)
+    }
+
+    private func ultimos(_ cuantos: Int) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            ForEach(data.recentExpenses.prefix(cuantos)) { expense in
+                ExpenseRowView(expense: expense, compact: false, simbolo: data.currency)
+            }
+        }
+    }
+}
+
+/// Una categoría del top en ficha: emoji y nombre, importe y su parte del mes.
+struct FichaCategoriaWidget: View {
+    let stat: WidgetCategoryStat
+    var simbolo: String = "€"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+                Text(stat.emoji)
+                    .font(.system(size: 11))
+                Text(stat.name.sinEmojiWidget)
+                    .font(.system(size: 10, weight: .medium, design: .rounded))
+                    .foregroundStyle(EstiloWidget.textoSecundario)
+                    .lineLimit(1)
+            }
+            Text(FormatoWidget.importe(stat.amount, simbolo: simbolo, sinDecimales: true))
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.1))
+                    Capsule().fill(EstiloWidget.marca)
+                        .frame(width: max(geo.size.width * stat.percent, 3))
+                        .widgetAccentable()
+                }
+            }
+            .frame(height: 3)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .tarjetaWidget(radio: 12)
     }
 }
 
@@ -512,16 +627,11 @@ struct LockScreenInlineView: View {
 struct ExpenseRowView: View {
     let expense: WidgetExpense
     let compact: Bool
+    var simbolo: String = "€"
 
     var body: some View {
-        HStack(spacing: compact ? 6 : 10) {
-            ZStack {
-                Circle()
-                    .fill(.white.opacity(0.07))
-                    .frame(width: compact ? 26 : 32, height: compact ? 26 : 32)
-                Text(expense.emoji)
-                    .font(.system(size: compact ? 13 : 16))
-            }
+        HStack(spacing: compact ? 7 : 10) {
+            EmojiWidget(emoji: expense.emoji, tamano: compact ? 22 : 28)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(expense.name)
@@ -529,21 +639,26 @@ struct ExpenseRowView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 if !compact {
-                    Text(expense.category)
-                        .font(.system(size: 10, weight: .regular, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.4))
+                    Text(expense.category.sinEmojiWidget)
+                        .font(.system(size: 10))
+                        .foregroundStyle(EstiloWidget.textoTerciario)
+                        .lineLimit(1)
                 }
             }
 
             Spacer(minLength: 2)
 
             VStack(alignment: .trailing, spacing: 1) {
-                Text(expense.formattedAmount)
-                    .font(.system(size: compact ? 11 : 13, weight: .bold, design: .rounded))
+                Text(FormatoWidget.importe(expense.amount, simbolo: simbolo))
+                    .font(.system(size: compact ? 11 : 13, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
                     .foregroundStyle(.white)
-                Text(expense.timeAgo)
-                    .font(.system(size: 9, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .lineLimit(1)
+                if !compact {
+                    Text(expense.timeAgo)
+                        .font(.system(size: 9))
+                        .foregroundStyle(EstiloWidget.textoTerciario)
+                }
             }
         }
     }
@@ -560,28 +675,20 @@ struct BudgetBarView: View {
                 HStack {
                     Text("Presupuesto")
                         .font(.system(size: 9, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(EstiloWidget.textoSecundario)
                     Spacer()
                     Text("\(Int(percent * 100))%")
                         .font(.system(size: 9, weight: .bold, design: .rounded))
                         .foregroundStyle(Color.budgetAccent(for: percent))
                 }
             }
+            // Cápsula lisa, como las barras de la app.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: height / 2)
-                        .fill(.white.opacity(0.12))
-                        .frame(height: height)
-                    LinearGradient(
-                        colors: [
-                            Color.budgetAccent(for: percent).opacity(0.7),
-                            Color.budgetAccent(for: percent),
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: height / 2))
-                    .frame(width: max(geo.size.width * percent, height), height: height)
+                    Capsule().fill(Color.white.opacity(0.12))
+                    Capsule().fill(Color.budgetAccent(for: percent))
+                        .frame(width: max(geo.size.width * percent, height))
+                        .widgetAccentable()
                 }
             }
             .frame(height: height)
@@ -596,12 +703,10 @@ struct StatPillView: View {
 
     var body: some View {
         VStack(alignment: .center, spacing: 3) {
-            Text(label)
-                .font(.system(size: 8, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.4))
-                .kerning(0.8)
+            EtiquetaWidget(texto: label, tamano: 8)
             Text(value)
-                .font(.system(size: 20, weight: .black, design: .rounded))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .monospacedDigit()
                 .foregroundStyle(accent)
                 .minimumScaleFactor(0.55)
                 .lineLimit(1)
@@ -612,34 +717,32 @@ struct StatPillView: View {
 /// Fila Top categoría: emoji + nombre + barra + importe
 struct CategoryBarRow: View {
     let stat: WidgetCategoryStat
+    var simbolo: String = "€"
 
     var body: some View {
         HStack(spacing: 8) {
             Text(stat.emoji)
-                .font(.system(size: 14))
-                .frame(width: 22)
+                .font(.system(size: 13))
+                .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 0) {
-                    Text(stat.name)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.85))
+                    Text(stat.name.sinEmojiWidget)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(1)
                     Spacer(minLength: 4)
-                    Text(stat.formattedAmount)
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                    Text(FormatoWidget.importe(stat.amount, simbolo: simbolo, sinDecimales: true))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
                         .foregroundStyle(.white)
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(0.1))
-                            .frame(height: 4)
-                        Capsule()
-                            .fill(LinearGradient(
-                                colors: [Color.wPurple, Color.wIndigo],
-                                startPoint: .leading, endPoint: .trailing
-                            ))
-                            .frame(width: max(geo.size.width * stat.percent, 4), height: 4)
+                        Capsule().fill(Color.white.opacity(0.1))
+                        Capsule().fill(EstiloWidget.marca)
+                            .frame(width: max(geo.size.width * stat.percent, 4))
+                            .widgetAccentable()
                     }
                 }
                 .frame(height: 4)
@@ -648,19 +751,21 @@ struct CategoryBarRow: View {
     }
 }
 
+/// Dato pequeño: etiqueta encima y cifra debajo.
 struct MiniStatView: View {
     let label: String
     let value: String
+    var alineacion: HorizontalAlignment = .leading
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label)
-                .font(.system(size: 7, weight: .black, design: .rounded))
-                .foregroundStyle(.white.opacity(0.4))
-                .kerning(0.8)
+        VStack(alignment: alineacion, spacing: 1) {
+            EtiquetaWidget(texto: label, tamano: 8)
             Text(value)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.85))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
     }
 }
