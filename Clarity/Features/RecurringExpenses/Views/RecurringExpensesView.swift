@@ -16,14 +16,17 @@ struct RecurringExpensesView: View {
     @State private var expenses: [RecurringExpense] = []
     @State private var isLoading = true
     @State private var showAddSheet = false
-    /// La regla abierta en detalle, por `stableId`.
+    /// Lo que se tocó para abrir el detalle: "regla|<stableId>" desde una
+    /// tarjeta o "cargo|<stableId>|<fecha>" desde una ficha de próximos. La
+    /// misma regla puede estar a la vez en los dos sitios y el zoom tiene que
+    /// salir del que se tocó, así que el id no puede ser solo el `stableId`.
     @State private var detalleId: String?
+    @Namespace private var zoom
 
     var body: some View {
         Group {
             if isLoading {
-                ProgressView()
-                    .tint(Color.clarityPrimary)
+                CargaClarity(texto: "Cargando tus recurrentes")
             } else if expenses.isEmpty {
                 emptyState
             } else {
@@ -49,10 +52,13 @@ struct RecurringExpensesView: View {
             }
         }
         .navigationDestination(item: $detalleId) { id in
-            if let regla = expenses.first(where: { $0.stableId == id }) {
+            // El segundo trozo del id es el `stableId` de la regla.
+            let partes = id.split(separator: "|", omittingEmptySubsequences: false)
+            if partes.count >= 2, let regla = expenses.first(where: { $0.stableId == String(partes[1]) }) {
                 RecurringExpenseDetailView(expense: regla) {
                     loadExpenses()
                 }
+                .transicionZoom(id: id, en: zoom)
             }
         }
         .task {
@@ -146,8 +152,10 @@ struct RecurringExpensesView: View {
         ScrollView(.horizontal) {
             LazyHStack(spacing: Spacing.xs) {
                 ForEach(proximos) { cargo in
-                    Button { detalleId = cargo.regla.stableId } label: {
+                    let idZoom = "cargo|\(cargo.regla.stableId)|\(cargo.fecha)"
+                    Button { detalleId = idZoom } label: {
                         TarjetaCargo(cargo: cargo)
+                            .origenZoom(id: idZoom, en: zoom)
                     }
                     .buttonStyle(TarjetaButtonStyle())
                 }
@@ -163,8 +171,10 @@ struct RecurringExpensesView: View {
     /// Cada regla es una tarjeta que abre su detalle, con pausar y borrar al
     /// deslizar y al mantener pulsado.
     private func tarjeta<Contenido: View>(_ regla: RecurringExpense, @ViewBuilder contenido: () -> Contenido) -> some View {
-        Button { detalleId = regla.stableId } label: {
+        let idZoom = "regla|\(regla.stableId)"
+        return Button { detalleId = idZoom } label: {
             contenido()
+                .origenZoom(id: idZoom, en: zoom)
         }
         .buttonStyle(TarjetaButtonStyle())
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -179,7 +189,7 @@ struct RecurringExpensesView: View {
             }
         }
         .contextMenu {
-            Button { detalleId = regla.stableId } label: {
+            Button { detalleId = idZoom } label: {
                 Label("Ver detalle", systemImage: "info.circle")
             }
             Button { alternar(regla) } label: {
@@ -474,7 +484,7 @@ private struct TarjetaCargo: View {
         }
         .padding(12)
         .frame(width: 132, height: 146, alignment: .topLeading)
-        .glassCard(cornerRadius: CornerRadius.large, tint: esHoy ? Color.clarityPrimary : nil)
+        .glassCard(cornerRadius: CornerRadius.large, tint: esHoy ? Color.clarityPrimary : nil, interactivo: true)
         .accessibilityElement(children: .combine)
     }
 }
@@ -539,7 +549,7 @@ private struct FilaRecurrente: View {
         .opacity(estado == .activa ? 1 : 0.62)
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .glassCard(cornerRadius: CornerRadius.large)
+        .glassCard(cornerRadius: CornerRadius.large, interactivo: true)
         .accessibilityElement(children: .combine)
         .accessibilityHint("Pulsa para ver el detalle. Desliza para pausar o borrar.")
     }
@@ -590,7 +600,7 @@ private struct FilaPlazos: View {
             }
         }
         .padding(14)
-        .glassCard(cornerRadius: CornerRadius.large)
+        .glassCard(cornerRadius: CornerRadius.large, interactivo: true)
         .accessibilityElement(children: .combine)
     }
 }

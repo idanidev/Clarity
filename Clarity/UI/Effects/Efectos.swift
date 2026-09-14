@@ -197,8 +197,12 @@ extension View {
     /// Agrupa botón y burbuja en un solo contenedor de vidrio para que se
     /// fundan al acercarse, como una gota. Sin iOS 26, no hace nada.
     @ViewBuilder
-    func contenedorDeVidrio() -> some View {
-        if #available(iOS 26, *) { GlassEffectContainer(spacing: 24) { self } } else { self }
+    ///
+    /// - Parameter espaciado: a qué distancia empiezan a fundirse dos piezas.
+    ///   Con controles que deben verse separados, poco; con una gota que sale
+    ///   de un botón, más.
+    func contenedorDeVidrio(espaciado: CGFloat = 24) -> some View {
+        if #available(iOS 26, *) { GlassEffectContainer(spacing: espaciado) { self } } else { self }
     }
 
     /// Botón redondo de vidrio teñido, que se hunde bajo el dedo.

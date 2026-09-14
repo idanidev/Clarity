@@ -32,6 +32,10 @@ class FinancialHubViewModel {
     var showAddGoal = false
     var editingGoal: Goal? = nil
 
+    /// La hucha que acaba de llegar a su objetivo con la última aportación.
+    /// La vista enseña la enhorabuena mientras no sea nil y la limpia al cerrarla.
+    var huchaCompletada: Goal? = nil
+
     // Services
     private let service: FinancialService
     private let getExpensesUseCase: GetExpensesUseCase
@@ -359,6 +363,9 @@ class FinancialHubViewModel {
         let goalName = goals[goalIndex].name
         let category = goals[goalIndex].savingsExpenseCategory ?? "Ahorros"
         let subcategory = goals[goalIndex].savingsExpenseSubcategory
+        // Antes de la actualización optimista: solo se celebra el cruce del objetivo,
+        // no cada aportación a una hucha que ya estaba llena.
+        let importeAnterior = goals[goalIndex].currentAmount
 
         // Optimistic UI update (animation handled by View)
         goals[goalIndex].currentAmount += amount
@@ -394,6 +401,14 @@ class FinancialHubViewModel {
             }
 
             HapticManager.shared.playCustomPattern(.expenseAdded)
+
+            // Por id y no por goalIndex: durante los await la lista puede haber cambiado.
+            if let meta = goals.first(where: { $0.id == goalId }),
+               meta.targetAmount > 0,
+               importeAnterior < meta.targetAmount,
+               meta.currentAmount >= meta.targetAmount {
+                huchaCompletada = meta
+            }
 
         } catch {
             // Rollback on error

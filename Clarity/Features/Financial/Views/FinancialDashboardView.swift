@@ -20,9 +20,7 @@ struct FinancialDashboardView: View {
                 HomeFondo()
 
                 if viewModel.isLoading {
-                    ProgressView()
-                        .tint(Color.clarityPrimary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    CargaClarity(texto: "Cargando tus metas")
                 } else {
                     scrollContent
                 }
@@ -81,6 +79,18 @@ struct FinancialDashboardView: View {
                 Button("OK") { viewModel.clearError() }
             } message: {
                 Text(viewModel.error ?? "")
+            }
+        }
+        // Encima del NavigationStack y no dentro, para que el velo tape también
+        // el título y el botón de añadir mientras dura la enhorabuena.
+        .overlay {
+            if let meta = viewModel.huchaCompletada {
+                CelebracionClarity(
+                    icono: "star.fill",
+                    titulo: "¡Hucha completada!",
+                    detalle: "Has llegado a \(Formatters.currency(meta.targetAmount)) en \(meta.name).",
+                    onCerrar: { viewModel.huchaCompletada = nil }
+                )
             }
         }
     }

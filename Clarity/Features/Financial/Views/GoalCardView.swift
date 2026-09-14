@@ -55,7 +55,13 @@ struct GoalCardView: View {
             }
 
             // Progress Bar
-            BarraProgresoClarity(progreso: progreso, color: progressColor, alto: 8)
+            // Cerca del tope la barra ondula para avisar sin gritar; ocupa lo mismo,
+            // así que cambiar de una a otra no mueve la tarjeta.
+            if goal.type == .spendingLimit && progreso >= 0.85 {
+                BarraOndulada(progreso: progreso, color: progressColor, alto: 8)
+            } else {
+                BarraProgresoClarity(progreso: progreso, color: progressColor, alto: 8)
+            }
 
             // Stats & Action
             HStack(alignment: .bottom) {
@@ -79,7 +85,7 @@ struct GoalCardView: View {
             }
         }
         .padding(16)
-        .glassCard(cornerRadius: CornerRadius.large)
+        .glassCard(cornerRadius: CornerRadius.large, interactivo: true)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(goal.name), \(mainStatText) de \(Formatters.currency(goal.targetAmount))")
         .accessibilityHint(goal.type == .savingsTarget ? "Meta de ahorro" : "Límite de gasto")
@@ -142,6 +148,8 @@ struct GoalCardView: View {
     }
 
     @State private var showFeedSheet = false
+    /// Uno por tarjeta: así el id "aportar" no choca entre huchas.
+    @Namespace private var ns
 
     private var feedButton: some View {
         Button {
@@ -154,9 +162,11 @@ struct GoalCardView: View {
             }
         }
         .buttonStyle(.secundarioClarity)
+        .origenZoom(id: "aportar", en: ns)
         .sheet(isPresented: $showFeedSheet) {
             if let onFeed = onFeed {
                 FeedGoalSheet(goal: goal, onFeed: onFeed)
+                    .transicionZoom(id: "aportar", en: ns)
             }
         }
     }

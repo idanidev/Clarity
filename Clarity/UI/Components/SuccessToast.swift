@@ -5,12 +5,16 @@ import SwiftUI
 
 struct SuccessToast: View {
     let message: String
-    
+    /// Pasa a `true` al aparecer: dispara el rebote del check.
+    @State private var aparecido = false
+
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 20))
-                .foregroundColor(.green)
+                .foregroundStyle(Color.success)
+                // El check rebota al aparecer: se nota que se ha guardado.
+                .symbolEffect(.bounce, value: aparecido)
 
             Text(message)
                 .font(.subheadline.weight(.semibold))
@@ -24,5 +28,6 @@ struct SuccessToast: View {
         .shadow(color: .black.opacity(0.2), radius: 10)
         .padding(.horizontal)
         .safeAreaPadding(.top)  // avoid Dynamic Island / notch
+        .onAppear { aparecido = true }
     }
 }

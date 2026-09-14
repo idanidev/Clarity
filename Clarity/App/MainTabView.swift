@@ -11,6 +11,10 @@ struct MainTabView: View {
     /// Sube cuando el control "Dictar gasto" abre la app: el micro arranca solo.
     @State private var arrancarVoz = 0
     @State private var showRecurring = false
+    /// El formulario de añadir crece desde el "+" de la barra.
+    @Namespace private var zoomBarra
+    /// Toques por pestaña: cada uno hace rebotar su icono.
+    @State private var toquesPestana: [Int: Int] = [:]
     /// Lo que ocupa la barra flotante. Cada pestaña deja ese hueco al final y el
     /// carrusel de la Home, que llega hasta el borde, lo lee del entorno.
     @State private var medidaBarra = MedidaBarraInferior(alto: 66, margenInferior: 34)
@@ -139,6 +143,7 @@ struct MainTabView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(.regularMaterial)
             .presentationCornerRadius(CornerRadius.large)
+            .transicionZoom(id: "pestana-2", en: zoomBarra)
         }
         .sheet(isPresented: $showRecurring) {
             NavigationStack {
@@ -278,7 +283,7 @@ struct MainTabView: View {
                 pestana(3, "gearshape.fill", "Ajustes")
             }
             .padding(5)
-            .glassCard(cornerRadius: 30)
+            .glassCard(cornerRadius: 30, interactivo: true)
             .frame(maxWidth: .infinity)
 
             SimpleVoiceButton(viewModel: homeViewModel, categories: UserDataManager.shared.categories, disparoGrabar: arrancarVoz)
@@ -291,11 +296,16 @@ struct MainTabView: View {
         let activa = selectedTab == tag
         return Button {
             selectedTab = tag  // la 2 la intercepta el onChange y abre el formulario
+            toquesPestana[tag, default: 0] += 1
             HapticManager.shared.selection()
         } label: {
             Image(systemName: icono)
                 .font(.system(size: 20, weight: activa ? .semibold : .regular))
                 .foregroundStyle(activa ? Color.clarityPrimary : Color.textSecondary)
+                // Rebota al tocarlo, como los iconos del sistema.
+                .symbolEffect(.bounce, value: toquesPestana[tag, default: 0])
+                // El "+" gira a una "x" mientras el formulario está abierto.
+                .rotationEffect(.degrees(tag == 2 && showManualExpense ? 45 : 0))
                 .frame(maxWidth: .infinity)
                 .frame(height: 48)
                 .background {
@@ -304,11 +314,13 @@ struct MainTabView: View {
                     }
                 }
                 .contentShape(Rectangle())
+                .origenZoom(id: "pestana-\(tag)", en: zoomBarra)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(nombre)
         .accessibilityAddTraits(activa ? .isSelected : [])
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedTab)
+        .animation(.spring(response: 0.35, dampingFraction: 0.7), value: showManualExpense)
     }
 }
 
