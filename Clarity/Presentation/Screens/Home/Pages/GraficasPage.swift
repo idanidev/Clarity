@@ -66,36 +66,9 @@ struct GraficasPage: View {
         let sectores = porciones(datos: datos, total: total)
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 18) {
-                ZStack {
-                    if sectores.isEmpty {
-                        // Nada que repartir: un anillo vacío. Un `Chart` con todos
-                        // los sectores a cero divide entre cero y Swift Charts
-                        // revienta ("Double value cannot be converted to Int").
-                        // Pasaba al ir a un mes que aún no había llegado de red.
-                        Circle()
-                            .strokeBorder(Color.primary.opacity(0.1), lineWidth: 24)
-                            .frame(width: 150, height: 150)
-                    } else {
-                        // El anillo se traza: cada sector crece con `dibujado` y un
-                        // sector transparente ocupa lo que falta hasta la vuelta
-                        // completa. De paso gira un cuarto hasta su posición.
-                        Chart(sectores) { p in
-                            SectorMark(angle: .value("€", p.valor), innerRadius: .ratio(0.68), angularInset: p.relleno ? 0 : 1.5)
-                                .cornerRadius(p.relleno ? 0 : 3)
-                                .foregroundStyle(p.color)
-                        }
-                        .chartLegend(.hidden)
-                        .frame(width: 150, height: 150)
-                        .rotationEffect(.degrees((1 - dibujado) * -120))
-                    }
-                    VStack(spacing: 2) {
-                        Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(Color.textSecondary)
-                        Text(Formatters.currency(total * dibujado))
-                            .font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
-                            .contentTransition(.numericText(value: total * dibujado))
-                    }
-                    .frame(width: 96)
-                }
+                // En su propia vista: la selección del anillo cambia en cada frame
+                // del arrastre y así solo se repinta él, no la página entera.
+                AnilloReparto(datos: datos, sectores: sectores, total: total, dibujado: dibujado)
                 VStack(alignment: .leading, spacing: 9) {
                     ForEach(datos, id: \.id) { g in
                         HStack(spacing: 8) {
@@ -116,33 +89,13 @@ struct GraficasPage: View {
 
     // Gasto por día, con el más caro señalado
     private var porDia: some View {
-        let dias = viewModel.gastosPorDia
-        let maximo = dias.max(by: { $0.importe < $1.importe })
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Por día").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("Media \(Formatters.currency(viewModel.resumen.mediaDiariaAnalisis))").font(.caption).foregroundStyle(Color.textSecondary)
-            }
-            // El día va como categoría, no como número: con un eje numérico las
-            // barras de ancho por ratio se quedaban a cero y el gráfico salía vacío.
-            Chart(dias, id: \.dia) { d in
-                BarMark(x: .value("Día", String(d.dia)), y: .value("€", d.importe * dibujado), width: .ratio(0.6))
-                    .cornerRadius(2)
-                    .foregroundStyle(d.dia == maximo?.dia && d.importe > 0 ? Color.error : Color.clarityPrimary)
-            }
-            .chartXAxis {
-                AxisMarks(values: ["1", "10", "20", String(dias.count)]) { v in
-                    AxisValueLabel(anchor: .top, collisionResolution: .disabled) {
-                        if let n = v.as(String.self) { Text(n).font(.caption2) }
-                    }
-                }
-            }
-            .chartYAxis(.hidden)
-            // Escala fija al máximo real: sin ella el eje crecería con las barras
-            // y parecerían llenas desde el primer frame.
-            .chartYScale(domain: 0...max(maximo?.importe ?? 1, 1))
-            .frame(height: 110)
+        VStack(alignment: .leading, spacing: 12) {
+            GraficoPorDia(
+                dias: viewModel.gastosPorDia,
+                media: viewModel.resumen.mediaDiariaAnalisis,
+                mes: viewModel.selectedMonth,
+                dibujado: dibujado
+            )
 
             if let d = viewModel.resumen.diaMasCaro, d.importe > 0 {
                 Aviso(icono: "exclamationmark.circle", color: .error,
@@ -243,28 +196,9 @@ struct GraficasPage: View {
         let evo = viewModel.evolucion(meses: evolucionMeses)
         let media = evo.isEmpty ? 0 : evo.map(\.total).reduce(0, +) / Double(evo.count)
         let clave = String(Formatters.localDayString(from: viewModel.selectedMonth).prefix(7))
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Últimos \(evolucionMeses) meses").font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("Media \(Formatters.currencyCompact(media))").font(.caption).foregroundStyle(Color.textSecondary)
-            }
-            Chart(evo) { m in
-                BarMark(x: .value("Mes", m.label), y: .value("€", m.total * dibujado), width: .ratio(0.55))
-                    .cornerRadius(6)
-                    .foregroundStyle(m.key == clave ? Color.clarityPrimary : Color.primary.opacity(0.22))
-                    .annotation(position: .top, spacing: 4) {
-                        Text(Formatters.currencyCompact(m.total)).font(.caption2)
-                            .foregroundStyle(m.key == clave ? .primary : Color.textSecondary)
-                            .opacity(dibujado)
-                    }
-            }
-            .chartYAxis(.hidden)
-            .chartYScale(domain: 0...max(evo.map(\.total).max() ?? 1, 1) * 1.18)
-            .frame(height: 150)
-        }
-        .padding(16)
-        .glassCard()
+        return GraficoEvolucion(meses: evolucionMeses, evo: evo, media: media, clave: clave, dibujado: dibujado)
+            .padding(16)
+            .glassCard()
     }
 }
 
@@ -306,6 +240,235 @@ private struct Porcion: Identifiable {
     let valor: Double
     let color: Color
     let relleno: Bool
+}
+
+// MARK: - Gráficos que se tocan
+//
+// Cada uno guarda su selección: Swift Charts la actualiza mientras dura el
+// arrastre y, estando aquí y no en la página, solo se repinta la tarjeta tocada.
+// Al soltar, `chartXSelection`/`chartAngleSelection` la devuelven a `nil` solos.
+
+/// El anillo del reparto. Al arrastrar, el centro cuenta la categoría que queda
+/// bajo el dedo en lugar del total.
+private struct AnilloReparto: View {
+    let datos: [CategoryGroup]
+    let sectores: [Porcion]
+    let total: Double
+    let dibujado: Double
+    /// Euros acumulados bajo el dedo, en el orden de los sectores.
+    @State private var angulo: Double?
+
+    var body: some View {
+        let elegida = categoriaElegida
+        ZStack {
+            if sectores.isEmpty {
+                // Nada que repartir: un anillo vacío. Un `Chart` con todos
+                // los sectores a cero divide entre cero y Swift Charts
+                // revienta ("Double value cannot be converted to Int").
+                // Pasaba al ir a un mes que aún no había llegado de red.
+                Circle()
+                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 24)
+                    .frame(width: 150, height: 150)
+            } else {
+                // El anillo se traza: cada sector crece con `dibujado` y un
+                // sector transparente ocupa lo que falta hasta la vuelta
+                // completa. De paso gira un cuarto hasta su posición.
+                Chart(sectores) { p in
+                    SectorMark(angle: .value("€", p.valor), innerRadius: .ratio(0.68), angularInset: p.relleno ? 0 : 1.5)
+                        .cornerRadius(p.relleno ? 0 : 3)
+                        .foregroundStyle(p.color)
+                        .opacity(elegida == nil || elegida?.id == p.id ? 1 : 0.35)
+                }
+                .chartLegend(.hidden)
+                .chartAngleSelection(value: $angulo)
+                .frame(width: 150, height: 150)
+                .rotationEffect(.degrees((1 - dibujado) * -120))
+            }
+            VStack(spacing: 2) {
+                if let elegida {
+                    Text(elegida.name.nombreSinEmoji)
+                        .font(.caption2).foregroundStyle(Color.textSecondary)
+                        .lineLimit(1).minimumScaleFactor(0.7)
+                    Text(Formatters.currency(elegida.totalAmount))
+                        .font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
+                    Text("\(porcentaje(elegida.totalAmount)) %")
+                        .font(.caption2.weight(.semibold)).foregroundStyle(Color.textSecondary)
+                } else {
+                    Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(Color.textSecondary)
+                    Text(Formatters.currency(total * dibujado))
+                        .font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
+                        .contentTransition(.numericText(value: total * dibujado))
+                }
+            }
+            .frame(width: 96)
+            // El centro queda encima del gráfico: sin esto se tragaría los
+            // arrastres que empiezan en el hueco del anillo.
+            .allowsHitTesting(false)
+        }
+        .onChange(of: elegida?.id) { _, nueva in
+            if nueva != nil { HapticManager.shared.selection() }
+        }
+    }
+
+    /// La categoría bajo el dedo. El sector transparente del dibujado no cuenta.
+    private var categoriaElegida: CategoryGroup? {
+        guard let angulo else { return nil }
+        var acumulado = 0.0
+        for p in sectores {
+            acumulado += p.valor
+            if angulo <= acumulado {
+                return p.relleno ? nil : datos.first { $0.id == p.id }
+            }
+        }
+        return nil
+    }
+
+    /// Mismo cálculo que la leyenda, para que las dos cifras coincidan.
+    private func porcentaje(_ importe: Double) -> Int {
+        total > 0 ? Int((importe / total * 100).rounded()) : 0
+    }
+}
+
+/// Gasto por día, con el más caro señalado. Al arrastrar se ve el día y su importe.
+private struct GraficoPorDia: View {
+    let dias: [(dia: Int, importe: Double)]
+    let media: Double
+    /// El mes que se enseña, para ponerle nombre al día elegido.
+    let mes: Date
+    let dibujado: Double
+    /// El día bajo el dedo, con la misma etiqueta que el eje.
+    @State private var seleccion: String?
+
+    var body: some View {
+        let maximo = dias.max(by: { $0.importe < $1.importe })
+        let elegido = seleccion.flatMap { s in dias.first { String($0.dia) == s } }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Por día").font(.subheadline.weight(.semibold))
+                Spacer()
+                // La anotación del día elegido cae sobre esta fila: la media se
+                // aparta para no quedar pisada, sin mover nada de sitio.
+                Text("Media \(Formatters.currency(media))").font(.caption).foregroundStyle(Color.textSecondary)
+                    .opacity(elegido == nil ? 1 : 0)
+            }
+            // El día va como categoría, no como número: con un eje numérico las
+            // barras de ancho por ratio se quedaban a cero y el gráfico salía vacío.
+            Chart {
+                ForEach(dias, id: \.dia) { d in
+                    BarMark(x: .value("Día", String(d.dia)), y: .value("€", d.importe * dibujado), width: .ratio(0.6))
+                        .cornerRadius(2)
+                        .foregroundStyle(d.dia == maximo?.dia && d.importe > 0 ? Color.error : Color.clarityPrimary)
+                        .opacity(elegido == nil || elegido?.dia == d.dia ? 1 : 0.35)
+                }
+                if let elegido {
+                    RuleMark(x: .value("Día", String(elegido.dia)))
+                        .foregroundStyle(Color.textTertiary)
+                        .lineStyle(StrokeStyle(lineWidth: 1))
+                        .zIndex(-1)
+                        .annotation(position: .top, spacing: 4,
+                                    overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                            EtiquetaSeleccion(titulo: nombreDia(elegido.dia), importe: elegido.importe)
+                        }
+                }
+            }
+            .chartXAxis {
+                AxisMarks(values: ["1", "10", "20", String(dias.count)]) { v in
+                    AxisValueLabel(anchor: .top, collisionResolution: .disabled) {
+                        if let n = v.as(String.self) { Text(n).font(.caption2) }
+                    }
+                }
+            }
+            .chartYAxis(.hidden)
+            // Escala fija al máximo real: sin ella el eje crecería con las barras
+            // y parecerían llenas desde el primer frame.
+            .chartYScale(domain: 0...max(maximo?.importe ?? 1, 1))
+            .chartXSelection(value: $seleccion)
+            .frame(height: 110)
+        }
+        .onChange(of: seleccion) { _, nuevo in
+            if nuevo != nil { HapticManager.shared.selection() }
+        }
+    }
+
+    /// "martes 16". Solo se llama con un día elegido, no en cada pintado.
+    private func nombreDia(_ dia: Int) -> String {
+        let cal = Calendar.current
+        guard let inicio = cal.date(from: cal.dateComponents([.year, .month], from: mes)),
+              let fecha = cal.date(byAdding: .day, value: dia - 1, to: inicio)
+        else { return "Día \(dia)" }
+        return fecha.formatted(.dateTime.weekday(.wide).day())
+    }
+}
+
+/// Los últimos meses. Al arrastrar, la cabecera enseña el total exacto del mes.
+private struct GraficoEvolucion: View {
+    let meses: Int
+    let evo: [MonthlySpending]
+    let media: Double
+    /// "yyyy-MM" del mes que se enseña, que va en el color de la app.
+    let clave: String
+    let dibujado: Double
+    /// La etiqueta del mes bajo el dedo, la misma que la del eje.
+    @State private var seleccion: String?
+
+    var body: some View {
+        let elegido = seleccion.flatMap { s in evo.first { $0.label == s } }
+        let claveElegida = elegido?.key
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Últimos \(meses) meses").font(.subheadline.weight(.semibold))
+                Spacer()
+                if let elegido {
+                    // Las barras ya llevan la cifra redondeada; aquí va la exacta.
+                    Text("\(nombreMes(elegido)) · \(Formatters.currency(elegido.total))")
+                        .font(.caption.weight(.semibold))
+                } else {
+                    Text("Media \(Formatters.currencyCompact(media))").font(.caption).foregroundStyle(Color.textSecondary)
+                }
+            }
+            Chart(evo) { m in
+                BarMark(x: .value("Mes", m.label), y: .value("€", m.total * dibujado), width: .ratio(0.55))
+                    .cornerRadius(6)
+                    .foregroundStyle(m.key == clave ? Color.clarityPrimary : Color.primary.opacity(0.22))
+                    .opacity(claveElegida == nil || claveElegida == m.key ? 1 : 0.4)
+                    .annotation(position: .top, spacing: 4) {
+                        Text(Formatters.currencyCompact(m.total)).font(.caption2)
+                            .foregroundStyle(m.key == clave ? .primary : Color.textSecondary)
+                            .opacity(dibujado * (claveElegida == nil || claveElegida == m.key ? 1 : 0.4))
+                    }
+            }
+            .chartYAxis(.hidden)
+            .chartYScale(domain: 0...max(evo.map(\.total).max() ?? 1, 1) * 1.18)
+            .chartXSelection(value: $seleccion)
+            .frame(height: 150)
+        }
+        .onChange(of: seleccion) { _, nuevo in
+            if nuevo != nil { HapticManager.shared.selection() }
+        }
+    }
+
+    /// "Septiembre" a partir de la clave "yyyy-MM"; la etiqueta corta si no se lee.
+    private func nombreMes(_ m: MonthlySpending) -> String {
+        guard let numero = Int(m.key.suffix(2)), (1...12).contains(numero) else { return m.label }
+        return Formatters.fullMonthName(numero)
+    }
+}
+
+/// El dato exacto de lo que está bajo el dedo, encima del gráfico.
+private struct EtiquetaSeleccion: View {
+    let titulo: String
+    let importe: Double
+
+    var body: some View {
+        VStack(spacing: 1) {
+            Text(titulo).font(.caption2).foregroundStyle(Color.textSecondary)
+            Text(Formatters.currency(importe)).font(.caption.weight(.semibold))
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 10).padding(.vertical, 5)
+        // Material y no color: tapa lo que quede debajo sin romper el vidrio.
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: CornerRadius.small, style: .continuous))
+    }
 }
 
 private struct Aviso: View {
