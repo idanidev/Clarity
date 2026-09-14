@@ -8,7 +8,7 @@ Clarity is a native iOS expense tracking app built with SwiftUI, targeting iOS 1
 
 - **Bundle ID**: `com.idanidev.clarity`
 - **Branch principal**: `ios-native`
-- **Versión actual**: 2.1.0 (próxima: 2.1.1)
+- **Versión actual**: 2.2.0 (próxima: 2.2.1)
 - **Firebase project**: `clarity-gastos`
 - **Xcode project**: usa `PBXFileSystemSynchronized` (Xcode 16) — los archivos nuevos en disco se incluyen automáticamente en el target, no hay que editar `project.pbxproj`.
 
