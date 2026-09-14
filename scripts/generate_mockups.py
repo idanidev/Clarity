@@ -122,7 +122,7 @@ MOCKUPS = [
         # grandes de gastos lo ofrece y es el motivo nº1 de abandono (#39).
         "headline": "Controla tus gastos\nal instante",
         "accent": "gastos",
-        "subtitle": "Todo tu dinero, en un vistazo",
+        "subtitle": "Una Home que sabe lo que te importa",
         "bg_base": (28, 12, 52),
         "blobs": [
             (0.18, 0.18, 900, (155, 80, 255), 160),
@@ -138,7 +138,7 @@ MOCKUPS = [
         "output": "mockup_02_chart.png",
         "headline": "Mira en qué\nse te va el mes",
         "accent": "mes",
-        "subtitle": "Pincha una categoría y ve el detalle",
+        "subtitle": "Toca una barra y ve el dato exacto",
         "bg_base": (8, 18, 55),
         "blobs": [
             (0.22, 0.20, 900, (60, 140, 255), 160),
@@ -694,13 +694,13 @@ TRANSLATIONS = {
         "mockup_04_home.png": {
             "headline": "Your money,\nunder control",
             "accent": "control",
-            "subtitle": "Everything at a glance",
+            "subtitle": "A home that knows what matters to you",
             "chip_text": '"20 on petrol"',
         },
         "mockup_02_chart.png": {
             "headline": "See where\nyour month goes",
             "accent": "month",
-            "subtitle": "Tap a category for the full breakdown",
+            "subtitle": "Tap a bar for the exact figure",
             "chip_text": "Categories",
         },
         "mockup_03_goals.png": {
