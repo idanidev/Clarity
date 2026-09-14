@@ -88,6 +88,38 @@ extension ExpenseModel {
         )
     }
 
+    /// Copia en el modelo lo que trae el dominio. Devuelve `false` si no había
+    /// nada distinto: así una sincronización sin novedades no ensucia el
+    /// contexto ni reescribe filas.
+    @discardableResult
+    func apply(_ domain: Expense) -> Bool {
+        let fecha = Formatters.date(from: domain.date) ?? date
+        let deudores = ExpenseModel.encodeDebtors(domain.debtors)
+        guard amount != domain.amount
+            || name != domain.name
+            || category != domain.category
+            || subcategory != domain.subcategory
+            || date != fecha
+            || paymentMethod != domain.paymentMethod
+            || notes != domain.notes
+            || goalId != domain.goalId
+            || isShared != domain.isShared
+            || debtorsData != deudores
+        else { return false }
+        amount = domain.amount
+        name = domain.name
+        category = domain.category
+        subcategory = domain.subcategory
+        date = fecha
+        paymentMethod = domain.paymentMethod
+        notes = domain.notes
+        goalId = domain.goalId
+        isShared = domain.isShared
+        debtorsData = deudores
+        updatedAt = Date()
+        return true
+    }
+
     func toDomain() -> Expense {
         Expense(
             id: self.id,

@@ -13,6 +13,8 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
 
     /// Margen antes de dar la lectura remota por perdida y servir cache local.
     private static let remoteReadTimeout: TimeInterval = 8
+    /// Cuándo se volcó por última vez el historial remoto en la caché.
+    private static let lastSyncKey = "lastSyncTimestamp"
 
     init(remote: FirebaseExpenseDataSource, swiftData: SwiftDataExpenseDataSource) {
         self.remoteDataSource = remote
@@ -23,21 +25,23 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
     
     func getExpenses(policy: CachePolicy) async throws -> [Expense] {
         switch policy {
-        case .cacheFirst(_):
+        case .cacheFirst(let maxAge):
             // Check SwiftData
             let cached = try swiftDataSource.fetchExpenses()
-            
-            // "Freshness" in SwiftData is tricky without a metadata table.
-            // For now, we assume if we have data, it's good, but we trigger sync.
-            // Improve: Store last sync timestamp in UserDefaults.
-            
+
             if !cached.isEmpty {
                 logger.debug("Returning SwiftData expenses")
-                
-                Task {
-                    try? await syncFromRemote()
+
+                // Solo si la última sincronización es más vieja que `maxAge`:
+                // antes se bajaba todo el historial de Firestore en cada
+                // arranque, aunque se hubiera hecho hacía un minuto.
+                let ultima = UserDefaults.standard.double(forKey: Self.lastSyncKey)
+                if Date().timeIntervalSince1970 - ultima > maxAge {
+                    Task {
+                        try? await syncFromRemote()
+                    }
                 }
-                
+
                 return cached
             }
             
@@ -158,36 +162,19 @@ final class ExpenseRepository: ExpenseRepositoryProtocol {
             logger.warning("syncFromRemote: user changed mid-sync, discarding remote payload")
             return
         }
-        try await saveToLocal(remote)
+        // Se purgan los locales que ya no existen en remoto (borrados desde
+        // otro dispositivo), pero solo si la respuesta trae un número razonable
+        // de gastos: una respuesta a medias no debe borrar la caché.
+        let locales = try swiftDataSource.count()
+        let purgar = remote.count > 0 && remote.count >= locales / 2
+        try swiftDataSource.upsertAll(remote, purgandoHuerfanos: purgar)
 
-        // Remove local expenses that no longer exist remotely (deleted on another device)
-        // Only run orphan detection if we got a reasonable number of remote expenses
-        // to avoid deleting local data when the network response is incomplete
-        let local = try swiftDataSource.fetchExpenses()
-        if remote.count > 0 && remote.count >= local.count / 2 {
-            let remoteIds = Set(remote.compactMap(\.id))
-            let orphans = local.filter { expense in
-                guard let id = expense.id else { return false }
-                return !remoteIds.contains(id)
-            }
-            for orphan in orphans {
-                if let id = orphan.id {
-                    try? swiftDataSource.deleteExpense(id)
-                }
-            }
-            if !orphans.isEmpty {
-                logger.debug("Removed \(orphans.count) orphaned local expenses")
-            }
-        }
-
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: "lastSyncTimestamp")
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastSyncKey)
         logger.debug("Background sync complete")
     }
     
     private func saveToLocal(_ expenses: [Expense]) async throws {
-        // Sync strategy: Insert or Update
-        for expense in expenses {
-           try swiftDataSource.upsertExpense(expense) 
-        }
+        // En bloque y con un solo save: ver `upsertAll`.
+        try swiftDataSource.upsertAll(expenses)
     }
 }

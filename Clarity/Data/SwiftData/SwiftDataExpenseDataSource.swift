@@ -19,6 +19,43 @@ final class SwiftDataExpenseDataSource {
         let models = try context.fetch(descriptor)
         return models.map { $0.toDomain() }
     }
+
+    /// Cuántos gastos hay en la caché, sin cargarlos.
+    func count() throws -> Int {
+        try context.fetchCount(FetchDescriptor<ExpenseModel>())
+    }
+
+    /// Vuelca lo remoto en bloque: un solo fetch de todo, se toca solo lo que
+    /// difiere y un único `save` al final.
+    ///
+    /// Antes era `upsertExpense` por gasto —un fetch y un save cada uno, en el
+    /// hilo principal— en cada arranque: con cientos de gastos de historial la
+    /// app se quedaba congelada un segundo largo justo al aparecer el total del
+    /// mes. Con `purgandoHuerfanos`, borra además los que ya no están en
+    /// `expenses` (eliminados desde otro dispositivo).
+    func upsertAll(_ expenses: [Expense], purgandoHuerfanos: Bool = false) throws {
+        let existentes = try context.fetch(FetchDescriptor<ExpenseModel>())
+        var porId: [String: ExpenseModel] = [:]
+        porId.reserveCapacity(existentes.count)
+        for modelo in existentes { porId[modelo.id] = modelo }
+
+        var vistos = Set<String>()
+        for expense in expenses {
+            guard let id = expense.id else { continue }
+            vistos.insert(id)
+            if let modelo = porId[id] {
+                modelo.apply(expense)
+            } else {
+                context.insert(ExpenseModel(from: expense))
+            }
+        }
+        if purgandoHuerfanos {
+            for (id, modelo) in porId where !vistos.contains(id) {
+                context.delete(modelo)
+            }
+        }
+        if context.hasChanges { try context.save() }
+    }
     
     func addExpense(_ expense: Expense) throws {
         let model = ExpenseModel(from: expense)
@@ -59,22 +96,7 @@ final class SwiftDataExpenseDataSource {
          let descriptor = FetchDescriptor<ExpenseModel>(predicate: #Predicate { $0.id == id })
          
          if let model = try context.fetch(descriptor).first {
-             // Update
-             model.amount = expense.amount
-             model.name = expense.name
-             model.category = expense.category
-             model.subcategory = expense.subcategory
-             
-             if let dateObj = Formatters.date(from: expense.date) {
-                 model.date = dateObj
-             }
-             
-             model.paymentMethod = expense.paymentMethod
-             model.notes = expense.notes
-             model.goalId = expense.goalId
-             model.isShared = expense.isShared
-             model.debtorsData = ExpenseModel.encodeDebtors(expense.debtors)
-             model.updatedAt = Date()
+             model.apply(expense)
          } else {
              // Insert
              let model = ExpenseModel(from: expense)
