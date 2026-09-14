@@ -1,16 +1,21 @@
 What's new in this version:
 
-YOUR FILTERS STAY PUT
-The filter you starred as your default was lost when you closed the app, and you were back to "This month". Not any more: it's now saved on the phone itself, so it survives even with no signal at launch.
+A HOME BUILT AROUND YOU
+The first screen is redesigned top to bottom: your month in big numbers, glass cards and a background that breathes. And it doesn't show everyone the same thing: it looks at your last six months and tells you whether Restaurants is drifting from your usual, how much you'll save if the month keeps going like this, where this month lands among the previous ones, which places you keep going back to, or how much the small stuff adds up to. Every slot shows what matters most to you today. The forecast counts the charges still to come, not just a flat average.
 
-YOU START BY LOGGING, NOT READING
-You log your first expense before you even finish setting up: tap the mic, say "three euros on a coffee", and it's in. And onboarding no longer asks what you earn before letting you through; if you want a budget, you set it up from Goals, where it actually does something.
+CHARTS YOU CAN TOUCH
+Drag your finger across the ring, the days or the months to see the exact figure for each one.
 
-YOU CAN WRITE TO ME NOW
-Settings has two new buttons, "Something's broken" and "I have an idea". They write straight to the person who makes the app, which is me. If something bothers you, tell me.
+ONE STYLE EVERYWHERE
+Goals, recurring expenses, settings, forms, the widget and the icon, which now comes in dark and tinted versions. Recurring expenses get a new screen: how much per month, what's coming up and what's paid in instalments.
+
+DETAILS
+• Screens grow out of whatever you tap.
+• Confetti when you fill a piggy bank or close a month within budget.
+• Bars ripple when you're getting close to a limit.
 
 FIXES
-• The app no longer hung when opened with no connection.
-• Saving an expense offline no longer left the button stuck.
-• Inactivity reminders were deleting themselves on launch.
-• The onboarding "Skip" button led straight to the screen you were skipping.
+• The app froze for a moment on launch while the month loaded.
+• Filters weren't applied to the cards or the charts.
+• Changing month from Charts could crash the app.
+• The last instalment of a financed purchase was never charged.

@@ -1,16 +1,21 @@
 Novedades de esta versión:
 
-TUS FILTROS SE QUEDAN COMO LOS DEJASTE
-El filtro que marcabas como predeterminado con la estrella se perdía al cerrar la app y volvías a "Este mes". Ya no: se guarda también en el propio iPhone, así que aguanta aunque no haya cobertura al arrancar.
+UNA HOME HECHA PARA TI
+La primera pantalla está rediseñada de arriba abajo: tu mes en grande, tarjetas de vidrio y un fondo que respira. Y no enseña lo mismo a todo el mundo: mira tus últimos seis meses y te dice si Restaurantes se te está yendo de lo normal, cuánto vas a ahorrar si el mes sigue así, dónde cae este mes entre los anteriores, a qué sitios vuelves más o cuánto suman los gastos pequeños. Cada hueco enseña lo que más te importa hoy. La previsión cuenta los cargos que aún te quedan por pasar, no una media a secas.
 
-EMPIEZAS APUNTANDO, NO LEYENDO
-Antes de terminar de configurar ya apuntas tu primer gasto: pulsas el micro, dices "tres euros en un café" y ya está dentro. Y el onboarding ha dejado de preguntarte cuánto cobras para dejarte pasar; si quieres presupuesto, lo configuras desde Metas, que es donde sirve para algo.
+GRÁFICAS QUE SE TOCAN
+Arrastra el dedo por el anillo, por los días o por los meses y verás el dato exacto de cada uno.
 
-AHORA PUEDES ESCRIBIRME
-En Ajustes hay dos botones nuevos, "Algo no funciona" y "Tengo una idea". Escriben directamente a la persona que hace la app, que soy yo. Si algo te chirría, cuéntamelo.
+TODO CON EL MISMO ESTILO
+Metas, gastos recurrentes, ajustes, formularios, el widget y el icono, que ahora tiene versión oscura y tintada. Los recurrentes estrenan pantalla: cuánto al mes, lo que viene y lo que va a plazos.
+
+DETALLES
+• Las pantallas crecen desde lo que tocas.
+• Confeti cuando completas una hucha o cierras un mes dentro del presupuesto.
+• Las barras ondulan cuando te acercas a un tope.
 
 CORRECCIONES
-• La app ya no se quedaba colgada al abrirla sin conexión.
-• Guardar un gasto sin cobertura ya no dejaba el botón bloqueado.
-• Los recordatorios de inactividad se borraban solos al abrir la app.
-• El botón "Saltar" del onboarding llevaba justo a la pantalla que querías saltarte.
+• La app se quedaba parada un momento al abrirla mientras cargaba el mes.
+• Los filtros no se aplicaban a las tarjetas ni a las gráficas.
+• Cambiar de mes desde Gráficas podía cerrar la app.
+• El último plazo de una compra financiada no se cobraba.
