@@ -1,4 +1,7 @@
-Novedades de esta versión:
+CORRECCIÓN (iOS 26 y 27)
+• Al añadir un gasto, el formulario se quedaba bloqueado al pasar del importe a la descripción. Ya no.
+
+Y lo nuevo de la 2.2:
 
 UNA HOME HECHA PARA TI
 La primera pantalla está rediseñada de arriba abajo: tu mes en grande, tarjetas de vidrio y un fondo que respira. Y no enseña lo mismo a todo el mundo: mira tus últimos seis meses y te dice si Restaurantes se te está yendo de lo normal, cuánto vas a ahorrar si el mes sigue así, dónde cae este mes entre los anteriores, a qué sitios vuelves más o cuánto suman los gastos pequeños. Cada hueco enseña lo que más te importa hoy. La previsión cuenta los cargos que aún te quedan por pasar, no una media a secas.

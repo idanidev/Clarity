@@ -1,4 +1,7 @@
-What's new in this version:
+FIX (iOS 26 and 27)
+• When adding an expense, the form got stuck moving from the amount to the description. Not any more.
+
+And what's new in 2.2:
 
 A HOME BUILT AROUND YOU
 The first screen is redesigned top to bottom: your month in big numbers, glass cards and a background that breathes. And it doesn't show everyone the same thing: it looks at your last six months and tells you whether Restaurants is drifting from your usual, how much you'll save if the month keeps going like this, where this month lands among the previous ones, which places you keep going back to, or how much the small stuff adds up to. Every slot shows what matters most to you today. The forecast counts the charges still to come, not just a flat average.
