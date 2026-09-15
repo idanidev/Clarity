@@ -15,9 +15,8 @@ struct HomeView: View {
     /// La barra de pestañas flotante: el carrusel llega hasta el borde y deja su hueco.
     @Environment(\.medidaBarraInferior) private var barra
     @State private var expenseToEdit: Expense?
-    /// Desde dónde se abrió la edición, para que la hoja crezca desde ahí.
-    @State private var origenEdicion = "gasto"
-    /// Las transiciones de zoom: de una fila a su hoja, de una tarjeta a su pantalla.
+    /// Las transiciones de zoom de una tarjeta a su pantalla. Solo en lo que se
+    /// abre con push: una hoja con teclado presentada con zoom se colgaba en iOS 26.
     @Namespace private var zoom
     @State private var showFilterSheet = false
     @State private var showAddExpense = false
@@ -80,8 +79,6 @@ struct HomeView: View {
                     Task { await viewModel.refresh() }
                 }
                 .presentationDetents([.large])
-                // Crece desde la fila que se tocó y vuelve a ella al cerrar.
-                .transicionZoom(id: origenEdicion, en: zoom)
             }
             .sheet(isPresented: $showAddExpense) {
                 AddExpenseSheet {
@@ -314,10 +311,7 @@ struct HomeView: View {
                 margenSuperior: margenSuperior,
                 irALista: irALista,
                 zoom: zoom,
-                onEditar: { gasto, origen in
-                    origenEdicion = origen
-                    expenseToEdit = gasto
-                },
+                onEditar: { expenseToEdit = $0 },
                 onDestino: irA
             )
         case .graficas:

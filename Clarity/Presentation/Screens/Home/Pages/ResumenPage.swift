@@ -9,10 +9,9 @@ struct ResumenPage: View {
     var margenSuperior: CGFloat = 0
     /// Cambia cuando otra tarjeta pide bajar hasta la lista de gastos.
     var irALista: Int = 0
-    /// Las transiciones de zoom de la Home: cada fila y cada tarjeta es un origen.
+    /// Las transiciones de zoom de la Home: cada tarjeta que abre una pantalla es un origen.
     let zoom: Namespace.ID
-    /// El gasto y desde dónde se tocó, para que la hoja crezca desde ahí.
-    let onEditar: (Expense, String) -> Void
+    let onEditar: (Expense) -> Void
     let onDestino: (HomeDestino) -> Void
 
     /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
@@ -57,7 +56,7 @@ struct ResumenPage: View {
                         }
                     }
 
-                    UltimosCard(gastos: viewModel.ultimosGastos, zoom: zoom, onEditar: onEditar)
+                    UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
 
                     if let e = r.slots[.e] { slot(e) }
                 }
@@ -141,21 +140,19 @@ struct ResumenPage: View {
                             .filaDeTarjeta(arriba: 2, abajo: 0)
                     }
                     ForEach(sub.expenses, id: \.stableId) { gasto in
-                        let origen = "lista-\(gasto.stableId)"
                         FilaGasto(gasto: gasto, color: grupo.color)
-                            .origenZoom(id: origen, en: zoom)
                             .contentShape(Rectangle())
-                            .onTapGesture { onEditar(gasto, origen) }
+                            .onTapGesture { onEditar(gasto) }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button(role: .destructive) {
                                     Task { await viewModel.deleteExpense(gasto) }
                                 } label: { Label("Borrar", systemImage: "trash") }
-                                Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
+                                Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
                                     .tint(Color.clarityPrimary)
                             }
                             // Mantener pulsado: la ficha del gasto y sus acciones.
                             .contextMenu {
-                                Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
+                                Button { onEditar(gasto) } label: { Label("Editar", systemImage: "pencil") }
                                 Button {
                                     Task { try? await viewModel.duplicateExpense(gasto) }
                                 } label: { Label("Duplicar", systemImage: "plus.square.on.square") }
@@ -624,7 +621,7 @@ private struct SlotCard: View {
             Text("\(Formatters.currency(d.media)) de media, frente a \(Formatters.currency(d.mediaResto)) el resto")
                 .font(.caption).foregroundStyle(Color.textSecondary)
             if d.esHoy {
-                Text("Hoy toca: ojo.").font(.caption.weight(.medium)).foregroundStyle(Color.warning).padding(.top, 8)
+                Text("Hoy es uno de esos días.").font(.caption.weight(.medium)).foregroundStyle(Color.warning).padding(.top, 8)
             }
         }
     }
@@ -724,15 +721,14 @@ private struct SlotCard: View {
 
 private struct UltimosCard: View {
     let gastos: [Expense]
-    let zoom: Namespace.ID
-    let onEditar: (Expense, String) -> Void
+    let onEditar: (Expense) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Últimos").font(.subheadline.weight(.semibold)).padding(.bottom, 12)
             ForEach(Array(gastos.enumerated()), id: \.element.stableId) { i, g in
                 if i > 0 { Divider().padding(.vertical, 10) }
-                Button { onEditar(g, "ultimos-\(g.stableId)") } label: {
+                Button { onEditar(g) } label: {
                     HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(g.name).font(.subheadline.weight(.medium)).lineLimit(1)
@@ -743,7 +739,6 @@ private struct UltimosCard: View {
                         Text(Formatters.currency(g.amount)).font(.subheadline.weight(.semibold))
                     }
                     .contentShape(Rectangle())
-                    .origenZoom(id: "ultimos-\(g.stableId)", en: zoom)
                 }
                 .buttonStyle(.plain)
             }

@@ -11,8 +11,6 @@ struct MainTabView: View {
     /// Sube cuando el control "Dictar gasto" abre la app: el micro arranca solo.
     @State private var arrancarVoz = 0
     @State private var showRecurring = false
-    /// El formulario de añadir crece desde el "+" de la barra.
-    @Namespace private var zoomBarra
     /// Toques por pestaña: cada uno hace rebotar su icono.
     @State private var toquesPestana: [Int: Int] = [:]
     /// Lo que ocupa la barra flotante. Cada pestaña deja ese hueco al final y el
@@ -143,7 +141,10 @@ struct MainTabView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(.regularMaterial)
             .presentationCornerRadius(CornerRadius.large)
-            .transicionZoom(id: "pestana-2", en: zoomBarra)
+            // Sin zoom desde el "+": en iOS 26, una hoja con teclado presentada
+            // con la transición de zoom se quedaba colgada al pasar del importe
+            // a la descripción. El zoom queda para las pantallas que se abren
+            // con push, que no traen teclado.
         }
         .sheet(isPresented: $showRecurring) {
             NavigationStack {
@@ -314,7 +315,6 @@ struct MainTabView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .origenZoom(id: "pestana-\(tag)", en: zoomBarra)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(nombre)
