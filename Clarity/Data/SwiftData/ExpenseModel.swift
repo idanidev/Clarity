@@ -94,7 +94,10 @@ extension ExpenseModel {
     @discardableResult
     func apply(_ domain: Expense) -> Bool {
         let fecha = Formatters.date(from: domain.date) ?? date
-        let deudores = ExpenseModel.encodeDebtors(domain.debtors)
+        // Sin deudores a ningún lado no hay nada que codificar: ahorra un
+        // JSONEncoder por gasto en cada sincronización.
+        let hayDeudores = domain.debtors?.isEmpty == false || debtorsData != nil
+        let deudores = hayDeudores ? ExpenseModel.encodeDebtors(domain.debtors) : nil
         guard amount != domain.amount
             || name != domain.name
             || category != domain.category
