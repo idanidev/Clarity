@@ -1,5 +1,7 @@
-CORRECCIÓN (iOS 26 y 27)
+CORRECCIONES (iOS 26 y 27)
+• En algunos iPhone con iOS 26, al abrir el formulario la app se quedaba colgada sin poder escribir el importe. Arreglado.
 • Al añadir un gasto, el formulario se quedaba bloqueado al pasar del importe a la descripción. Ya no.
+• Con mucho historial, la app tardaba de más al abrirse y al buscar.
 
 Y lo nuevo de la 2.2:
 
