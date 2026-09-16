@@ -1,5 +1,7 @@
-FIX (iOS 26 and 27)
+FIXES (iOS 26 and 27)
+• On some iPhones running iOS 26, opening the form froze the app before you could type the amount. Fixed.
 • When adding an expense, the form got stuck moving from the amount to the description. Not any more.
+• With a long history, the app took too long to open and to search.
 
 And what's new in 2.2:
 
