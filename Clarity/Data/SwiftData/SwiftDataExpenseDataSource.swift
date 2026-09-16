@@ -34,7 +34,18 @@ final class SwiftDataExpenseDataSource {
     /// mes. Con `purgandoHuerfanos`, borra además los que ya no están en
     /// `expenses` (eliminados desde otro dispositivo).
     func upsertAll(_ expenses: [Expense], purgandoHuerfanos: Bool = false) throws {
-        let existentes = try context.fetch(FetchDescriptor<ExpenseModel>())
+        // Solo los modelos del lote, salvo al purgar, que hay que mirar todo el
+        // almacén. Cargarlo entero para guardar un mes —tres o cuatro veces al
+        // arrancar y en cada búsqueda— eran segundos de hilo principal con
+        // miles de gastos.
+        let ids = expenses.compactMap(\.id)
+        let existentes: [ExpenseModel]
+        if purgandoHuerfanos {
+            existentes = try context.fetch(FetchDescriptor<ExpenseModel>())
+        } else {
+            guard !ids.isEmpty else { return }
+            existentes = try context.fetch(FetchDescriptor<ExpenseModel>(predicate: #Predicate { ids.contains($0.id) }))
+        }
         var porId: [String: ExpenseModel] = [:]
         porId.reserveCapacity(existentes.count)
         for modelo in existentes { porId[modelo.id] = modelo }
