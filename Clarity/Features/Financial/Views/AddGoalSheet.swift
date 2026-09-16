@@ -2,7 +2,7 @@
 //  AddGoalSheet.swift
 //  Clarity
 //
-//  Crear / editar Hucha o Escudo con Form nativo iOS.
+//  Crear / editar Hucha, Escudo o Ahorro mensual con Form nativo iOS.
 //
 
 import SwiftUI
@@ -29,22 +29,43 @@ struct AddGoalSheet: View {
     @State private var newSubcategoryName = ""
 
     private var canSave: Bool {
-        guard !name.trimmingCharacters(in: .whitespaces).isEmpty,
-              !targetAmount.isEmpty else { return false }
-        if selectedType == .savingsTarget {
+        guard !targetAmount.isEmpty else { return false }
+        switch selectedType {
+        case .monthlySavings:
+            // Solo pide el importe: sin nombre se llama "Ahorro mensual".
+            return true
+        case .savingsTarget:
+            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
             let cats = UserDataManager.shared.categories
             let subs = cats.first(where: { $0.name == savingsCategory })?.subcategories ?? []
             if !subs.isEmpty && savingsSubcategory.isEmpty { return false }
-            if savingsCategory.isEmpty { return false }
+            return !savingsCategory.isEmpty
+        case .spendingLimit:
+            guard !name.trimmingCharacters(in: .whitespaces).isEmpty else { return false }
+            return !selectedCategory.isEmpty
         }
-        if selectedType == .spendingLimit && selectedCategory.isEmpty { return false }
-        return true
     }
 
     private var amountLabel: String {
-        selectedType == .savingsTarget
-            ? String(localized: "goal.savingsTarget", defaultValue: "Objetivo de Ahorro")
-            : String(localized: "goal.monthlyLimit", defaultValue: "Límite Mensual")
+        switch selectedType {
+        case .savingsTarget:
+            return String(localized: "goal.savingsTarget", defaultValue: "Objetivo de Ahorro")
+        case .spendingLimit:
+            return String(localized: "goal.monthlyLimit", defaultValue: "Límite Mensual")
+        case .monthlySavings:
+            return String(localized: "goal.monthlySavings", defaultValue: "Ahorro al mes")
+        }
+    }
+
+    private var typeFooter: String {
+        switch selectedType {
+        case .savingsTarget:
+            return "Hucha: ahorra hacia un objetivo (vacaciones, coche, etc)."
+        case .spendingLimit:
+            return "Escudo: limita el gasto mensual de una categoría."
+        case .monthlySavings:
+            return "Ahorro mensual: lo que te quede de tus ingresos tras gastar cuenta como ahorrado. Empieza de cero cada mes."
+        }
     }
 
     var body: some View {
@@ -56,15 +77,20 @@ struct AddGoalSheet: View {
                         Picker("", selection: $selectedType) {
                             Label("Hucha", systemImage: "banknote").tag(GoalType.savingsTarget)
                             Label("Escudo", systemImage: "shield").tag(GoalType.spendingLimit)
+                            Label("Ahorrar al mes", systemImage: "calendar").tag(GoalType.monthlySavings)
                         }
                         .pickerStyle(.segmented)
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 12, trailing: 0))
+                        .onChange(of: selectedType) { _, nuevo in
+                            // El icono inicial es el de hucha/escudo; al pasar a ahorro
+                            // mensual sin haber elegido otro, se propone el suyo.
+                            if nuevo == .monthlySavings && selectedSymbol == Self.simboloInicial {
+                                selectedSymbol = GoalType.monthlySavings.defaultIcon
+                            }
+                        }
                     } footer: {
-                        Text(selectedType == .savingsTarget
-                            ? "Hucha: ahorra hacia un objetivo (vacaciones, coche, etc)."
-                            : "Escudo: limita el gasto mensual de una categoría."
-                        )
+                        Text(typeFooter)
                     }
                 }
 
@@ -90,15 +116,12 @@ struct AddGoalSheet: View {
                         }
                         .buttonStyle(.plain)
 
-                        TextField(
-                            String(localized: "goal.namePlaceholder", defaultValue: "Nombre"),
-                            text: $name
-                        )
-                        .font(.body)
-                        .submitLabel(.done)
+                        TextField(namePlaceholder, text: $name)
+                            .font(.body)
+                            .submitLabel(.done)
                     }
                 } header: {
-                    Text("Nombre")
+                    Text(selectedType == .monthlySavings ? "Nombre (opcional)" : "Nombre")
                 }
 
                 // ── Cantidad ──
@@ -116,7 +139,7 @@ struct AddGoalSheet: View {
                     Text(amountLabel)
                 }
 
-                // ── Categoría vinculada ──
+                // ── Categoría vinculada (el ahorro mensual no lleva) ──
                 if selectedType == .spendingLimit {
                     Section {
                         NavigationLink {
@@ -135,7 +158,7 @@ struct AddGoalSheet: View {
                     } footer: {
                         Text("El escudo cuenta los gastos de esta categoría hasta el límite.")
                     }
-                } else {
+                } else if selectedType == .savingsTarget {
                     let categories = UserDataManager.shared.categories
                     Section {
                         if !categories.isEmpty {
@@ -279,17 +302,33 @@ struct AddGoalSheet: View {
         }
     }
 
+    /// Icono con el que abre la hoja; sirve para saber si el usuario ha elegido otro.
+    private static let simboloInicial = "eurosign.circle"
+
+    private var namePlaceholder: String {
+        selectedType == .monthlySavings
+            ? String(localized: "goal.monthlySavingsName", defaultValue: "Ahorro mensual")
+            : String(localized: "goal.namePlaceholder", defaultValue: "Nombre")
+    }
+
     private var navigationTitle: String {
-        if editingGoal != nil {
-            return selectedType == .savingsTarget ? "Editar Hucha" : "Editar Escudo"
+        switch (editingGoal != nil, selectedType) {
+        case (true, .savingsTarget): return "Editar Hucha"
+        case (true, .spendingLimit): return "Editar Escudo"
+        case (true, .monthlySavings): return "Editar Ahorro mensual"
+        case (false, .savingsTarget): return "Nueva Hucha"
+        case (false, .spendingLimit): return "Nuevo Escudo"
+        case (false, .monthlySavings): return "Nuevo Ahorro mensual"
         }
-        return selectedType == .savingsTarget ? "Nueva Hucha" : "Nuevo Escudo"
     }
 
     private func prefill() {
         guard let goal = editingGoal else { return }
         name = goal.name
-        targetAmount = String(goal.targetAmount)
+        // Sin el ".0" de String(Double) cuando el objetivo es entero.
+        targetAmount = goal.targetAmount == goal.targetAmount.rounded()
+            ? String(Int(goal.targetAmount))
+            : String(goal.targetAmount)
         selectedType = goal.type
         if let symbol = goal.systemImage ?? goal.icon, !symbol.isEmpty {
             selectedSymbol = symbol
@@ -308,21 +347,35 @@ struct AddGoalSheet: View {
             return
         }
 
+        var goalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if goalName.isEmpty && selectedType == .monthlySavings {
+            goalName = GoalType.monthlySavings.displayName
+        }
+
         var updatedGoal = Goal(
-            name: name.trimmingCharacters(in: .whitespacesAndNewlines),
+            name: goalName,
             type: selectedType,
+            // El ahorro mensual se mide cada mes de cero; el resto conserva lo que tuviera.
+            recurrence: editingGoal?.recurrence ?? (selectedType == .monthlySavings ? .monthly : .oneTime),
             targetAmount: amount,
             linkedCategoryId: selectedType == .spendingLimit && !selectedCategory.isEmpty ? selectedCategory : nil,
             savingsExpenseCategory: selectedType == .savingsTarget && !savingsCategory.isEmpty ? savingsCategory : nil,
             savingsExpenseSubcategory: selectedType == .savingsTarget && !savingsSubcategory.isEmpty ? savingsSubcategory : nil,
-            deadline: useDeadline ? deadline : nil,
+            deadline: selectedType == .savingsTarget && useDeadline ? deadline : nil,
             icon: selectedSymbol
         )
+        // La tarjeta prefiere `systemImage` a `icon`: se escribe también ahí para
+        // que un símbolo antiguo no tape el recién elegido.
+        updatedGoal.systemImage = selectedSymbol.contains(".") ? selectedSymbol : nil
 
         if let existing = editingGoal {
             updatedGoal.documentId = existing.documentId
             updatedGoal.currentAmount = existing.currentAmount
             updatedGoal.createdAt = existing.createdAt
+            updatedGoal.colorHex = existing.colorHex
+            // Sin esto el merge de Firestore pisaba el historial de aportaciones
+            // de la hucha con un array vacío.
+            updatedGoal.savedHistory = existing.savedHistory
         }
 
         onSave(updatedGoal)

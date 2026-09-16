@@ -218,6 +218,23 @@ struct FinancialDashboardView: View {
 
     private var goalsContent: some View {
         VStack(alignment: .leading, spacing: Spacing.sm) {
+            // Primero, porque sale del mismo "Libre" de la tarjeta de arriba.
+            if !viewModel.monthlySavingsGoals.isEmpty {
+                CabeceraSeccionClarity(
+                    titulo: String(localized: "financial.goals.monthlySavings", defaultValue: "Ahorro mensual")
+                )
+                .padding(.top, Spacing.xs)
+
+                ForEach(viewModel.monthlySavingsGoals) { goal in
+                    GoalCardView(
+                        goal: goal,
+                        monthlySavings: viewModel.monthlySavings,
+                        onEdit: { viewModel.editingGoal = goal },
+                        onDelete: { Task { await viewModel.deleteGoal(goal.id) } }
+                    )
+                }
+            }
+
             if !viewModel.spendingLimits.isEmpty {
                 CabeceraSeccionClarity(
                     titulo: String(localized: "financial.goals.spendingLimits", defaultValue: "Límites de Gasto")
@@ -258,14 +275,14 @@ struct FinancialDashboardView: View {
     // MARK: - Empty State
 
     /// No es `EstadoVacioClarity` porque hay que conservar la explicación de las
-    /// dos herramientas: una tarjeta de vidrio por cada una y el botón debajo.
+    /// tres herramientas: una tarjeta de vidrio por cada una y el botón debajo.
     private var emptyGoals: some View {
         VStack(spacing: Spacing.sm) {
             VStack(spacing: 6) {
                 Text("Tus metas financieras")
                     .font(.title3.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("Dos herramientas para ordenar tu dinero")
+                Text("Tres herramientas para ordenar tu dinero")
                     .font(.subheadline)
                     .foregroundStyle(Color.textSecondary)
                     .multilineTextAlignment(.center)
@@ -288,6 +305,13 @@ struct FinancialDashboardView: View {
                 subtitle: "Limita el gasto mensual de una categoría",
                 example: "Ej: máximo 200€/mes en Ocio. Clarity te avisa cuando te acercas al límite."
             )
+            explainerCard(
+                icon: GoalType.monthlySavings.defaultIcon,
+                iconColor: Color.success,
+                title: "Ahorro mensual",
+                subtitle: "Guarda una cantidad fija cada mes",
+                example: "Ej: ahorrar 300€/mes. Lo que te quede de tus ingresos tras gastar cuenta como ahorrado."
+            )
 
             Button {
                 viewModel.showAddGoal = true
@@ -302,7 +326,7 @@ struct FinancialDashboardView: View {
 
     private func explainerCard(icon: String, iconColor: Color, title: String, subtitle: String, example: String) -> some View {
         HStack(alignment: .top, spacing: 14) {
-            CirculoIconoClarity(icono: icon, color: iconColor, tamano: 52)
+            CirculoIconoClarity(icono: icon, color: iconColor, tamano: 52, esSimbolo: icon.contains("."))
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)

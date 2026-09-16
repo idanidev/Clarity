@@ -114,6 +114,11 @@ class FinancialHubViewModel {
         goals.filter { $0.type == .savingsTarget }
     }
 
+    /// Metas de "ahorrar X al mes". Su progreso no vive en la meta sino en `monthlySavings`.
+    var monthlySavingsGoals: [Goal] {
+        goals.filter { $0.type == .monthlySavings }
+    }
+
     /// All expenses for the current month, loaded server-side for accuracy.
     /// Refreshed on demand via refreshCurrentMonthExpenses().
     private(set) var currentMonthExpenses: [Expense] = []
@@ -125,6 +130,11 @@ class FinancialHubViewModel {
 
     /// Free Cash = Income - Total Spent (savingsAllocated shown separately)
     var freeCash: Double { income - totalSpent }
+
+    /// Lo ahorrado este mes para las metas de ahorro mensual: lo mismo que queda
+    /// "libre" arriba. Puede ser negativo (gastado más que ingresado); la tarjeta
+    /// lo enseña como 0 € con aviso.
+    var monthlySavings: Double { freeCash }
 
     /// Percentage of income remaining
     var freeCashPercentage: Double {
@@ -359,7 +369,10 @@ class FinancialHubViewModel {
 
     /// Feed a Piggy Bank: Subtract from freeCash, add to goal, and record an expense
     func feedPiggyBank(goalId: String, amount: Double) async {
-        guard let goalIndex = goals.firstIndex(where: { $0.id == goalId }) else { return }
+        // Solo las huchas se alimentan: así la enhorabuena de hucha completada no
+        // puede saltar por otro tipo de meta.
+        guard let goalIndex = goals.firstIndex(where: { $0.id == goalId }),
+              goals[goalIndex].type == .savingsTarget else { return }
         let goalName = goals[goalIndex].name
         let category = goals[goalIndex].savingsExpenseCategory ?? "Ahorros"
         let subcategory = goals[goalIndex].savingsExpenseSubcategory
@@ -420,8 +433,13 @@ class FinancialHubViewModel {
     /// Create a new goal
     func createGoal(_ goal: Goal) async {
         do {
-            try await service.saveGoal(goal)
-            goals.append(goal)
+            let documentId = try await service.saveGoal(goal)
+            // Se guarda en memoria ya con el id de Firestore: sin él, editar la meta
+            // recién creada la duplicaba (sin id se hace addDocument) y borrarla o
+            // alimentarla apuntaba a un documento que no existe.
+            var saved = goal
+            saved.documentId = documentId
+            goals.append(saved)
             HapticManager.shared.playSuccess()
         } catch {
             self.error = error.safeUserMessage

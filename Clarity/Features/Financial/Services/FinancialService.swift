@@ -155,8 +155,11 @@ class FinancialService {
         return goals
     }
 
-    /// Save or update a goal
-    func saveGoal(_ goal: Goal) async throws {
+    /// Save or update a goal. Devuelve el id del documento: al crear es el que
+    /// asigna Firestore, y sin él la meta en memoria no se podía editar ni
+    /// borrar hasta recargar la pestaña.
+    @discardableResult
+    func saveGoal(_ goal: Goal) async throws -> String {
         guard let userId = userId else {
             throw FinancialServiceError.notAuthenticated
         }
@@ -165,14 +168,17 @@ class FinancialService {
         goalToSave.userId = userId
         goalToSave.updatedAt = Date()
 
-        if let documentId = goal.documentId {
-            try await goalsCollection(userId).document(documentId).setData(
+        let documentId: String
+        if let existingId = goal.documentId {
+            try await goalsCollection(userId).document(existingId).setData(
                 from: goalToSave, merge: true)
+            documentId = existingId
         } else {
-            try await goalsCollection(userId).addDocument(from: goalToSave)
+            documentId = try await goalsCollection(userId).addDocument(from: goalToSave).documentID
         }
 
         logger.info("✅ Saved goal: \(goal.name)")
+        return documentId
     }
 
     /// Feed a piggy bank (add to currentAmount and record history)

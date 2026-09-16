@@ -3,7 +3,7 @@
 //  Clarity
 //
 //  Onboarding contextual la primera vez que el usuario abre la pestaña Metas.
-//  Explica las dos herramientas (Hucha / Escudo) con ejemplos visuales.
+//  Explica las tres herramientas (Hucha / Escudo / Ahorro mensual) con ejemplos visuales.
 //
 
 import SwiftUI
@@ -22,6 +22,7 @@ struct MetasOnboardingSheet: View {
                 IntroPage().tag(0)
                 HuchaPage().tag(1)
                 EscudoPage().tag(2)
+                AhorroMensualPage().tag(3)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .ignoresSafeArea()
@@ -29,7 +30,7 @@ struct MetasOnboardingSheet: View {
             VStack(spacing: 16) {
                 // Dot indicators
                 HStack(spacing: 6) {
-                    ForEach(0..<3, id: \.self) { i in
+                    ForEach(0..<4, id: \.self) { i in
                         Capsule()
                             .fill(i == page ? Color.clarityPrimary : Color.textTertiary)
                             .frame(width: i == page ? 22 : 6, height: 6)
@@ -39,7 +40,7 @@ struct MetasOnboardingSheet: View {
 
                 // CTA
                 Button {
-                    if page < 2 {
+                    if page < 3 {
                         withAnimation { page += 1 }
                         HapticManager.shared.selection()
                     } else {
@@ -47,7 +48,7 @@ struct MetasOnboardingSheet: View {
                         dismiss()
                     }
                 } label: {
-                    Text(page < 2 ? "Siguiente" : "Empezar")
+                    Text(page < 3 ? "Siguiente" : "Empezar")
                 }
                 .buttonStyle(.principalClarity)
                 .padding(.horizontal, 24)
@@ -90,7 +91,7 @@ private struct IntroPage: View {
                     Text("Metas")
                         .font(.system(size: 40, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
-                    Text("Dos herramientas\npara dominar tu dinero")
+                    Text("Tres herramientas\npara dominar tu dinero")
                         .font(.title3)
                         .foregroundStyle(Color.textSecondary)
                         .multilineTextAlignment(.center)
@@ -299,4 +300,97 @@ private struct EscudoPage: View {
 
 #Preview {
     MetasOnboardingSheet()
+}
+
+private struct AhorroMensualPage: View {
+    @State private var appear = false
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            RadialGradient(
+                colors: [Color.clarityPrimary.opacity(0.18), Color.clear],
+                center: .top, startRadius: 0, endRadius: 320
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer().frame(height: 50)
+
+                CirculoIconoClarity(icono: "banknote.fill", color: Color.clarityPrimary, tamano: 96, esSimbolo: true)
+                    .scaleEffect(appear ? 1 : 0.4)
+
+                Spacer().frame(height: 16)
+
+                VStack(spacing: 8) {
+                    Text("AHORRO MENSUAL")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color.clarityPrimary)
+                        .tracking(2.5)
+                    Text("Ahorra X\ncada mes")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                    Text("Dile cuánto quieres que te quede a fin de mes. Se mide solo con tus ingresos y tus gastos, sin aportar nada.")
+                        .font(.subheadline)
+                        .foregroundStyle(Color.textSecondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 4)
+                }
+                .opacity(appear ? 1 : 0)
+                .offset(y: appear ? 0 : 16)
+
+                Spacer().frame(height: 20)
+
+                // Tarjeta de ejemplo
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 12) {
+                        CirculoIconoClarity(icono: "banknote.fill", color: Color.clarityPrimary, tamano: 50, esSimbolo: true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Ahorro mensual")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundStyle(.white)
+                            Text("Objetivo: 500 € al mes")
+                                .font(.caption)
+                                .monospacedDigit()
+                                .foregroundStyle(Color.textSecondary)
+                        }
+                        Spacer()
+                        Text("84%")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(Color.clarityPrimary)
+                    }
+
+                    BarraProgresoClarity(progreso: Double(progress), color: Color.clarityPrimary, alto: 8)
+
+                    HStack {
+                        Text("420 € ahorrados")
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(Color.textSecondary)
+                        Spacer()
+                        Text("Faltan 80 €")
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(Color.textTertiary)
+                    }
+                }
+                .padding(16)
+                .glassCard(cornerRadius: CornerRadius.large)
+                .padding(.horizontal, 28)
+                .opacity(appear ? 1 : 0)
+                .offset(y: appear ? 0 : 24)
+
+                Spacer()
+                Spacer()
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.75)) { appear = true }
+            withAnimation(.spring(response: 0.9, dampingFraction: 0.8).delay(0.4)) { progress = 0.84 }
+        }
+    }
 }

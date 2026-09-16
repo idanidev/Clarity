@@ -12,6 +12,9 @@ struct GoalCardView: View {
     /// Closure that returns the spent amount for a given category name.
     /// Provided by FinancialDashboardView via FinancialHubViewModel.getSpentAmount(for:).
     var spentAmountProvider: ((String) -> Double)? = nil
+    /// Ahorro del mes (ingresos − gastado) para las metas de ahorro mensual; los
+    /// demás tipos lo ignoran. Puede venir negativo: la tarjeta enseña 0 € y avisa.
+    var monthlySavings: Double = 0
     var onFeed: ((Double) -> Void)?  // Only for Piggy Banks
     var onEdit: (() -> Void)?       // Edit action
     var onDelete: (() -> Void)?    // Delete action
@@ -35,17 +38,10 @@ struct GoalCardView: View {
                         .foregroundStyle(.primary)
                         .lineLimit(1)
 
-                    if goal.type == .spendingLimit, let cat = goal.linkedCategoryId, !cat.isEmpty {
-                        Text(cat)
-                            .font(.caption)
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(1)
-                    } else {
-                        Text(goal.type == .savingsTarget ? "Meta de Ahorro" : "Límite Mensual")
-                            .font(.caption)
-                            .foregroundStyle(Color.textSecondary)
-                            .lineLimit(1)
-                    }
+                    subtitulo
+                        .font(.caption)
+                        .foregroundStyle(Color.textSecondary)
+                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
@@ -71,10 +67,16 @@ struct GoalCardView: View {
                         .foregroundStyle(.primary)
                         .contentTransition(.numericText())
 
-                    Text("de \(Formatters.currency(goal.targetAmount))")
+                    Text(subStatText)
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(Color.textSecondary)
+
+                    if mesEnNegativo {
+                        Text("Este mes no cierra en positivo")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(Color.error)
+                    }
                 }
 
                 Spacer()
@@ -86,9 +88,17 @@ struct GoalCardView: View {
         }
         .padding(16)
         .glassCard(cornerRadius: CornerRadius.large, interactivo: true)
+        .contentShape(Rectangle())
+        // Tocar la tarjeta abre la edición; el botón de alimentar se queda su
+        // toque porque los gestos del hijo ganan al del padre.
+        .onTapGesture {
+            HapticManager.shared.impact(.light)
+            onEdit?()
+        }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(goal.name), \(mainStatText) de \(Formatters.currency(goal.targetAmount))")
-        .accessibilityHint(goal.type == .savingsTarget ? "Meta de ahorro" : "Límite de gasto")
+        .accessibilityLabel("\(goal.name), \(mainStatText) \(subStatText)")
+        .accessibilityHint("Edita la meta")
+        .accessibilityAddTraits(.isButton)
         .contextMenu {
             Button {
                 onEdit?()
@@ -120,18 +130,40 @@ struct GoalCardView: View {
 
     // MARK: - Components
 
+    /// `Text` y no `String` para que los literales sigan pasando por la localización.
+    private var subtitulo: Text {
+        switch goal.type {
+        case .spendingLimit:
+            if let cat = goal.linkedCategoryId, !cat.isEmpty {
+                return Text(cat)
+            }
+            return Text("Límite Mensual")
+        case .savingsTarget:
+            return Text("Meta de Ahorro")
+        case .monthlySavings:
+            // No repite el nombre por defecto ("Ahorro mensual"): dice de dónde
+            // sale. Corto, que a la derecha va el chip "Objetivo cumplido".
+            return Text("Ingresos − gastos")
+        }
+    }
+
     private var statusBadge: some View {
         Group {
-            if goal.type == .spendingLimit {
+            switch goal.type {
+            case .spendingLimit:
                 if displayedCurrentAmount > goal.targetAmount {
                     chip(Text("¡Roto! 💔"), color: Color.error)
                 } else {
                     chip(Text("Protegido"), color: Color.success)
                 }
-            } else {
-                let pct =
-                    goal.targetAmount > 0 ? min(goal.currentAmount / goal.targetAmount, 1.0) : 0
-                chip(Text("\(Int(pct * 100))%"), color: Color.clarityPrimary)
+            case .savingsTarget:
+                chip(Text("\(porcentaje)%"), color: Color.clarityPrimary)
+            case .monthlySavings:
+                if objetivoCumplido {
+                    chip(Text("Objetivo cumplido"), color: Color.success)
+                } else {
+                    chip(Text("\(porcentaje)%"), color: Color.clarityPrimary)
+                }
             }
         }
     }
@@ -170,10 +202,13 @@ struct GoalCardView: View {
     // MARK: - Helpers
 
     /// Real spending for spendingLimit goals — delegated to FinancialHubViewModel via spentAmountProvider.
-    /// For savingsTarget goals, returns goal.currentAmount.
+    /// For monthlySavings goals, the month's savings (never below 0). For savingsTarget goals, goal.currentAmount.
     private var displayedCurrentAmount: Double {
         if goal.type == .spendingLimit, let categoryId = goal.linkedCategoryId, !categoryId.isEmpty {
             return spentAmountProvider?(categoryId) ?? 0
+        }
+        if goal.type == .monthlySavings {
+            return max(monthlySavings, 0)
         }
         return goal.currentAmount
     }
@@ -181,6 +216,19 @@ struct GoalCardView: View {
     /// De 0 a 1 para la barra; la barra recorta lo que se pase.
     private var progreso: Double {
         goal.targetAmount > 0 ? displayedCurrentAmount / goal.targetAmount : 0
+    }
+
+    private var porcentaje: Int {
+        Int(min(max(progreso, 0), 1) * 100)
+    }
+
+    /// Solo para el ahorro mensual: se ha gastado más de lo ingresado.
+    private var mesEnNegativo: Bool {
+        goal.type == .monthlySavings && monthlySavings < 0
+    }
+
+    private var objetivoCumplido: Bool {
+        goal.type == .monthlySavings && goal.targetAmount > 0 && displayedCurrentAmount >= goal.targetAmount
     }
 
     /// El mismo criterio de siempre para elegir icono: SF Symbol si lo hay,
@@ -192,31 +240,46 @@ struct GoalCardView: View {
         if let icon = goal.icon, !icon.isEmpty {
             return (icon, icon.contains(".") || icon.count > 2)
         }
-        return (goal.type == .savingsTarget ? "🐖" : "🛡️", false)
+        let porDefecto = goal.type.defaultIcon
+        return (porDefecto, porDefecto.contains("."))
     }
 
     private var colorMeta: Color {
         if let hex = goal.colorHex, !hex.isEmpty {
             return Color(hex: hex)
         }
-        return goal.type == .savingsTarget ? Color.clarityPrimary : Color.warning
+        switch goal.type {
+        case .savingsTarget: return Color.clarityPrimary
+        case .spendingLimit: return Color.warning
+        case .monthlySavings: return Color.success
+        }
     }
 
     private var progressColor: Color {
-        if goal.type == .spendingLimit {
+        switch goal.type {
+        case .spendingLimit:
             let ratio = goal.targetAmount > 0 ? displayedCurrentAmount / goal.targetAmount : 0
             return ratio > 0.9 ? Color.error : (ratio > 0.7 ? Color.warning : Color.success)
-        } else {
+        case .savingsTarget:
             return Color.clarityPrimary
+        case .monthlySavings:
+            return objetivoCumplido ? Color.success : Color.clarityPrimary
         }
     }
 
     private var mainStatText: String {
-        if goal.type == .spendingLimit {
+        switch goal.type {
+        case .spendingLimit:
             return Formatters.currency(goal.targetAmount - displayedCurrentAmount) + " restan"
-        } else {
+        case .savingsTarget, .monthlySavings:
             return Formatters.currency(displayedCurrentAmount) + " ahorrado"
         }
+    }
+
+    private var subStatText: String {
+        goal.type == .monthlySavings
+            ? "de \(Formatters.currency(goal.targetAmount)) este mes"
+            : "de \(Formatters.currency(goal.targetAmount))"
     }
 }
 

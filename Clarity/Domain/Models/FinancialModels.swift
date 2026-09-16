@@ -154,6 +154,29 @@ enum GoalRecurrence: String, Codable, CaseIterable {
 enum GoalType: String, Codable, CaseIterable {
     case savingsTarget = "savings_target"  // Piggy Bank 🐖
     case spendingLimit = "spending_limit"  // Shield 🛡️
+    /// "Quiero ahorrar X € al mes". No se alimenta: su progreso es lo que queda
+    /// libre del mes (ingresos − gastado), así que `currentAmount` no aplica y
+    /// la vista recibe el importe calculado desde el ViewModel.
+    case monthlySavings = "monthly_savings"
+
+    /// Nombre corto del tipo para la interfaz.
+    var displayName: String {
+        switch self {
+        case .savingsTarget: return "Hucha"
+        case .spendingLimit: return "Escudo"
+        case .monthlySavings: return "Ahorro mensual"
+        }
+    }
+
+    /// Icono cuando la meta no tiene ninguno guardado: emoji en los tipos
+    /// históricos, SF Symbol (lleva punto) en el ahorro mensual.
+    var defaultIcon: String {
+        switch self {
+        case .savingsTarget: return "🐖"
+        case .spendingLimit: return "🛡️"
+        case .monthlySavings: return "banknote.fill"
+        }
+    }
 }
 
 // MARK: - Goal (Subcollection or Array in User)
