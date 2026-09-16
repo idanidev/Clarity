@@ -19,6 +19,7 @@ struct HomeView: View {
     /// abre con push: una hoja con teclado presentada con zoom se colgaba en iOS 26.
     @Namespace private var zoom
     @State private var showFilterSheet = false
+    @State private var showPersonalizar = false
     @State private var showAddExpense = false
     /// El buscador se abre desde la barra y ocupa su fila encima del carrusel:
     /// el `.searchable` nativo se abría encima de la primera tarjeta porque el
@@ -98,6 +99,10 @@ struct HomeView: View {
                 // Una hoja no tiene barra de pestañas debajo, y sus filas de
                 // chips a lo ancho crecían con el hueco heredado.
                 .sinHuecoBarraInferior()
+            }
+            .sheet(isPresented: $showPersonalizar) {
+                PersonalizarHomeSheet(viewModel: viewModel)
+                    .presentationDetents([.large])
             }
             // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
             // VoiceConfirmationSheet is now handled by VoiceExpenseButton directly
@@ -312,7 +317,8 @@ struct HomeView: View {
                 irALista: irALista,
                 zoom: zoom,
                 onEditar: { expenseToEdit = $0 },
-                onDestino: irA
+                onDestino: irA,
+                onPersonalizar: { showPersonalizar = true }
             )
         case .graficas:
             GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior, activa: pagina == .graficas)

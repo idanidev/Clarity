@@ -13,6 +13,8 @@ struct ResumenPage: View {
     let zoom: Namespace.ID
     let onEditar: (Expense) -> Void
     let onDestino: (HomeDestino) -> Void
+    /// Abre la hoja de tarjetas: cuáles salen y en qué orden.
+    let onPersonalizar: () -> Void
 
     /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
     @State private var plegadas: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expenses.collapsedCategories") ?? [])
@@ -59,6 +61,17 @@ struct ResumenPage: View {
                     UltimosCard(gastos: viewModel.ultimosGastos, onEditar: onEditar)
 
                     if let e = r.slots[.e] { slot(e) }
+
+                    // La puerta a ocultar y ordenar tarjetas, donde acaban ellas.
+                    Button { onPersonalizar() } label: {
+                        Label("Personalizar tarjetas", systemImage: "slider.horizontal.3")
+                            .font(.caption.weight(.medium))
+                            .foregroundStyle(Color.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.horizontal, 6)
+                            .padding(.top, 2)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .filaDeTarjeta()
 
@@ -181,6 +194,18 @@ private extension ResumenPage {
                 .origenZoom(id: "destino-\(destino)", en: zoom)
         }
         .buttonStyle(TarjetaButtonStyle())
+        // Mantener pulsada una tarjeta: quitarla o ir a ordenarlas.
+        .contextMenu {
+            Button {
+                viewModel.ocultarTarjeta(contenido.clase)
+                HapticManager.shared.selection()
+            } label: {
+                Label("Ocultar esta tarjeta", systemImage: "eye.slash")
+            }
+            Button { onPersonalizar() } label: {
+                Label("Personalizar tarjetas…", systemImage: "slider.horizontal.3")
+            }
+        }
     }
 
     func destino(de contenido: HomeResumen.Contenido) -> HomeDestino {

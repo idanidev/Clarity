@@ -49,6 +49,8 @@ struct HomeNormalTests {
         #expect(n.porCategoria["Ocio"] == 200)
         #expect(n.porCategoria["Súper"] == 0)
         #expect(n.porCategoria["Vivienda"] == nil)
+        #expect(n.mesesPorCategoria["Ocio"] == 3)
+        #expect(n.mesesPorCategoria["Súper"] == 1)
         // El total del mes sí lo cuenta todo: 750, 900 y 800.
         #expect(n.totalMensual == 800)
     }

@@ -234,6 +234,36 @@ struct HomeResumenTests {
         #expect(resumen([gasto(90, "Restaurantes", dia: 8)], normal: dosMeses).relevancias["fueraDeNormal"] == nil)
     }
 
+    @Test("Fuera de lo normal: solo por encima y solo en categorías habituales")
+    func fueraDeNormalSoloArriba() {
+        // Por debajo de lo normal no se avisa: gastar menos no pide nada.
+        let bajo = resumen([gasto(10, "Restaurantes", dia: 8)], normal: normalDeTresMeses)
+        #expect(bajo.relevancias["fueraDeNormal"] == nil)
+        // Una categoría que solo apareció un mes (el taller) no tiene "normal".
+        var historico: [Expense] = []
+        for mes in 1...3 { historico.append(gasto(100, "Restaurantes", dia: 6, mes: mes)) }
+        historico.append(gasto(400, "Coche-Moto", dia: 9, mes: 2))
+        let normal = HomeNormal.build(historico: historico, mes: hoy, calendar: cal)
+        let r = resumen([gasto(300, "Coche-Moto", dia: 8)], normal: normal)
+        #expect(r.relevancias["fueraDeNormal"] == nil)
+    }
+
+    @Test("Preferencias: lo oculto no sale y lo que el usuario pone primero gana el hueco")
+    func preferencias() {
+        let gastos = (1...5).map { gasto(2, "Ocio", dia: $0) } + [gasto(60, "Ocio", dia: 4, name: "Cena"), gasto(30, "Ocio", dia: 2)]
+        #expect(resumen(gastos).slots[HomeResumen.Slot.b]?.clase == "diaCaro")
+        let conOrden = HomeResumen.build(gastos: gastos, gastosMesAnterior: [], metas: [], recurrentes: [],
+                                         presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: cal,
+                                         preferencias: HomePreferencias(prioridad: ["hormiga"]))
+        #expect(conOrden.slots[HomeResumen.Slot.b]?.clase == "hormiga")
+        let ocultando = HomeResumen.build(gastos: gastos, gastosMesAnterior: [], metas: [], recurrentes: [],
+                                          presupuesto: nil, primerGasto: nil, hoy: hoy, calendar: cal,
+                                          preferencias: HomePreferencias(ocultas: ["diaCaro", "reparto"]))
+        let clases = ocultando.slots.values.map(\.clase)
+        #expect(!clases.contains("diaCaro"))
+        #expect(!clases.contains("reparto"))
+    }
+
     @Test("Tus sitios: comercios repetidos este mes, sin recurrentes, y el nombre normalizado")
     func sitios() {
         let gastos = [

@@ -268,6 +268,7 @@ nonisolated struct HomeResumen: Sendable {
     ///   - primerGasto: fecha del primer gasto que apuntó el usuario, para "N días apuntando".
     ///   - normal: la costumbre del usuario, si hay meses detrás. Sin ella, lo
     ///     que se mide contra "tu normal" no sale.
+    ///   - preferencias: lo que el usuario ocultó no sale; lo que ordenó gana el hueco.
     ///   - filtro: los filtros puestos en la Home, si hay. Lo que habla de en qué
     ///     se gasta —reparto, día más caro, semanas, subidas, sitios, hormigas y
     ///     comparativa de las tarjetas— mira solo lo que lo pasa. Total, ritmo,
@@ -283,6 +284,7 @@ nonisolated struct HomeResumen: Sendable {
         hoy: Date = Date(),
         calendar: Calendar = .current,
         normal: HomeNormal? = nil,
+        preferencias: HomePreferencias = HomePreferencias(),
         filtro: ((Expense) -> Bool)? = nil
     ) -> HomeResumen {
         let total = gastos.reduce(0) { $0 + $1.amount }
@@ -468,11 +470,16 @@ nonisolated struct HomeResumen: Sendable {
                 let variablePorCategoria = Dictionary(grouping: gastos.filter { !$0.esRecurrente }, by: \.category)
                     .mapValues { $0.reduce(0) { $0 + $1.amount } }
                 let desvios = normal.porCategoria.compactMap { (cat, mediana) -> Desvio? in
-                    guard mediana >= normal.totalMensual * 0.05, mediana > 0,
+                    // Solo categorías habituales: un taller suelto no es "tu normal".
+                    // Y solo por encima: gastar menos que de costumbre no pide
+                    // nada y suele tener una explicación obvia (#68).
+                    guard normal.mesesPorCategoria[cat, default: 0] >= 3,
+                          mediana >= normal.totalMensual * 0.05, mediana > 0,
                           let actual = variablePorCategoria[cat], actual > 0 else { return nil }
                     let esperado = mediana * fraccion
+                    guard esperado >= 15 else { return nil }
                     let pct = (actual - esperado) / esperado
-                    guard abs(pct) >= 0.25 else { return nil }
+                    guard pct >= 0.3 else { return nil }
                     return Desvio(categoria: cat, actual: actual, esperado: esperado,
                                   normalMensual: mediana, porcentaje: Int((pct * 100).rounded()))
                 }
@@ -507,7 +514,8 @@ nonisolated struct HomeResumen: Sendable {
             // gastar en ella, para ponerle uno desde Metas.
             if normal.meses >= 3,
                let (cat, mediana) = normal.porCategoria
-                .filter({ !categoriasConTope.contains($0.key) && $0.value >= normal.totalMensual * 0.1 })
+                .filter({ !categoriasConTope.contains($0.key) && $0.value >= normal.totalMensual * 0.1
+                          && normal.mesesPorCategoria[$0.key, default: 0] >= 3 })
                 .max(by: { $0.value < $1.value }) {
                 disponibles["limiteSugerido"] = .limiteSugerido(LimiteSugerido(
                     categoria: cat, normalMensual: mediana, actual: porCategoria[cat] ?? 0))
@@ -518,13 +526,16 @@ nonisolated struct HomeResumen: Sendable {
         // relevante de lo que le cabe y no se ha usado ya en otro hueco.
         let contexto = Contexto(totalAnalisis: totalAnalisis, subidaRelativa: subidaRelativa,
                                 diaActual: diaActual, diasConGasto: porDia.count)
+        // Lo que el usuario ocultó no sale, puntúe lo que puntúe.
+        for clase in preferencias.ocultas { disponibles[clase] = nil }
         let relevancias = disponibles.mapValues { Self.relevancia($0, contexto) }
         var usados = Set<String>()
         var slots: [Slot: Contenido] = [:]
         for slot in Slot.allCases {
             let opciones = slot.candidatos.enumerated().compactMap { orden, clase -> (orden: Int, clase: String, valor: Double)? in
                 guard !usados.contains(clase), let valor = relevancias[clase] else { return nil }
-                return (orden, clase, valor)
+                // Lo que el usuario ordenó va por delante de la relevancia automática.
+                return (orden, clase, valor + preferencias.bonus(clase))
             }
             guard let mejor = opciones.max(by: { a, b in
                 a.valor < b.valor || (a.valor == b.valor && a.orden > b.orden)

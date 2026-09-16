@@ -375,6 +375,18 @@ final class HomeViewModel {
     /// Cuántos meses hacia atrás forman la costumbre del usuario.
     static let mesesNormal = 6
 
+    /// Qué tarjetas quiere ver el usuario y en qué orden (#69). Se guarda en el iPhone.
+    var preferencias: HomePreferencias = HomePreferencias.cargar() {
+        didSet {
+            preferencias.guardar()
+            invalidarDerivados()
+        }
+    }
+
+    func ocultarTarjeta(_ clase: String) {
+        preferencias.ocultas.insert(clase)
+    }
+
     /// Los meses anteriores al que se enseña, traídos de red una vez por mes
     /// visitado, para medir el mes contra la costumbre del usuario y no contra
     /// el mes pasado a secas.
@@ -665,6 +677,7 @@ final class HomeViewModel {
             hoy: hoy,
             calendar: cal,
             normal: normal,
+            preferencias: preferencias,
             filtro: criterio
         )
 

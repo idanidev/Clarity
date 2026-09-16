@@ -17,6 +17,9 @@ nonisolated struct HomeNormal: Sendable, Equatable {
     /// no es una costumbre que se pueda desviar. Un mes sin esa categoría
     /// cuenta como 0.
     let porCategoria: [String: Double]
+    /// En cuántos meses del tramo hubo gasto en cada categoría. Por debajo de
+    /// tres no es una costumbre: es un mes raro (el taller, un viaje).
+    let mesesPorCategoria: [String: Int]
     /// Gasto medio por día de la semana, con los números de `Calendar`
     /// (1 = domingo). Sin recurrentes, por lo mismo.
     let porDiaSemana: [Int: Double]
@@ -62,6 +65,7 @@ nonisolated struct HomeNormal: Sendable, Equatable {
         let porCategoria = porCategoriaYMes.mapValues { meses in
             Self.mediana(porMes.keys.map { meses[$0] ?? 0 })
         }
+        let mesesPorCategoria = porCategoriaYMes.mapValues { $0.values.filter { $0 > 0 }.count }
 
         // Día de la semana: la suma de cada uno entre las veces que cae en el tramo.
         var sumaPorDia: [Int: Double] = [:]
@@ -97,6 +101,7 @@ nonisolated struct HomeNormal: Sendable, Equatable {
             meses: porMes.count,
             totalMensual: Self.mediana(Array(totalesPorMes.values)),
             porCategoria: porCategoria,
+            mesesPorCategoria: mesesPorCategoria,
             porDiaSemana: porDiaSemana,
             totalesPorMes: totalesPorMes,
             umbralHormiga: umbralHormiga,
