@@ -92,13 +92,13 @@ private struct AddExpAmountSection: View {
                 // Redondeada y con dígitos de ancho fijo, como las cifras de la
                 // Home: el importe no cambia de ancho con cada tecla.
                 TextField("0.00", text: $viewModel.amountText)
-                    .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .monospacedDigit()
+                    // Sin `minimumScaleFactor` ni `monospacedDigit` sobre el campo: en
+                    // iOS 26 esa combinación en un TextField de este tamaño dejaba la
+                    // app colgada al aparecer el teclado en algunos iPhone. Las
+                    // expresiones largas ("1,50 + 2 × 3") encogen bajando el tamaño.
+                    .font(.system(size: tamanoImporte, weight: .bold, design: .rounded))
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
-                    // Responsive: expresiones largas ("1,50 + 2 × 3") encogen para caber
-                    // en pantallas pequeñas (iPhone SE) en vez de cortarse.
-                    .minimumScaleFactor(0.4)
                     .lineLimit(1)
                     .focused(focused, equals: .amount)
                     .submitLabel(.next)
@@ -141,6 +141,12 @@ private struct AddExpAmountSection: View {
     }
 
     /// Botón de operador (icono compacto) que lo inserta en el importe y mantiene el foco.
+    /// 48 pt hasta ocho caracteres; menos a partir de ahí, para que quepa.
+    private var tamanoImporte: CGFloat {
+        let n = viewModel.amountText.count
+        return n > 12 ? 26 : (n > 8 ? 34 : 48)
+    }
+
     private func operatorButton(_ symbol: String, icon: String) -> some View {
         Button {
             viewModel.appendAmountOperator(symbol)

@@ -76,8 +76,8 @@ struct EditExpenseSheet: View {
                     .foregroundStyle(Color.clarityPrimary)
 
                 TextField("0.00", value: $viewModel.amount, format: .number)
+                    // Sin `monospacedDigit` sobre el campo: ver AddExpenseSheet (iOS 26).
                     .font(.system(size: 48, weight: .bold, design: .rounded))
-                    .monospacedDigit()
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.leading)
                     .accessibilityLabel("Cantidad del gasto")
