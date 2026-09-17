@@ -1,26 +1,16 @@
-FIXES (iOS 26 and 27)
-• On some iPhones running iOS 26, opening the form froze the app before you could type the amount. Fixed.
-• When adding an expense, the form got stuck moving from the amount to the description. Not any more.
-• With a long history, the app took too long to open and to search.
+What's new in this version:
 
-And what's new in 2.2:
+YOU DECIDE WHAT THE HOME SHOWS
+Home cards can now be hidden and reordered: "Personalizar tarjetas" below them, or long-press a card to remove it. Whatever you put on top shows first.
 
-A HOME BUILT AROUND YOU
-The first screen is redesigned top to bottom: your month in big numbers, glass cards and a background that breathes. And it doesn't show everyone the same thing: it looks at your last six months and tells you whether Restaurants is drifting from your usual, how much you'll save if the month keeps going like this, where this month lands among the previous ones, which places you keep going back to, or how much the small stuff adds up to. Every slot shows what matters most to you today. The forecast counts the charges still to come, not just a flat average.
+DATA THAT ACTUALLY TELLS YOU SOMETHING
+"Out of the ordinary" now only shows up when you're spending well above your usual in a category you use regularly. Spending less than usual — the month after the garage bill — is no longer news.
 
-CHARTS YOU CAN TOUCH
-Drag your finger across the ring, the days or the months to see the exact figure for each one.
+GOALS: SAVE X A MONTH
+A new kind of goal: tell it how much you want left at the end of the month and it tracks itself from your income and expenses, nothing to top up. It starts from zero every month.
 
-ONE STYLE EVERYWHERE
-Goals, recurring expenses, settings, forms, the widget and the icon, which now comes in dark and tinted versions. Recurring expenses get a new screen: how much per month, what's coming up and what's paid in instalments.
-
-DETAILS
-• Screens grow out of whatever you tap.
-• Confetti when you fill a piggy bank or close a month within budget.
-• Bars ripple when you're getting close to a limit.
+EDIT GOALS WITH ONE TAP
+Tap a shield or a piggy bank to edit it. And editing a piggy bank no longer loses its contributions.
 
 FIXES
-• The app froze for a moment on launch while the month loaded.
-• Filters weren't applied to the cards or the charts.
-• Changing month from Charts could crash the app.
-• The last instalment of a financed purchase was never charged.
+• A goal you had just created couldn't be edited or deleted until you reopened the app.

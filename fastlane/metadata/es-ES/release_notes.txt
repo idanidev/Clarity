@@ -1,26 +1,16 @@
-CORRECCIONES (iOS 26 y 27)
-• En algunos iPhone con iOS 26, al abrir el formulario la app se quedaba colgada sin poder escribir el importe. Arreglado.
-• Al añadir un gasto, el formulario se quedaba bloqueado al pasar del importe a la descripción. Ya no.
-• Con mucho historial, la app tardaba de más al abrirse y al buscar.
+Novedades de esta versión:
 
-Y lo nuevo de la 2.2:
+TÚ DECIDES QUÉ VES EN LA HOME
+Las tarjetas de la Home se pueden ocultar y ordenar: «Personalizar tarjetas» al final de ellas, o mantén pulsada una para quitarla. Lo que pongas arriba sale primero.
 
-UNA HOME HECHA PARA TI
-La primera pantalla está rediseñada de arriba abajo: tu mes en grande, tarjetas de vidrio y un fondo que respira. Y no enseña lo mismo a todo el mundo: mira tus últimos seis meses y te dice si Restaurantes se te está yendo de lo normal, cuánto vas a ahorrar si el mes sigue así, dónde cae este mes entre los anteriores, a qué sitios vuelves más o cuánto suman los gastos pequeños. Cada hueco enseña lo que más te importa hoy. La previsión cuenta los cargos que aún te quedan por pasar, no una media a secas.
+DATOS QUE AVISAN DE ALGO
+«Fuera de lo normal» ya solo aparece cuando gastas bastante más de lo que sueles en una categoría habitual. Gastar menos que de costumbre —el mes después del taller— ya no es noticia.
 
-GRÁFICAS QUE SE TOCAN
-Arrastra el dedo por el anillo, por los días o por los meses y verás el dato exacto de cada uno.
+METAS: AHORRAR X AL MES
+Un objetivo nuevo: dile cuánto quieres que te quede a fin de mes y se mide solo, con tus ingresos y tus gastos, sin aportar nada. Empieza de cero cada mes.
 
-TODO CON EL MISMO ESTILO
-Metas, gastos recurrentes, ajustes, formularios, el widget y el icono, que ahora tiene versión oscura y tintada. Los recurrentes estrenan pantalla: cuánto al mes, lo que viene y lo que va a plazos.
-
-DETALLES
-• Las pantallas crecen desde lo que tocas.
-• Confeti cuando completas una hucha o cierras un mes dentro del presupuesto.
-• Las barras ondulan cuando te acercas a un tope.
+EDITAR METAS CON UN TOQUE
+Tocar un escudo o una hucha abre su edición. Y editar una hucha ya no pierde sus aportaciones.
 
 CORRECCIONES
-• La app se quedaba parada un momento al abrirla mientras cargaba el mes.
-• Los filtros no se aplicaban a las tarjetas ni a las gráficas.
-• Cambiar de mes desde Gráficas podía cerrar la app.
-• El último plazo de una compra financiada no se cobraba.
+• Una meta recién creada no se podía editar ni borrar hasta reabrir la app.
