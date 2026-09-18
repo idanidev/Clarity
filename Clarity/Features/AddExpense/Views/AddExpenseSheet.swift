@@ -52,11 +52,12 @@ struct AddExpenseSheet: View {
                     AddExpSaveToolbarButton(viewModel: viewModel, onSave: onSave, dismiss: dismiss)
                 }
 
-                // Solo antes de iOS 26: desde iOS 26 (y en 27) esta barra de
-                // accesorio se descuelga al cambiar de teclado dentro de una hoja,
-                // se queda flotando en medio del formulario y se traga los toques.
-                // El teclado se cierra arrastrando el formulario o tocando otro campo.
-                if #unavailable(iOS 26) {
+                // Hasta iOS 26 inclusive. En iOS 27 esta barra de accesorio se
+                // descuelga al cambiar de teclado dentro de una hoja, se queda
+                // flotando en medio del formulario y se traga los toques; allí el
+                // teclado se cierra arrastrando o tocando otro campo. En iOS 26 hace
+                // falta: sin ella (2.2.1) el formulario se congelaba en algunos iPhone.
+                if #unavailable(iOS 27) {
                     ToolbarItem(placement: .keyboard) {
                         HStack {
                             Spacer()

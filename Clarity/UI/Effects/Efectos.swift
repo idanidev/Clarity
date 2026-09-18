@@ -189,6 +189,24 @@ extension View {
     func transicionZoom(id: String, en ns: Namespace.ID) -> some View {
         if #available(iOS 18, *) { navigationTransition(.zoom(sourceID: id, in: ns)) } else { self }
     }
+
+    /// El zoom para HOJAS CON TECLADO, que va por versión de iOS porque cada una
+    /// falla de una manera (verificado con usuarios reales, 2.2.0–2.2.2):
+    /// - iOS 18–26: con zoom. Presentada como hoja normal, en iOS 26 la app se
+    ///   quedaba congelada al abrir el formulario en algunos iPhone.
+    /// - iOS 27+: sin zoom. Allí es el zoom —con la barra del teclado— lo que
+    ///   dejaba el formulario bloqueado.
+    /// No unificar sin probar en las dos.
+    @ViewBuilder
+    func transicionZoomDeHoja(id: String, en ns: Namespace.ID) -> some View {
+        if #available(iOS 27, *) {
+            self
+        } else if #available(iOS 18, *) {
+            navigationTransition(.zoom(sourceID: id, in: ns))
+        } else {
+            self
+        }
+    }
 }
 
 // MARK: - Vidrio del micro (iOS 26)

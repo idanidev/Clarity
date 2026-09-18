@@ -13,6 +13,8 @@ struct MainTabView: View {
     @State private var showRecurring = false
     /// Toques por pestaña: cada uno hace rebotar su icono.
     @State private var toquesPestana: [Int: Int] = [:]
+    /// El formulario de añadir crece desde el "+" (solo hasta iOS 26: ver `transicionZoomDeHoja`).
+    @Namespace private var zoomBarra
     /// Lo que ocupa la barra flotante. Cada pestaña deja ese hueco al final y el
     /// carrusel de la Home, que llega hasta el borde, lo lee del entorno.
     @State private var medidaBarra = MedidaBarraInferior(alto: 66, margenInferior: 34)
@@ -141,10 +143,9 @@ struct MainTabView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(.regularMaterial)
             .presentationCornerRadius(CornerRadius.large)
-            // Sin zoom desde el "+": en iOS 26, una hoja con teclado presentada
-            // con la transición de zoom se quedaba colgada al pasar del importe
-            // a la descripción. El zoom queda para las pantallas que se abren
-            // con push, que no traen teclado.
+            // Con zoom en iOS 18–26 y hoja normal en iOS 27+: cada versión con
+            // lo que funciona en ella. Ver `transicionZoomDeHoja`.
+            .transicionZoomDeHoja(id: "pestana-2", en: zoomBarra)
         }
         .sheet(isPresented: $showRecurring) {
             NavigationStack {
@@ -315,6 +316,7 @@ struct MainTabView: View {
                     }
                 }
                 .contentShape(Rectangle())
+                .origenZoom(id: "pestana-\(tag)", en: zoomBarra)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(nombre)

@@ -180,6 +180,8 @@ struct GoalCardView: View {
     }
 
     @State private var showFeedSheet = false
+    /// Uno por tarjeta: así el id "aportar" no choca entre huchas.
+    @Namespace private var ns
 
     private var feedButton: some View {
         Button {
@@ -192,9 +194,11 @@ struct GoalCardView: View {
             }
         }
         .buttonStyle(.secundarioClarity)
+        .origenZoom(id: "aportar", en: ns)
         .sheet(isPresented: $showFeedSheet) {
             if let onFeed = onFeed {
                 FeedGoalSheet(goal: goal, onFeed: onFeed)
+                    .transicionZoomDeHoja(id: "aportar", en: ns)
             }
         }
     }
