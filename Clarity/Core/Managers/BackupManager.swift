@@ -575,7 +575,18 @@ final class BackupManager {
                 .document(userId)
                 .collection("expenses")
                 .getDocuments(source: .default)
-            return snapshot.documents.compactMap { try? $0.data(as: Expense.self) }
+            // Con el DTO y el id del documento, como el resto de la app: `Expense`
+            // no lleva `@DocumentID` y el documento no guarda el id, así que
+            // decodificado a pelo salía con `id == nil` y `restoreExpense` lo
+            // descartaba: la copia no recuperaba ni un gasto.
+            return snapshot.documents.compactMap { doc -> Expense? in
+                do {
+                    return try doc.data(as: ExpenseDTO.self).toDomain(id: doc.documentID)
+                } catch {
+                    self.logger.error("Backup: gasto \(doc.documentID) no decodificable: \(error.localizedDescription)")
+                    return nil
+                }
+            }
         }
     }
 

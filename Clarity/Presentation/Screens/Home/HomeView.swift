@@ -17,8 +17,9 @@ struct HomeView: View {
     @State private var expenseToEdit: Expense?
     /// Desde dónde se abrió la edición, para que la hoja crezca desde ahí (hasta iOS 26).
     @State private var origenEdicion = "gasto"
-    /// Las transiciones de zoom de una tarjeta a su pantalla. Solo en lo que se
-    /// abre con push: una hoja con teclado presentada con zoom se colgaba en iOS 26.
+    /// Las transiciones de zoom de una tarjeta a su pantalla, y de una fila a su
+    /// hoja de edición hasta iOS 26 (ver `transicionZoomDeHoja`: en iOS 27 la
+    /// hoja con teclado se presenta sin zoom).
     @Namespace private var zoom
     @State private var showFilterSheet = false
     @State private var showPersonalizar = false
@@ -177,7 +178,10 @@ struct HomeView: View {
                         HomePuntos(actual: pagina)
                             .padding(.bottom, barra.total + 6)
                     }
-                    .ignoresSafeArea(.container, edges: .bottom)
+                    // El teclado solo cuenta si es el del buscador. El de una
+                    // hoja (añadir o editar gasto) encogía el carrusel que
+                    // queda debajo y subía la cabecera sobre el reloj.
+                    .ignoresSafeArea(buscando ? .container : .all, edges: .bottom)
                 }
             }
         }

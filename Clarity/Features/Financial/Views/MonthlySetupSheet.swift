@@ -102,6 +102,16 @@ struct MonthlySetupSheet: View {
                     }
                     .buttonStyle(.principalClarity)
                     .disabled(!isValid)
+
+                    // La hoja no se puede cerrar y el importe tiene que ser
+                    // mayor que 0: quien no cobra este mes se quedaba encerrado
+                    // o tenía que inventarse una cifra.
+                    Button("Este mes no tengo ingresos") {
+                        HapticManager.shared.selection()
+                        onConfirm(0)
+                    }
+                    .font(.subheadline)
+                    .foregroundStyle(Color.textSecondary)
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 24)

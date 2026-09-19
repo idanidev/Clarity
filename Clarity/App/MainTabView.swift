@@ -123,10 +123,16 @@ struct MainTabView: View {
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { medidaBarra.alto = $0 }
         }
         // El área segura de abajo, medida desde algo que llega hasta el borde.
+        // Solo el margen del dispositivo (0 o 34): cuando una hoja saca el
+        // teclado, aquí llega su alto (318, 345…) y meterlo en `medidaBarra`
+        // recolocaba las cuatro pestañas de debajo en plena presentación.
         .background {
             Color.clear
                 .ignoresSafeArea()
-                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: { medidaBarra.margenInferior = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: {
+                    guard $0 < 100 else { return }
+                    medidaBarra.margenInferior = $0
+                }
         }
         // Detrás de todo, la aurora: el vidrio de la píldora necesita algo que
         // refractar también en las pestañas con fondo propio.

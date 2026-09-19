@@ -152,7 +152,9 @@ struct EditExpenseSheet: View {
                 selection: $viewModel.date,
                 displayedComponents: .date
             )
-            .datePickerStyle(.graphical)
+            // Compacto, como en Añadir gasto: el calendario gráfico dentro de
+            // un Form con campos de texto se reconstruía en cada tecla.
+            .datePickerStyle(.compact)
             .tint(Color.clarityPrimary)
             .accessibilityLabel("Fecha del gasto")
         }
