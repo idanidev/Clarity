@@ -117,10 +117,18 @@ final class WidgetDataManager {
     func getCurrentWidgetData() -> SharedWidgetData? {
         guard
             let defaults = sharedDefaults,
-            let raw      = defaults.data(forKey: widgetKey),
-            let decoded  = try? JSONDecoder().decode(SharedWidgetData.self, from: raw)
+            let raw      = defaults.data(forKey: widgetKey)
         else { return nil }
-        return decoded
+        do {
+            return try JSONDecoder().decode(SharedWidgetData.self, from: raw)
+        } catch {
+            // Lo que lee el widget ya no casa con el modelo (un campo que
+            // cambió de forma): sin esto, el widget en blanco no tenía causa.
+            // El error, con la privacidad por defecto: un `DecodingError` puede
+            // citar el valor que no supo leer, y aquí hay nombres e importes.
+            logger.error("⚠️ [Widget] Datos compartidos ilegibles (\(raw.count) bytes): \(String(describing: error))")
+            return nil
+        }
     }
 
     // MARK: - Clear

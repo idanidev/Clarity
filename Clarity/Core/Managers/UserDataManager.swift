@@ -60,17 +60,34 @@ final class UserDataManager {
         // Esperar a Auth con listener (antes polling 5×300ms = hasta 1.5s síncrono en cold launch)
         if userId == nil {
             await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                var resumed = false
-                let resume = { if !resumed { resumed = true; cont.resume() } }
-                let token = Auth.auth().addStateDidChangeListener { _, user in
-                    if user != nil { resume() }
+                // El listener se retira en cuanto deja de hacer falta, llegue
+                // la sesión o salte el tope. Antes el handle se descartaba y
+                // el listener se quedaba puesto para siempre: uno más por cada
+                // `loadUserData()` sin sesión —se llama desde ocho sitios—, y
+                // todos despertando en cada cambio de Auth.
+                //
+                // Todo esto corre en el main actor (Firebase llama al listener
+                // en el hilo principal, y siempre de forma asíncrona, así que
+                // `escucha` ya está asignado cuando llega la primera llamada):
+                // `resuelto` no necesita cerrojo, y la continuación se reanuda
+                // una sola vez pase lo que pase.
+                var resuelto = false
+                var escucha: AuthStateDidChangeListenerHandle?
+                let resolver = {
+                    guard !resuelto else { return }
+                    resuelto = true
+                    if let escucha { Auth.auth().removeStateDidChangeListener(escucha) }
+                    escucha = nil
+                    cont.resume()
+                }
+                escucha = Auth.auth().addStateDidChangeListener { _, user in
+                    if user != nil { resolver() }
                 }
                 // Safety net 2s para no colgar indefinido si nadie se loguea
                 Task {
                     try? await Task.sleep(for: .seconds(2))
-                    resume()
+                    resolver()
                 }
-                _ = token  // listener queda activo; el wakeup de safety lo libera ya que solo necesitamos primera señal
             }
         }
         guard let userId = userId else {

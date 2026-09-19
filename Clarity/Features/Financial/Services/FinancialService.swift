@@ -24,6 +24,11 @@ class FinancialService {
         Auth.auth().currentUser?.uid
     }
 
+    /// Margen antes de dar por perdida una lectura. El mismo que
+    /// `ExpenseRepository`. Solo lecturas: una escritura que agota el tiempo
+    /// sigue adelante por su cuenta y puede acabar aplicándose.
+    private static let remoteReadTimeout: TimeInterval = 8
+
     // MARK: - Collections
     private func budgetsCollection(_ userId: String) -> CollectionReference {
         db.collection("users").document(userId).collection("monthly_budgets")
@@ -45,12 +50,15 @@ class FinancialService {
         let docRef = budgetsCollection(userId).document(documentId)
 
         // Try cache first for instant load; fallback to server if cache is empty/missing.
-        let document: DocumentSnapshot
-        do {
-            let cached = try await docRef.getDocument(source: .cache)
-            document = cached.exists ? cached : try await docRef.getDocument(source: .server)
-        } catch {
-            document = try await docRef.getDocument(source: .server)
+        // Con tope de espera (#32), alrededor del bloque entero para que el
+        // tiempo agotado salga como un error de red y no dispare otra lectura.
+        let document = try await withTimeout(Self.remoteReadTimeout) {
+            do {
+                let cached = try await docRef.getDocument(source: .cache)
+                return cached.exists ? cached : try await docRef.getDocument(source: .server)
+            } catch {
+                return try await docRef.getDocument(source: .server)
+            }
         }
 
         guard document.exists else { return nil }
@@ -139,16 +147,26 @@ class FinancialService {
             .whereField("userId", isEqualTo: userId)
             .whereField("isArchived", isEqualTo: false)
 
-        let snapshot: QuerySnapshot
-        do {
-            let cached = try await query.getDocuments(source: .cache)
-            snapshot = cached.isEmpty ? try await query.getDocuments(source: .server) : cached
-        } catch {
-            snapshot = try await query.getDocuments(source: .server)
+        // Con tope de espera (#32): ver `fetchMonthlyBudget`.
+        let snapshot = try await withTimeout(Self.remoteReadTimeout) {
+            do {
+                let cached = try await query.getDocuments(source: .cache)
+                return cached.isEmpty ? try await query.getDocuments(source: .server) : cached
+            } catch {
+                return try await query.getDocuments(source: .server)
+            }
         }
 
+        // Una meta que no se puede decodificar desaparecía de la lista sin
+        // dejar rastro. Sigue sin salir —no hay caso «desconocido» al que
+        // mandarla: los tipos alimentan selectores—, pero ahora se sabe cuál.
         let goals = snapshot.documents.compactMap { doc -> Goal? in
-            try? doc.data(as: Goal.self)
+            do {
+                return try doc.data(as: Goal.self)
+            } catch {
+                logger.error("Meta \(doc.documentID, privacy: .public) no decodificable: \(error.localizedDescription)")
+                return nil
+            }
         }
 
         logger.info("✅ Fetched \(goals.count) goals")

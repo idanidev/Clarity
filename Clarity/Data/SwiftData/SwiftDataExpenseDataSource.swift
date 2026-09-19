@@ -123,25 +123,12 @@ final class SwiftDataExpenseDataSource {
         let descriptor = FetchDescriptor<ExpenseModel>(predicate: #Predicate { $0.id == id })
         
         if let model = try context.fetch(descriptor).first {
-            // Update fields
-            model.amount = expense.amount
-            model.name = expense.name
-            model.category = expense.category
-            model.subcategory = expense.subcategory
-            
-            // Usar parser UTC compartido (un DateFormatter sin TZ deriva la fecha al editar)
-            if let dateObj = Formatters.date(from: expense.date) {
-                model.date = dateObj
-            }
-            
-            model.paymentMethod = expense.paymentMethod
-            model.notes = expense.notes
-            model.goalId = expense.goalId
-            model.isShared = expense.isShared
-            model.debtorsData = ExpenseModel.encodeDebtors(expense.debtors)
-            model.updatedAt = Date()
-
-            try context.save()
+            // Con `apply`, como la sincronización: copiaba los campos a mano y
+            // se había quedado atrás (ni deducible ni los de recurrente). Y
+            // solo se guarda si algo cambia: `apply` no toca nada —ni
+            // `updatedAt`— cuando el gasto llega igual que estaba.
+            model.apply(expense)
+            if context.hasChanges { try context.save() }
         }
     }
 

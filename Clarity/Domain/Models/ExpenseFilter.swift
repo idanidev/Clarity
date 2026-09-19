@@ -90,7 +90,12 @@ nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
         let methodsArray = try container.decodeIfPresent([String].self, forKey: .selectedPaymentMethods) ?? []
         self.selectedPaymentMethods = Set(methodsArray)
         
-        self.dateRange = try container.decodeIfPresent(DateRange.self, forKey: .dateRange) ?? .thisMonth
+        // Como texto y luego al enum: `decodeIfPresent(DateRange.self)` solo
+        // cubre que el campo FALTE. Con un valor que este enum no conoce —un
+        // rango renombrado, o uno nuevo guardado desde una versión posterior—
+        // lanza, y el filtro entero se perdía (y con él, el predeterminado).
+        self.dateRange = (try container.decodeIfPresent(String.self, forKey: .dateRange))
+            .flatMap(DateRange.init(rawValue:)) ?? .thisMonth
         
         self.customStartDate = try container.decodeIfPresent(Date.self, forKey: .customStartDate) ?? Date()
         self.customEndDate = try container.decodeIfPresent(Date.self, forKey: .customEndDate) ?? Date()
@@ -98,7 +103,9 @@ nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
         self.minAmount = try container.decodeIfPresent(Double.self, forKey: .minAmount)
         self.maxAmount = try container.decodeIfPresent(Double.self, forKey: .maxAmount)
         
-        self.sortBy = try container.decodeIfPresent(SortOption.self, forKey: .sortBy) ?? .dateDesc
+        // Igual que `dateRange`: un orden desconocido no tumba el filtro.
+        self.sortBy = (try container.decodeIfPresent(String.self, forKey: .sortBy))
+            .flatMap(SortOption.init(rawValue:)) ?? .dateDesc
         self.showOnlyRecurring = try container.decodeIfPresent(Bool.self, forKey: .showOnlyRecurring) ?? false
     }
     

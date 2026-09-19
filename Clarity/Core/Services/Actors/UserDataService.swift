@@ -22,6 +22,14 @@ actor UserDataService {
     // MARK: - State (Isolated)
     private var categoriesVersion: String?
     private var lastCategoriesUpdate: Date?
+    /// Versiones con un espejo en marcha ("" = sin versión). Al cargar, la
+    /// lectura de caché y el refresco contra servidor llegan casi a la vez:
+    /// sin esto, las dos lanzarían el mismo espejo.
+    private var espejosEnCurso: Set<String> = []
+
+    /// Margen antes de dar por perdida una lectura (#32). El mismo que
+    /// `ExpenseRepository`.
+    private static let remoteReadTimeout: TimeInterval = 8
 
     private init() {}
 
@@ -34,16 +42,24 @@ actor UserDataService {
     func loadCategories(userId: String, forceServer: Bool = false) async throws -> (categories: [Category], version: String?) {
         let docRef = db.collection("users").document(userId)
 
-        let doc: DocumentSnapshot
-        if forceServer {
-            // Refresh multi-device: lectura directa de server (sin cache stale)
-            doc = try await docRef.getDocument(source: .server)
-        } else {
+        // Con tope de espera (#32). CRÍTICO: un tiempo agotado tiene que ser
+        // un error de red más, nunca «no hay mapa». Por eso envuelve SOLO la
+        // lectura y lanza desde aquí, antes de mirar el mapa: a la siembra de
+        // más abajo solo se llega con un documento leído de verdad. Y por eso
+        // envuelve el bloque entero y no cada `getDocument`: dentro del `do`,
+        // el tiempo agotado caería en el `catch` como un fallo de caché.
+        // Quien llama (`UserDataManager`) ante un error se queda con las
+        // categorías que tenía y no escribe nada.
+        let doc = try await withTimeout(Self.remoteReadTimeout) {
+            if forceServer {
+                // Refresh multi-device: lectura directa de server (sin cache stale)
+                return try await docRef.getDocument(source: .server)
+            }
             do {
                 let cached = try await docRef.getDocument(source: .cache)
-                doc = cached.exists ? cached : try await docRef.getDocument(source: .server)
+                return cached.exists ? cached : try await docRef.getDocument(source: .server)
             } catch {
-                doc = try await docRef.getDocument(source: .server)
+                return try await docRef.getDocument(source: .server)
             }
         }
 
@@ -76,10 +92,23 @@ actor UserDataService {
 
         // Espejar a subcolección SOLO si la versión cambió desde el último mirror
         // (antes corría en cada load → N writes Firestore por arranque).
+        //
+        // La versión se apunta DESPUÉS de espejar, no antes: apuntada antes, un
+        // espejo fallido se daba por hecho y no se reintentaba hasta que las
+        // categorías volvieran a cambiar. Es solo el espejo; el mapa no se toca.
         let version = doc.data()?["categoriesVersion"] as? String
-        if version == nil || version != categoriesVersion {
-            categoriesVersion = version
-            Task { try? await mirrorCategoriesToSubcollection(userId: userId, map: categoriesMap) }
+        let claveDeEspejo = version ?? ""
+        if version == nil || version != categoriesVersion, !espejosEnCurso.contains(claveDeEspejo) {
+            espejosEnCurso.insert(claveDeEspejo)
+            Task {
+                defer { espejosEnCurso.remove(claveDeEspejo) }
+                do {
+                    try await mirrorCategoriesToSubcollection(userId: userId, map: categoriesMap)
+                    categoriesVersion = version
+                } catch {
+                    logger.error("Espejo de categorías a la subcolección fallido; se reintentará en la próxima carga: \(error.localizedDescription)")
+                }
+            }
         }
 
         let sorted = loaded.sorted { $0.name < $1.name }
@@ -122,12 +151,14 @@ actor UserDataService {
     /// Son hasta 100 lecturas, y antes se hacían en cada `loadUserData()`.
     func loadPaymentMethods(userId: String) async throws -> Set<String> {
         let ref = db.collection("users").document(userId).collection("expenses").limit(to: 100)
-        let snapshot: QuerySnapshot
-        do {
-            let cached = try await ref.getDocuments(source: .cache)
-            snapshot = cached.isEmpty ? try await ref.getDocuments(source: .server) : cached
-        } catch {
-            snapshot = try await ref.getDocuments(source: .server)
+        // Con tope de espera (#32), alrededor del bloque entero: ver `loadCategories`.
+        let snapshot = try await withTimeout(Self.remoteReadTimeout) {
+            do {
+                let cached = try await ref.getDocuments(source: .cache)
+                return cached.isEmpty ? try await ref.getDocuments(source: .server) : cached
+            } catch {
+                return try await ref.getDocuments(source: .server)
+            }
         }
         var methods = Set<String>()
         for doc in snapshot.documents {

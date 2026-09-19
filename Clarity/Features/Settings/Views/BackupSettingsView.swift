@@ -52,9 +52,15 @@ struct BackupSettingsView: View {
         } message: {
             Text(errorMessage)
         }
-        .sheet(isPresented: $showExportSheet) {
+        // El JSON exportado lleva todos los gastos en claro y se quedaba en
+        // `tmp/` después de compartirlo. Se borra al cerrarse la hoja, que es
+        // donde acaban todos los caminos: compartido, cancelado o arrastrada
+        // hacia abajo (ese último no pasa por el aviso de `ShareSheet`).
+        .sheet(isPresented: $showExportSheet, onDismiss: borrarExportacionTemporal) {
             if let url = exportedFileURL {
-                ShareSheet(items: [url])
+                ShareSheet(items: [url]) {
+                    showExportSheet = false
+                }
             }
         }
         .fileImporter(
@@ -81,7 +87,9 @@ struct BackupSettingsView: View {
             switch result {
             case .success(let urls):
                 guard let url = urls.first else { return }
-                parseCSVForPreview(fileURL: url)
+                Task {
+                    await parseCSVForPreview(fileURL: url)
+                }
             case .failure(let error):
                 errorMessage = error.localizedDescription
                 showError = true
@@ -311,16 +319,31 @@ struct BackupSettingsView: View {
         }
     }
 
-    private func parseCSVForPreview(fileURL: URL) {
-        guard fileURL.startAccessingSecurityScopedResource() else {
-            errorMessage = "No se puede acceder al archivo"
-            showError = true
-            return
-        }
-        defer { fileURL.stopAccessingSecurityScopedResource() }
+    /// Quita de `tmp/` el JSON que se acaba de compartir (o de no compartir).
+    private func borrarExportacionTemporal() {
+        guard let url = exportedFileURL else { return }
+        try? FileManager.default.removeItem(at: url)
+        exportedFileURL = nil
+    }
+
+    private func parseCSVForPreview(fileURL: URL) async {
+        // El indicador del botón, y de paso que no se pueda elegir otro
+        // archivo mientras se lee este.
+        isImportingCSV = true
+        defer { isImportingCSV = false }
 
         do {
-            let expenses = try ExportService.shared.parseCSV(from: fileURL)
+            // Leer y parsear fuera del hilo principal: antes iba en el callback
+            // del selector de archivos, y un CSV de años congelaba la pantalla.
+            // El permiso de acceso se abre y se cierra dentro de la misma tarea
+            // que lee, para que cubra la lectura entera.
+            let expenses = try await Task.detached(priority: .userInitiated) {
+                guard fileURL.startAccessingSecurityScopedResource() else {
+                    throw NSError(domain: "BackupManager", code: 403, userInfo: [NSLocalizedDescriptionKey: "No se puede acceder al archivo"])
+                }
+                defer { fileURL.stopAccessingSecurityScopedResource() }
+                return try ExportService.shared.parseCSV(from: fileURL)
+            }.value
             guard !expenses.isEmpty else {
                 errorMessage = "El archivo CSV no contiene gastos válidos"
                 showError = true
@@ -584,9 +607,20 @@ struct BackupRow: View {
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
+    /// Se llama cuando la hoja de compartir ha terminado: se compartió, o se
+    /// cerró sin elegir nada.
+    var onFinish: (() -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { activityType, completed, _, _ in
+            // Cancelar dentro de una actividad (descartar el borrador del
+            // correo, p. ej.) devuelve a la hoja, que sigue abierta: eso
+            // todavía no es terminar.
+            guard completed || activityType == nil else { return }
+            onFinish?()
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

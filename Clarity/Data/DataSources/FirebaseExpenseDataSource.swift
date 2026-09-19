@@ -31,10 +31,7 @@ actor FirebaseExpenseDataSource {
         let snapshot = try await collection.order(by: "date", descending: true)
             .getDocuments(source: soloServidor ? .server : .default)
 
-        return snapshot.documents.compactMap { doc in
-            guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
-            return dto.toDomain(id: doc.documentID)
-        }
+        return snapshot.documents.compactMap(Self.decodificar)
     }
     
     /// Fetches ALL expenses matching the filter (Server-Side Date Filter, No Limit)
@@ -63,10 +60,7 @@ actor FirebaseExpenseDataSource {
         
         let snapshot = try await query.getDocuments()
         
-        return snapshot.documents.compactMap { doc in
-            guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
-            return dto.toDomain(id: doc.documentID)
-        }
+        return snapshot.documents.compactMap(Self.decodificar)
     }
     
     /// Fetch acotado por rango de fechas ("yyyy-MM-dd" inclusive). Rango sobre un solo
@@ -84,10 +78,7 @@ actor FirebaseExpenseDataSource {
             .order(by: "date", descending: true)
             .getDocuments(source: soloServidor ? .server : .default)
 
-        return snapshot.documents.compactMap { doc in
-            guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
-            return dto.toDomain(id: doc.documentID)
-        }
+        return snapshot.documents.compactMap(Self.decodificar)
     }
 
     // MARK: - Write Operations
@@ -131,6 +122,20 @@ actor FirebaseExpenseDataSource {
         }
         collection.document(id).delete { error in
             if let error { Self.logRemoteWriteFailure("deleteExpense", error) }
+        }
+    }
+
+    /// Un documento que no se puede decodificar se saltaba con `try?`: el
+    /// gasto desaparecía de la app —y, con la purga de huérfanos, de la caché—
+    /// sin dejar rastro. Se sigue saltando, pero ahora se sabe cuál y por qué.
+    /// Solo el id del documento: ni nombre ni importe.
+    private nonisolated static func decodificar(_ doc: QueryDocumentSnapshot) -> Expense? {
+        do {
+            return try doc.data(as: ExpenseDTO.self).toDomain(id: doc.documentID)
+        } catch {
+            Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "FirebaseExpenseDS")
+                .error("Gasto \(doc.documentID, privacy: .public) no decodificable: \(error.localizedDescription)")
+            return nil
         }
     }
 

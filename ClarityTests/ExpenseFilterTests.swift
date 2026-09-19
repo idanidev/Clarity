@@ -86,4 +86,78 @@ struct ExpenseFilterTests {
         #expect(rango.start == "\(prefijo)-01")
         #expect(rango.end == "\(prefijo)-\(String(format: "%02d", dias))")
     }
+
+    // MARK: - Decodificación tolerante
+
+    /// Un filtro guardado, con los campos que se le digan cambiados.
+    private func json(_ cambios: [String: Any]) throws -> Data {
+        var campos: [String: Any] = [
+            "id": "11111111-2222-3333-4444-555555555555",
+            "name": "Mío",
+            "selectedCategories": ["Ocio"],
+            "selectedPaymentMethods": [],
+            "dateRange": "Mes anterior",
+            "sortBy": "Mayor importe",
+            "showOnlyRecurring": true,
+        ]
+        for (clave, valor) in cambios { campos[clave] = valor }
+        return try JSONSerialization.data(withJSONObject: campos)
+    }
+
+    @Test("Un rango de fechas desconocido cae al de por defecto sin tumbar el filtro")
+    func rangoDesconocido() throws {
+        // P. ej. un rango nuevo guardado desde una versión posterior de la app.
+        let filtro = try JSONDecoder().decode(
+            ExpenseFilter.self, from: try json(["dateRange": "Últimos 2 años"]))
+
+        #expect(filtro.dateRange == .thisMonth)
+        // El resto del filtro sobrevive.
+        #expect(filtro.name == "Mío")
+        #expect(filtro.selectedCategories == ["Ocio"])
+        #expect(filtro.sortBy == .amountDesc)
+        #expect(filtro.showOnlyRecurring)
+    }
+
+    @Test("Un orden desconocido cae al de por defecto sin tumbar el filtro")
+    func ordenDesconocido() throws {
+        let filtro = try JSONDecoder().decode(
+            ExpenseFilter.self, from: try json(["sortBy": "Por categoría"]))
+
+        #expect(filtro.sortBy == .dateDesc)
+        #expect(filtro.dateRange == .lastMonth)
+        #expect(filtro.name == "Mío")
+    }
+
+    @Test("Los valores conocidos y los ausentes se leen como siempre")
+    func valoresConocidos() throws {
+        let completo = try JSONDecoder().decode(ExpenseFilter.self, from: try json([:]))
+        #expect(completo.dateRange == .lastMonth)
+        #expect(completo.sortBy == .amountDesc)
+
+        let sinCampos = try JSONDecoder().decode(
+            ExpenseFilter.self, from: Data(#"{"name":"Vacío"}"#.utf8))
+        #expect(sinCampos.dateRange == .thisMonth)
+        #expect(sinCampos.sortBy == .dateDesc)
+    }
+
+    @Test("Un filtro con un valor desconocido ya no se cae de la lista de guardados")
+    func listaDeGuardados() throws {
+        // `UserDocument` descarta los filtros que no decodifican: con un rango
+        // desconocido el filtro desaparecía de «Mis filtros».
+        let bueno = try JSONSerialization.jsonObject(with: try json([:]))
+        let raro = try JSONSerialization.jsonObject(with: try json(["dateRange": "???", "name": "Raro"]))
+        let documento = try JSONSerialization.data(withJSONObject: ["savedFilters": [bueno, raro]])
+
+        let usuario = try JSONDecoder().decode(UserDocument.self, from: documento)
+
+        #expect(usuario.savedFilters?.map(\.name) == ["Mío", "Raro"])
+    }
+
+    @Test("Ida y vuelta: lo que se guarda se lee igual")
+    func idaYVuelta() throws {
+        let filtro = ExpenseFilter(name: "Año", dateRange: .lastYear, sortBy: .nameAsc)
+        let vuelta = try JSONDecoder().decode(ExpenseFilter.self, from: try JSONEncoder().encode(filtro))
+        #expect(vuelta.dateRange == .lastYear)
+        #expect(vuelta.sortBy == .nameAsc)
+    }
 }

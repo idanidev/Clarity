@@ -194,4 +194,120 @@ struct SwiftDataExpenseDataSourceTests {
         // Las fechas salen de la caché tal y como entraron.
         #expect(pagina.expenses.map(\.date) == ["2026-09-11", "2026-09-10", "2026-09-10", "2019-05-01"])
     }
+
+    // MARK: - apply() y updateExpense
+
+    private func modelo(_ id: String, en contexto: ModelContext) throws -> ExpenseModel {
+        try #require(try contexto.fetch(
+            FetchDescriptor<ExpenseModel>(predicate: #Predicate { $0.id == id })).first)
+    }
+
+    @Test("apply() sincroniza deducible y los campos de recurrente")
+    func applyCamposDeRecurrente() throws {
+        let (fuente, contexto) = try almacen()
+        try fuente.upsertAll([gasto("a", 10)])
+        let fila = try modelo("a", en: contexto)
+        #expect(!fila.isDeductible && fila.recurringId == nil && fila.isRecurring == nil)
+
+        // Llega de otro dispositivo marcado como deducible y enlazado a su regla.
+        let remoto = Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1")
+        #expect(fila.apply(remoto))
+
+        #expect(fila.isDeductible)
+        #expect(fila.isRecurring == true)
+        #expect(fila.recurringId == "regla-1")
+        // Y sale igual por el dominio.
+        let leido = fila.toDomain()
+        #expect(leido.isDeductible == true && leido.isRecurring == true && leido.recurringId == "regla-1")
+    }
+
+    @Test("apply() detecta como cambio cada uno de los tres campos, y ninguno si no lo hay")
+    func applyDetectaCambios() throws {
+        let (fuente, contexto) = try almacen()
+        let base = Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1")
+        try fuente.upsertAll([base])
+        let fila = try modelo("a", en: contexto)
+
+        #expect(!fila.apply(base))
+        #expect(fila.apply(Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: false, isRecurring: true, recurringId: "regla-1")))
+        #expect(fila.apply(Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: false, isRecurring: true, recurringId: "regla-2")))
+        #expect(fila.apply(Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: false, isRecurring: false, recurringId: "regla-2")))
+        #expect(fila.isRecurring == false && fila.recurringId == "regla-2" && !fila.isDeductible)
+    }
+
+    @Test("Aplicar sobre una fila deja lo mismo que insertarla de cero")
+    func applyIgualQueInsertar() throws {
+        let (fuente, contexto) = try almacen()
+        let remoto = Expense(
+            id: "a", amount: 12, name: "y", category: "Ocio", date: "2026-09-11",
+            isDeductible: nil, isRecurring: nil, recurringId: nil)
+        // Una fila que tenía los tres campos puestos…
+        try fuente.upsertAll([Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1")])
+        try fuente.upsertAll([remoto])
+        let aplicada = try modelo("a", en: contexto).toDomain()
+        // …queda como la recién insertada desde el mismo gasto.
+        let insertada = ExpenseModel(from: remoto).toDomain()
+
+        #expect(aplicada.isDeductible == insertada.isDeductible)
+        #expect(aplicada.isRecurring == insertada.isRecurring)
+        #expect(aplicada.recurringId == insertada.recurringId)
+    }
+
+    @Test("updateExpense usa apply(): actualiza también los campos que antes se dejaba")
+    func updateConApply() throws {
+        let (fuente, _) = try almacen()
+        try fuente.addExpense(gasto("a", 10))
+
+        try fuente.updateExpense(Expense(
+            id: "a", amount: 15, name: "editado", category: "Ocio", date: "2026-09-12",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1"))
+
+        let leido = try #require(try fuente.fetchExpenses().first)
+        #expect(leido.amount == 15 && leido.name == "editado" && leido.date == "2026-09-12")
+        #expect(leido.isDeductible == true && leido.isRecurring == true && leido.recurringId == "regla-1")
+    }
+
+    @Test("updateExpense sin cambios ni ensucia el contexto ni toca updatedAt")
+    func updateSinCambios() throws {
+        let (fuente, contexto) = try almacen()
+        try fuente.addExpense(gasto("a", 10))
+        let antes = try modelo("a", en: contexto).updatedAt
+
+        try fuente.updateExpense(gasto("a", 10))
+
+        #expect(!contexto.hasChanges)
+        #expect(try modelo("a", en: contexto).updatedAt == antes)
+    }
+
+    @Test("updateExpense con una fecha ilegible conserva la que había")
+    func updateFechaIlegible() throws {
+        let (fuente, _) = try almacen()
+        try fuente.addExpense(gasto("a", 10, fecha: "2026-09-10"))
+
+        try fuente.updateExpense(gasto("a", 11, fecha: "no-es-fecha"))
+
+        let leido = try #require(try fuente.fetchExpenses().first)
+        #expect(leido.amount == 11)
+        #expect(leido.date == "2026-09-10")
+    }
+
+    @Test("updateExpense de un gasto que no está en la caché no hace nada")
+    func updateInexistente() throws {
+        let (fuente, contexto) = try almacen()
+        try fuente.updateExpense(gasto("fantasma", 10))
+        #expect(try fuente.count() == 0)
+        #expect(!contexto.hasChanges)
+    }
 }

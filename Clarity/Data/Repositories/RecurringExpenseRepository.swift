@@ -32,6 +32,10 @@ class RecurringExpenseRepository {
         return try await cache.valor(para: userId) { try await self.fetchAllSinCache() }
     }
 
+    /// Margen antes de dar por perdida la lectura de las reglas. El mismo que
+    /// `ExpenseRepository`.
+    private static let remoteReadTimeout: TimeInterval = 8
+
     /// Al cerrar sesión o cambiar de usuario.
     func vaciarCache() {
         cache.vaciar()
@@ -42,13 +46,19 @@ class RecurringExpenseRepository {
             throw RepositoryError.notAuthenticated
         }
         // Cache-first: serve from disk instantly, fallback to server (también si cache vacío)
+        //
+        // Con tope de espera (#32). Envuelve el bloque entero, no cada lectura:
+        // así el tiempo agotado sale de aquí como cualquier error de red, en vez
+        // de caer en el `catch` de dentro y lanzar otra lectura al servidor.
+        // Quien llama ya trata el error: nunca se convierte en «no hay reglas».
         let query = collection.order(by: "dayOfMonth")
-        let snapshot: QuerySnapshot
-        do {
-            let cached = try await query.getDocuments(source: .cache)
-            snapshot = cached.isEmpty ? try await query.getDocuments(source: .server) : cached
-        } catch {
-            snapshot = try await query.getDocuments(source: .server)
+        let snapshot = try await withTimeout(Self.remoteReadTimeout) {
+            do {
+                let cached = try await query.getDocuments(source: .cache)
+                return cached.isEmpty ? try await query.getDocuments(source: .server) : cached
+            } catch {
+                return try await query.getDocuments(source: .server)
+            }
         }
         var results: [RecurringExpense] = []
         for doc in snapshot.documents {
