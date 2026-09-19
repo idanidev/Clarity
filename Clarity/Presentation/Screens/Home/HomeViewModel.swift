@@ -774,11 +774,9 @@ final class HomeViewModel {
             }
 
             mesesEnMemoria.removeValue(forKey: String(expense.date.prefix(7)))
+            // `loadExpenses` ya actualiza el widget: repetirlo aquí gastaba dos
+            // recargas de WidgetKit por cada borrado.
             await loadExpenses()
-            WidgetDataManager.shared.updateFromExpenses(
-                currentMonthExpenses,
-                monthBudget: currentMonthlyBudget?.totalIncome
-            )
             // Avisar a otras VMs (FinancialHub escudos/metas) para refresh inmediato
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(

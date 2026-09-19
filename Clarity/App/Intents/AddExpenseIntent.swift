@@ -55,6 +55,10 @@ struct GetSpendingSummaryIntent: AppIntent {
 
     static var openAppWhenRun: Bool = false
 
+    /// Siri dice importes en voz alta: con el iPhone bloqueado pide desbloquear
+    /// antes. Sin esto, el bloqueo biométrico de la app no protegía este dato.
+    static var authenticationPolicy: IntentAuthenticationPolicy = .requiresAuthentication
+
     private nonisolated func loadWidgetData() -> SharedWidgetData? {
         let appGroupID = "group.com.idanidev.clarity"
         let widgetKey  = "widgetData_v2"
