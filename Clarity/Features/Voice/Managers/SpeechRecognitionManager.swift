@@ -190,12 +190,18 @@ class SpeechRecognitionManager {
                     }
                     self.resetSilenceTimer()
                 }
-            }
 
-            self.bufferCount += 1
-            if self.bufferCount > self.maxBuffers {
-                self.logger.warning("⚠️ Max buffer limit reached — stopping recording")
-                self.stopRecording()
+                // El tope de búferes, aquí dentro y no en el hilo de audio: el
+                // contador es estado del main actor y `stopRecording()` toca el
+                // motor, la sesión y propiedades observadas por la interfaz. Lo
+                // único que Apple quiere en el hilo del tap es el `append`.
+                // `isListening` evita repetir la parada con los búferes que ya
+                // venían de camino cuando se alcanzó el tope.
+                self.bufferCount += 1
+                if self.bufferCount > self.maxBuffers, self.isListening {
+                    self.logger.warning("⚠️ Max buffer limit reached — stopping recording")
+                    self.stopRecording()
+                }
             }
         }
 
@@ -389,6 +395,10 @@ class SpeechRecognitionManager {
                 audioEngine.pause()
                 recognitionTask?.finish()
                 isListening = false
+                // El dictado acaba aquí, no en `stopRecording()` (que con el motor
+                // en pausa no hace nada): la sesión se suelta igual que allí. El
+                // botón ve caer `isListening` y procesa lo transcrito hasta ahora.
+                SoundManager.shared.restoreAfterRecording()
             }
 
         case .ended:
@@ -413,6 +423,16 @@ class SpeechRecognitionManager {
     }
 
     private func attemptAudioRecovery() {
+        // Una interrupción cierra el dictado (ver `.began`), así que aquí ya no
+        // graba nadie. Reactivar la sesión sin uso era volver a lo que se evita
+        // al parar: AirPods en HFP y el audio de las demás apps atenuado.
+        guard isListening else {
+            audioSessionState = .idle
+            wasInterrupted = false
+            retryAttempts = 0
+            return
+        }
+
         Task {
             do {
                 let audioSession = AVAudioSession.sharedInstance()

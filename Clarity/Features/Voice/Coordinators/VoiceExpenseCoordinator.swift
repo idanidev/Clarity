@@ -38,6 +38,14 @@ class VoiceExpenseCoordinator {
     // Data State
     var pendingExpense: Expense?
     var wasFullyDetected = false
+    /// La categoría de `pendingExpense` no salió del dictado: es la primera de
+    /// la lista, puesta por no dejar el campo vacío. La hoja lo avisa.
+    private(set) var categoryIsGuess = false
+
+    /// Descripción de una frase a la que le faltó el importe. No es un error:
+    /// la frase se entendió, así que en vez de tirarla con un «OK» la vista abre
+    /// el formulario manual con ella puesta y el foco en el importe.
+    private(set) var borradorManual: String?
 
     // Messages
     var errorMessage: String? {
@@ -208,6 +216,8 @@ class VoiceExpenseCoordinator {
                 let resolved = userMatch ?? parserResolved
                 let categoryName = resolved?.category ?? categories.first?.name ?? ""
                 let resolvedSub = resolved?.subcategory
+                // Nadie reconoció la categoría: la de arriba es un relleno.
+                categoryIsGuess = resolved == nil && !categoryName.isEmpty
 
                 // Decimal -> Double bridge for legacy model
                 let amountDouble = NSDecimalNumber(decimal: parsed.amount).doubleValue
@@ -228,14 +238,40 @@ class VoiceExpenseCoordinator {
                 state = .confirming
 
             case .failure(let error):
+                stats.recordFailure()
+
+                // Falta el importe, pero la frase se entendió: al formulario
+                // manual con ella, no a un alert que la tira (ai-service.md:
+                // «si el importe no se detecta → confirmación antes de guardar»).
+                if case .noAmountFound = error {
+                    proponerBorradorManual(desde: transcript)
+                    return
+                }
+
                 // Specific error messages
                 SoundManager.shared.play(.error)
                 if settings.vibration { VoiceHapticsEngine.shared.playError() }
 
                 state = .error(error.safeUserMessage)
-                stats.recordFailure()
             }
         }
+    }
+
+    /// Deja lista la descripción para el formulario manual, limpia de verbos de
+    /// comando como la dejaría el parser. También la usa el micro de la barra,
+    /// que tiene su propia tubería pero el mismo formulario al que ir a parar.
+    func proponerBorradorManual(desde frase: String) {
+        // El formulario cuenta el gasto como manual: la marca de Siri no debe
+        // quedarse puesta para el dictado siguiente.
+        origen = .voice
+        if state == .processing { state = .idle }
+        if settings.vibration { HapticManager.shared.warning() }
+        borradorManual = SmartTransactionParser.shared.descripcionParaFormulario(de: frase)
+    }
+
+    /// El formulario manual ya se ha cerrado (guardado o no): el borrador caduca.
+    func descartarBorradorManual() {
+        borradorManual = nil
     }
 
     func saveExpense(_ expense: Expense, viewModel: HomeViewModel) async {
@@ -314,6 +350,7 @@ class VoiceExpenseCoordinator {
         )
 
         wasFullyDetected = resolved != nil
+        categoryIsGuess = resolved == nil && !categoryName.isEmpty
         state = .confirming
     }
 
@@ -394,6 +431,7 @@ class VoiceExpenseCoordinator {
         state = .idle
         pendingExpense = nil
         wasFullyDetected = false
+        categoryIsGuess = false
     }
 
     func clearError() {

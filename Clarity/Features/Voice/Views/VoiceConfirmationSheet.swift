@@ -5,7 +5,11 @@ import SwiftUI
 
 struct VoiceConfirmationSheet: View {
     let expense: Expense
+    /// Si es falso no hay cuenta atrás: el usuario revisa y pulsa «Guardar».
     let wasFullyDetected: Bool
+    /// La categoría no salió del dictado: es la primera de la lista, puesta por
+    /// no dejar el campo vacío. La hoja lo avisa hasta que el usuario elige una.
+    let categoryIsGuess: Bool
     /// Snapshot inicial. Si está vacío (cold launch desde Siri sin user data cargado),
     /// se hace fallback a `userData.categories` que es reactivo.
     let categories: [Category]
@@ -40,13 +44,19 @@ struct VoiceConfirmationSheet: View {
     @State private var showNewCategory = false
     @State private var showAddSubcategory = false
     @State private var newSubcategoryName = ""
+    /// El usuario ya ha tocado la categoría: el aviso de suposición sobra.
+    @State private var categoryReviewed = false
     @Environment(\.dismiss) private var dismiss
 
     private let autoConfirmDuration: Double
+    /// Decidido una vez al crear la hoja (ver `VoiceSettings.arrancaCuentaAtras`).
+    /// Sin cuenta atrás no hay barra, ni anillo en «Guardar», ni guardado solo.
+    private let hasCountdown: Bool
 
     init(
         expense: Expense,
         wasFullyDetected: Bool,
+        categoryIsGuess: Bool = false,
         categories: [Category],
         speechManager: SpeechRecognitionManager,
         onConfirm: @escaping (Expense) -> Void,
@@ -54,6 +64,7 @@ struct VoiceConfirmationSheet: View {
     ) {
         self.expense = expense
         self.wasFullyDetected = wasFullyDetected
+        self.categoryIsGuess = categoryIsGuess
         self.categories = categories
         self.speechManager = speechManager
         self.onConfirm = onConfirm
@@ -62,7 +73,13 @@ struct VoiceConfirmationSheet: View {
         let settings = VoiceSettings.load()
         let duration = settings.autoConfirmDelay
         self.autoConfirmDuration = duration
+        self.hasCountdown = settings.arrancaCuentaAtras(deteccionCompleta: wasFullyDetected)
         self._timeRemaining = State(initialValue: duration)
+    }
+
+    /// La cuenta atrás está en marcha y a la vista.
+    private var countdownRunning: Bool {
+        hasCountdown && !countdownCancelled && timeRemaining > 0 && canSave
     }
 
     var body: some View {
@@ -86,7 +103,7 @@ struct VoiceConfirmationSheet: View {
                 }
 
                 // Category
-                Section("Categoría") {
+                Section {
                     Picker("Categoría", selection: $selectedCategoryName) {
                         Text("Seleccionar").tag("")
                         ForEach(availableCategories, id: \.name) { category in
@@ -94,6 +111,9 @@ struct VoiceConfirmationSheet: View {
                         }
                     }
                     .onChange(of: selectedCategoryName) { old, new in
+                        // Antes de `isInitialized` quien cambia la selección es
+                        // la propia hoja al rellenarse, no el usuario.
+                        if isInitialized { categoryReviewed = true }
                         cancelCountdown()
                         if old != new,
                             let newCategory = availableCategories.first(where: { $0.name == new }),
@@ -159,6 +179,19 @@ struct VoiceConfirmationSheet: View {
                         Label("Nueva categoría", systemImage: "plus.circle.fill")
                             .foregroundStyle(Color.clarityPrimary)
                     }
+                } header: {
+                    Text("Categoría")
+                } footer: {
+                    // Mismo tono que el aviso de subcategoría del formulario
+                    // manual: pie de sección, en ámbar, sin tapar nada.
+                    if categoryIsGuess && !categoryReviewed {
+                        Label(
+                            "No he reconocido la categoría: esta es una suposición. Revísala antes de guardar.",
+                            systemImage: "sparkles"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(Color.warning)
+                    }
                 }
             }
             .fondoClarity()
@@ -189,7 +222,7 @@ struct VoiceConfirmationSheet: View {
                     Button {
                         confirmExpense()
                     } label: {
-                        if !countdownCancelled && timeRemaining > 0 && canSave {
+                        if countdownRunning {
                             SaveCountdownButton(
                                 timeRemaining: timeRemaining,
                                 progress: progress
@@ -206,7 +239,7 @@ struct VoiceConfirmationSheet: View {
             }
             // Native iOS bottom bar — replaces the form section banner
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !countdownCancelled && timeRemaining > 0 && canSave {
+                if countdownRunning {
                     AutoSaveBar(
                         timeRemaining: timeRemaining,
                         progress: progress,
@@ -288,7 +321,9 @@ struct VoiceConfirmationSheet: View {
             try? await Task.sleep(nanoseconds: 50_000_000)
             isInitialized = true
 
-            guard autoConfirmDuration > 0, !countdownCancelled, canSave else { return }
+            // Sin detección completa no se guarda solo: la categoría puede ser una
+            // suposición y el usuario tiene que verla antes (`hasCountdown`).
+            guard hasCountdown, !countdownCancelled, canSave else { return }
 
             let tickNs: UInt64 = 250_000_000 // 0.25s per tick
             let totalTicks = Int(autoConfirmDuration / 0.25)
@@ -349,7 +384,8 @@ struct VoiceConfirmationSheet: View {
     }
 
     private func cancelCountdown() {
-        guard isInitialized, !countdownCancelled else { return }
+        // Sin cuenta atrás no hay nada que cancelar (ni háptico que dar).
+        guard hasCountdown, isInitialized, !countdownCancelled else { return }
         countdownCancelled = true
         timeRemaining = -1
         HapticManager.shared.selection()

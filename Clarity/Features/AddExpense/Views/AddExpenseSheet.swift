@@ -46,6 +46,9 @@ struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
     @FocusState private var focused: AddExpField?
+    /// Descripción que ya viene puesta: un dictado al que le faltó el importe.
+    /// La frase no se tira; el foco va al importe, que es lo único que falta.
+    var descripcionInicial: String = ""
     let onSave: () -> Void
 
     var body: some View {
@@ -70,7 +73,18 @@ struct AddExpenseSheet: View {
             .navigationTitle("Nuevo Gasto")
             .navigationBarTitleDisplayMode(.large)
             .task {
+                // Antes del `warmup`, que toca disco: que el campo no aparezca
+                // vacío y se rellene luego.
+                if !descripcionInicial.isEmpty, viewModel.name.isEmpty {
+                    viewModel.name = descripcionInicial
+                }
                 await viewModel.warmup()
+                // Con lo aprendido y el historial ya en memoria, la sugerencia de
+                // categoría para lo dictado sale de ahí y no solo de las palabras
+                // clave (el `onChange` del campo pudo adelantarse al `warmup`).
+                if !descripcionInicial.isEmpty, viewModel.name == descripcionInicial {
+                    viewModel.onNameChange(descripcionInicial)
+                }
                 // Foco inicial en importe
                 if focused == nil { focused = .amount }
             }

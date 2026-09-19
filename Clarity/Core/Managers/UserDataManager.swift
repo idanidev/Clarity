@@ -32,6 +32,28 @@ final class UserDataManager {
 
     var hasLoaded: Bool { !categories.isEmpty }
 
+    /// Verdadero desde que `categories` viene del almacén del usuario y no de
+    /// los valores de fábrica que el `init` deja en memoria. `hasLoaded` no vale
+    /// para esto —esos valores de fábrica ya lo hacen verdadero— e `isLoading`
+    /// tampoco: es falso tanto antes de empezar a cargar como al acabar.
+    /// Solo lo lee `esperarCategoriasDelUsuario`; no cambia cómo se cargan.
+    @ObservationIgnored private(set) var categoriasDelUsuarioCargadas = false
+
+    /// Espera, con tope, a que las categorías sean las del usuario. Para quien
+    /// llega en frío con una frase que resolver contra ellas (el enlace de
+    /// Siri): con las de fábrica, «gasolina» acababa en una categoría que el
+    /// usuario quizá ni tiene. Devuelve si llegaron; pasado el tope se sigue
+    /// con lo que haya, como antes.
+    @discardableResult
+    func esperarCategoriasDelUsuario(tope: Duration = .milliseconds(2500)) async -> Bool {
+        let limite = ContinuousClock.now + tope
+        while !categoriasDelUsuarioCargadas, ContinuousClock.now < limite {
+            // Cancelada, `sleep` ya no duerme: salir en vez de dar vueltas.
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
+        }
+        return categoriasDelUsuarioCargadas
+    }
+
     // Inyectable para tests (default: Firebase Auth). NO cachear el uid: cambia en sign-out/in.
     @ObservationIgnored private let userIdProvider: () -> String?
     private var userId: String? { userIdProvider() }
@@ -109,6 +131,7 @@ final class UserDataManager {
 
             let (catsResult, _) = try await fetchedCategories
             self.categories = catsResult
+            categoriasDelUsuarioCargadas = true
 
             // Multi-device: la primera lectura puede venir de cache. Refresco
             // contra server en background y actualizo solo si difiere.
@@ -184,6 +207,7 @@ final class UserDataManager {
         do {
             let (cats, _) = try await service.loadCategories(userId: userId, forceServer: false)
             self.categories = cats
+            categoriasDelUsuarioCargadas = true
         } catch {
             logger.error("refreshCategories failed: \(error.localizedDescription)")
         }
@@ -314,6 +338,8 @@ final class UserDataManager {
     }
     
     func clearCache() {
+        // Vuelven los valores de fábrica (cierre de sesión): ya no son del usuario.
+        categoriasDelUsuarioCargadas = false
         Task {
             categories = await service.createDefaultCategories()
             paymentMethods = PaymentMethod.pickerOptions.map { $0.rawValue }

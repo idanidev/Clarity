@@ -147,7 +147,37 @@ final class WidgetDataManager {
             return
         }
         if let encoded = try? JSONEncoder().encode(data) {
+            // Los datos, siempre y al momento; la recarga, agrupada.
             defaults.set(encoded, forKey: widgetKey)
+            pedirRecarga()
+        }
+    }
+
+    // MARK: - Recarga agrupada
+
+    private var agrupador = AgrupadorDeRecargas()
+    private var recargaProgramada: Task<Void, Never>?
+
+    /// Pide una recarga de los widgets sin lanzarla en el acto.
+    ///
+    /// Guardar un gasto por voz escribe aquí dos veces seguidas (el gasto puesto
+    /// a mano en la lista y el refresco que lo reconcilia), y un dictado con N
+    /// gastos, 2N. Cada escritura acababa en un `reloadAllTimelines()`, que
+    /// vuelve a pintar todos los widgets. Como lo que leen es siempre lo último
+    /// escrito, basta una recarga cuando la ráfaga se calma.
+    private func pedirRecarga() {
+        agrupador.pedir(a: Date())
+        // Ya hay una tarea esperando: al despertar verá el vencimiento nuevo.
+        guard recargaProgramada == nil else { return }
+        recargaProgramada = Task { [weak self] in
+            while let falta = self?.agrupador.vencimiento?.timeIntervalSinceNow, falta > 0 {
+                // Nadie cancela esta tarea; si algún día pasa, que no se quede
+                // dando vueltas con un `sleep` que ya no duerme.
+                do { try await Task.sleep(for: .seconds(falta)) } catch { break }
+            }
+            guard let self else { return }
+            self.agrupador.recargada()
+            self.recargaProgramada = nil
             WidgetCenter.shared.reloadAllTimelines()
         }
     }
@@ -187,5 +217,44 @@ final class WidgetDataManager {
             let diff = calendar.dateComponents([.day], from: date, to: Date())
             return "Hace \(diff.day ?? 0)d"
         }
+    }
+}
+
+// MARK: - Política de agrupación
+
+/// Cuándo toca recargar los widgets, dadas las peticiones que van llegando.
+///
+/// Sin reloj propio ni tareas: recibe la hora desde fuera para poder probarse.
+/// Espera a que pase `margen` sin peticiones nuevas, pero nunca más de `tope`
+/// desde la primera: una ráfaga que no para no deja el widget sin actualizar.
+struct AgrupadorDeRecargas {
+    let margen: TimeInterval
+    let tope: TimeInterval
+
+    private var primeraPeticion: Date?
+    private var ultimaPeticion: Date?
+
+    init(margen: TimeInterval = 1, tope: TimeInterval = 3) {
+        self.margen = margen
+        self.tope = tope
+    }
+
+    var hayPendiente: Bool { primeraPeticion != nil }
+
+    /// Momento en que toca recargar, o `nil` si no hay nada pendiente.
+    var vencimiento: Date? {
+        guard let primeraPeticion, let ultimaPeticion else { return nil }
+        return min(ultimaPeticion.addingTimeInterval(margen), primeraPeticion.addingTimeInterval(tope))
+    }
+
+    mutating func pedir(a ahora: Date) {
+        if primeraPeticion == nil { primeraPeticion = ahora }
+        ultimaPeticion = ahora
+    }
+
+    /// La recarga ya se ha lanzado: la siguiente petición abre otra ráfaga.
+    mutating func recargada() {
+        primeraPeticion = nil
+        ultimaPeticion = nil
     }
 }

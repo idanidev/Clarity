@@ -89,21 +89,36 @@ final class SoundManager: NSObject {
         }
     }
 
-    /// Restaura la sesión de audio a la config normal tras una grabación.
+    /// Suelta la sesión de audio al terminar de grabar.
+    ///
+    /// Antes la dejaba en `.playAndRecord` con HFP y `duckOthers`, y ACTIVA: tras
+    /// el primer dictado unos AirPods se quedaban en HFP (mono, calidad de
+    /// llamada) y el audio de las demás apps atenuado mientras Clarity siguiera
+    /// abierta. Ahora:
+    ///
+    /// 1. Se desactiva avisando a las demás, que recuperan volumen y ruta.
+    /// 2. Queda puesta una categoría que NO graba para los sonidos de éxito y
+    ///    error. `AVAudioPlayer` activa la sesión por su cuenta al sonar; con
+    ///    `.playback` + `.mixWithOthers` suena aunque el móvil esté en silencio
+    ///    —igual que con `.playAndRecord`— sin cortar ni atenuar a nadie y, al no
+    ///    haber entrada, sin HFP.
+    ///
+    /// El orden importa: primero soltar (todavía con la categoría de grabación,
+    /// que es la que tiene tomada la ruta) y luego cambiar la categoría, que con
+    /// la sesión inactiva no mueve nada. Si soltar falla por estar ocupada, el
+    /// cambio de categoría se hace igual: al menos deja de pedir micro.
     func restoreAfterRecording() {
+        deactivateSession()
         do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(
-                .playAndRecord, mode: .default,
-                options: [.defaultToSpeaker, .allowBluetoothHFP, .duckOthers])
-            try session.setActive(true, options: .notifyOthersOnDeactivation)
-            logger.info("✅ Audio Session restored to playback mode")
+            try AVAudioSession.sharedInstance().setCategory(
+                .playback, mode: .default, options: [.mixWithOthers])
+            logger.info("✅ Audio Session released after recording (playback, mixable)")
         } catch {
             logger.error("❌ Failed to restore audio session: \(error.localizedDescription)")
         }
     }
 
-    /// Deactivates the session (optional, usually left active or managed by SpeechManager)
+    /// Desactiva la sesión avisando a las demás apps para que reanuden lo suyo.
     func deactivateSession() {
         do {
             try AVAudioSession.sharedInstance().setActive(

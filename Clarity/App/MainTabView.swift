@@ -147,7 +147,11 @@ struct MainTabView: View {
         .environment(\.medidaBarraInferior, medidaBarra)
         // Sheets and alerts
         .sheet(isPresented: $showManualExpense) {
-            AddExpenseSheet {
+            // Con un dictado al que le faltó el importe, la descripción llega
+            // puesta. Se lee del coordinador (una referencia) y no de un `@State`
+            // de aquí: el contenido de una hoja `isPresented` puede quedarse con
+            // el valor que tenía el estado antes de presentarse.
+            AddExpenseSheet(descripcionInicial: voiceCoordinator.borradorManual ?? "") {
                 Task { await homeViewModel.refresh() }
                 NotificationCenter.default.post(name: .expenseDidChange, object: nil)
                 NotificationsView.cancelInactivityReminder()
@@ -194,6 +198,23 @@ struct MainTabView: View {
         // Registro de cuelgues: la hoja se abre desde el "+", el widget y una URL.
         .onChange(of: showManualExpense) { _, abierta in
             Migas.deja(abierta ? "hoja añadir: se presenta" : "hoja añadir: se cierra")
+            // El borrador dictado vale para una hoja: la siguiente abre en blanco.
+            if !abierta { voiceCoordinator.descartarBorradorManual() }
+        }
+        // Dictado con frase pero sin importe (Siri o el micro de la barra): al
+        // formulario manual con la descripción puesta, en vez de un alert que
+        // tiraba la frase.
+        .onChange(of: voiceCoordinator.borradorManual) { _, borrador in
+            guard borrador != nil else { return }
+            // Con el formulario ya abierto no se pisa lo que se esté escribiendo.
+            guard !showManualExpense else {
+                voiceCoordinator.descartarBorradorManual()
+                return
+            }
+            Task { @MainActor in
+                await cerrarHojasAbiertas()
+                showManualExpense = true
+            }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             OfflineBanner()
@@ -239,6 +260,7 @@ struct MainTabView: View {
                 VoiceConfirmationSheet(
                     expense: expense,
                     wasFullyDetected: voiceCoordinator.wasFullyDetected,
+                    categoryIsGuess: voiceCoordinator.categoryIsGuess,
                     categories: userDataManager.categories,
                     speechManager: speechManager,
                     onConfirm: { confirmed in
@@ -279,14 +301,16 @@ struct MainTabView: View {
                 try? await Task.sleep(for: .milliseconds(300))
                 if let merchant, !merchant.isEmpty,
                    let amountStr, let amount = Double(amountStr) {
+                    await prepararConfirmacionDeFuera()
                     voiceCoordinator.populateFromApplePay(merchant: merchant, amount: amount)
                 } else if let phrase = inputPhrase, !phrase.isEmpty {
+                    await prepararConfirmacionDeFuera()
                     // Solo Siri y los Atajos abren la app con `input`: el micro
                     // de dentro llama al coordinator directamente.
                     voiceCoordinator.marcarOrigenSiri()
                     voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
                 } else {
-                    showManualExpense = true
+                    abrirFormularioSiNoHayNadaAbierto()
                 }
             }
         }
@@ -305,7 +329,13 @@ struct MainTabView: View {
             .glassCard(cornerRadius: 30, interactivo: true)
             .frame(maxWidth: .infinity)
 
-            SimpleVoiceButton(viewModel: homeViewModel, categories: UserDataManager.shared.categories, disparoGrabar: arrancarVoz)
+            SimpleVoiceButton(
+                viewModel: homeViewModel,
+                categories: UserDataManager.shared.categories,
+                disparoGrabar: arrancarVoz,
+                // Mismo destino que una frase de Siri sin importe: el formulario.
+                alFaltarImporte: { voiceCoordinator.proponerBorradorManual(desde: $0) }
+            )
         }
         .padding(.horizontal, Spacing.sm)
         .padding(.bottom, Spacing.xxs)
@@ -355,6 +385,10 @@ private extension MainTabView {
             defaults.removeObject(forKey: "widget_start_voice")
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(500))
+                // Con una hoja delante el micro arrancaba detrás, grabando a
+                // ciegas. Quien pulsa «Dictar gasto» quiere dictar: se cierra lo
+                // que hubiera y luego se arranca.
+                await cerrarHojasAbiertas()
                 selectedTab = 0
                 arrancarVoz += 1
             }
@@ -364,8 +398,57 @@ private extension MainTabView {
         defaults.removeObject(forKey: "widget_open_add_expense")
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
-            showManualExpense = true
+            abrirFormularioSiNoHayNadaAbierto()
         }
+    }
+}
+
+// MARK: - Hojas que no se pisan
+
+/// SwiftUI no presenta una hoja mientras otra del mismo nivel sigue en
+/// pantalla: la segunda se pierde sin aviso. Lo que llega de fuera (Siri, el
+/// widget, el Botón de Acción) no sabe qué hay abierto, así que se decide aquí:
+///
+/// - Si trae datos (una frase de Siri, un pago) o es una orden de dictar, se
+///   cierra lo abierto y se espera a que se vaya. Perder un gasto ya dictado es
+///   peor que cerrar un formulario a medias, y quien pide dictar quiere dictar.
+/// - Si solo pide abrir el formulario y ya hay algo delante, no se hace nada:
+///   la petición no lleva nada que perder y el usuario está con otra cosa.
+private extension MainTabView {
+    var hayHojaAbierta: Bool {
+        if case .confirming = voiceCoordinator.state { return true }
+        return showManualExpense || showRecurring || voiceCoordinator.showVoicePaywall
+            || voiceCoordinator.showError
+    }
+
+    func abrirFormularioSiNoHayNadaAbierto() {
+        guard !hayHojaAbierta else { return }
+        showManualExpense = true
+    }
+
+    /// Cierra las hojas (y el alert de voz) de esta vista y espera lo que tarda
+    /// la animación de cierre. Sin nada abierto no espera.
+    func cerrarHojasAbiertas() async {
+        guard hayHojaAbierta else { return }
+        Migas.deja("hojas: se cierran para atender una petición de fuera")
+        showManualExpense = false
+        showRecurring = false
+        voiceCoordinator.showVoicePaywall = false
+        voiceCoordinator.clearError()
+        if case .confirming = voiceCoordinator.state { voiceCoordinator.reset() }
+        // El cierre de una hoja dura ~0,35–0,5 s; presentar antes de que acabe
+        // es volver al problema. Tiempo fijo y no `onDismiss`: son cuatro hojas
+        // y un alert, y un retardo corto se entiende mejor que cinco avisos.
+        try? await Task.sleep(for: .milliseconds(600))
+    }
+
+    /// Lo que necesita una confirmación que llega de fuera antes de presentarse:
+    /// el sitio libre y las categorías del usuario. En frío, `categories` aún
+    /// puede ser la lista de fábrica que el gestor deja en memoria al nacer, y
+    /// la frase se resolvería contra categorías que el usuario quizá no tiene.
+    func prepararConfirmacionDeFuera() async {
+        await cerrarHojasAbiertas()
+        await userDataManager.esperarCategoriasDelUsuario()
     }
 }
 
