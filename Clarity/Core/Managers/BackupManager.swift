@@ -443,6 +443,7 @@ final class BackupManager {
 
             // 3. Restaurar categorías
             logger.info("   Restoring \(backup.categories.count) categories...")
+            try await garantizarMapaDeCategorias(backup.categories, userId: userId)
             for category in backup.categories {
                 try await restoreCategory(category, userId: userId)
             }
@@ -567,6 +568,7 @@ final class BackupManager {
         // Restaurar todos los datos
         try await restoreExpenses(backup.expenses, userId: userId)
 
+        try await garantizarMapaDeCategorias(backup.categories, userId: userId)
         for category in backup.categories {
             try await restoreCategory(category, userId: userId)
         }
@@ -720,12 +722,16 @@ final class BackupManager {
         throw lastError!
     }
 
+    // Las tres lecturas de la copia van solo contra el servidor. Sin red,
+    // Firestore contesta desde su caché sin dar error —puede que con un mes
+    // suelto— y eso se guardaba como copia completa. Ahora falla, se reintenta
+    // y la copia automática lo vuelve a probar en el siguiente arranque.
     private func fetchAllExpenses(userId: String) async throws -> [Expense] {
         try await withRetry {
             let snapshot = try await self.db.collection("users")
                 .document(userId)
                 .collection("expenses")
-                .getDocuments(source: .default)
+                .getDocuments(source: .server)
             // Con el DTO y el id del documento, como el resto de la app: `Expense`
             // no lleva `@DocumentID` y el documento no guarda el id, así que
             // decodificado a pelo salía con `id == nil` y `restoreExpense` lo
@@ -746,7 +752,7 @@ final class BackupManager {
             let snapshot = try await self.db.collection("users")
                 .document(userId)
                 .collection("recurringExpenses")
-                .getDocuments(source: .default)
+                .getDocuments(source: .server)
             return snapshot.documents.compactMap { try? $0.data(as: RecurringExpense.self) }
         }
     }
@@ -755,8 +761,11 @@ final class BackupManager {
         try await withRetry {
             let snapshot = try await self.db.collection("users")
                 .document(userId)
-                .collection("monthlyBudgets")
-                .getDocuments(source: .default)
+                // `monthly_budgets`, como `FinancialService`. Aquí ponía
+                // `monthlyBudgets`, que no existe: las copias no guardaban
+                // ningún presupuesto.
+                .collection("monthly_budgets")
+                .getDocuments(source: .server)
             return snapshot.documents.compactMap { try? $0.data(as: MonthlyBudget.self) }
         }
     }
@@ -784,6 +793,17 @@ final class BackupManager {
             }
             try await batch.commit()
         }
+    }
+
+    /// Regla de `architecture.md`: no se escribe una entrada del mapa sin que el
+    /// mapa entero esté persistido. Si el documento no tiene mapa (cuenta nueva,
+    /// dispositivo nuevo) y la restauración se cortaba a medias, quedaba un mapa
+    /// parcial que además impedía la siembra de después. Con esto, si falta se
+    /// siembra completo con las categorías de la copia; si ya existe, no hace
+    /// nada. De paso crea el documento, que `updateData` exige.
+    private func garantizarMapaDeCategorias(_ categories: [Category], userId: String) async throws {
+        guard !categories.isEmpty else { return }
+        try await UserDataService.shared.persistCategoriesIfMissing(categories, userId: userId)
     }
 
     private func restoreCategory(_ category: Category, userId: String) async throws {
@@ -825,7 +845,7 @@ final class BackupManager {
         let data = try Firestore.Encoder().encode(model)
         try await db.collection("users")
             .document(userId)
-            .collection("monthlyBudgets")
+            .collection("monthly_budgets")
             .document(docId)
             .setData(data, merge: true)
     }
