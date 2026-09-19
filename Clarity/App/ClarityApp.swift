@@ -131,6 +131,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Lo primero, para que el vigilante cubra también el arranque. Aquí solo
+        // registra observadores: ver `Diagnosticos`.
+        Diagnosticos.arranca()
+
         FirebaseApp.configure()
 
         // Layer 1: Enable Firestore offline persistence (disk cache for all reads)

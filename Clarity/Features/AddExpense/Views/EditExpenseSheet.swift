@@ -64,6 +64,9 @@ struct EditExpenseSheet: View {
                 viewModel.name = newTranscript
             }
         }
+        // Registro de cuelgues: ver `AddExpenseSheet`.
+        .onAppear { Migas.deja("hoja editar: aparece") }
+        .background(MigasDeFoco(hoja: "hoja editar", foco: $focused))
     }
 
     // MARK: - Sections

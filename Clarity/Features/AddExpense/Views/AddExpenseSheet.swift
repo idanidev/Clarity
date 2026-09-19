@@ -11,6 +11,37 @@ enum AddExpField: Hashable {
     case debtorAmount(String)
 }
 
+extension AddExpField {
+    /// Nombre del campo para el registro de cuelgues (`Migas`). Solo el caso: el
+    /// identificador del deudor se queda fuera, que las migas viajan en un correo.
+    var nombreParaMiga: String {
+        switch self {
+        case .amount: return "importe"
+        case .name: return "nombre"
+        case .notes: return "notas"
+        case .debtorName: return "deudor-nombre"
+        case .debtorAmount: return "deudor-importe"
+        }
+    }
+}
+
+/// Deja una miga en cada cambio de foco de una hoja de gasto.
+///
+/// Vista aparte y no un `onChange(of: focused)` en la hoja: leer el foco en el
+/// `body` de la hoja lo reevaluaría entero cada vez que cambia. Aquí lo lee
+/// esta, que no pinta nada.
+struct MigasDeFoco: View {
+    let hoja: String
+    @FocusState.Binding var foco: AddExpField?
+
+    var body: some View {
+        Color.clear
+            .onChange(of: foco) { _, nuevo in
+                Migas.deja("\(hoja): foco \(nuevo?.nombreParaMiga ?? "ninguno")")
+            }
+    }
+}
+
 struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
@@ -73,6 +104,10 @@ struct AddExpenseSheet: View {
                 Text(viewModel.errorMessage ?? "Error desconocido")
             }
         }
+        // Registro de cuelgues: que el informe sepa si la hoja llegó a aparecer y
+        // qué campo tenía el foco.
+        .onAppear { Migas.deja("hoja añadir: aparece") }
+        .background(MigasDeFoco(hoja: "hoja añadir", foco: $focused))
     }
 }
 
