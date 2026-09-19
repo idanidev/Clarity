@@ -22,6 +22,12 @@ struct ClarityApp: App {
 
     @State private var feedbackManager = FeedbackManager.shared
     @Environment(\.scenePhase) private var scenePhase
+    /// El velo de privacidad está puesto. Se decide UNA vez, al salir de
+    /// `.active`, y no en el `body`: `isBiometricEnabled` lee el llavero, que con
+    /// el iPhone bloqueado no se deja leer y contesta «no». Si este `body` se
+    /// reevaluara en segundo plano (basta el temporizador de un aviso), el velo
+    /// se caería justo cuando hace falta.
+    @State private var veloPuesto = false
 
     var body: some Scene {
         WindowGroup {
@@ -35,11 +41,36 @@ struct ClarityApp: App {
                     }
                 }
 
+                // Velo de privacidad: con el bloqueo activado, la miniatura del
+                // selector de apps no enseña los importes. Va ligado a la fase y
+                // no a `isLocked`: `.inactive` también salta con el Centro de
+                // control, una alerta del sistema o el propio Face ID, y ahí el
+                // velo se quita solo al volver, sin pedir nada (si toca
+                // autenticarse lo decide `AppLockManager` al volver de segundo
+                // plano).
+                if veloPuesto {
+                    VeloDePrivacidad()
+                        // Sin transición: el sistema hace la foto de la miniatura
+                        // enseguida, y a medio fundido se verían los importes.
+                        .transition(.identity)
+                        // Por encima también de los avisos (`FeedbackOverlay` va
+                        // a 9999): un «50 € en Mercadona» a medio salir también
+                        // es un importe.
+                        .zIndex(10_000)
+                }
+
                 // App Lock Overlay
                 if lockManager.isLocked {
                     LockScreenView(lockManager: lockManager)
-                        .transition(.opacity)
-                        .zIndex(100)
+                        // Entra de golpe y solo se funde al salir: al volver de
+                        // segundo plano sustituye al velo en el mismo instante, y
+                        // con un fundido de entrada se transparentaba la pantalla
+                        // de debajo durante 0,2 s.
+                        .transition(.asymmetric(insertion: .identity, removal: .opacity))
+                        // Encima del velo: mientras Face ID pregunta la app está
+                        // `.inactive`, y así se sigue viendo esta pantalla y no
+                        // un parpadeo al velo.
+                        .zIndex(10_001)
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: lockManager.isLocked)
@@ -75,14 +106,19 @@ struct ClarityApp: App {
                     }
                 }
             }
-            .onChange(of: scenePhase) { _, newPhase in
+            .onChange(of: scenePhase) { oldPhase, newPhase in
                 switch newPhase {
                 case .background:
+                    // Lo normal es pasar antes por `.inactive`; por si acaso no.
+                    if oldPhase == .active { veloPuesto = lockManager.isBiometricEnabled }
                     lockManager.sceneDidEnterBackground()
                     AnalyticsService.shared.endSession()
                 case .inactive:
-                    break
+                    // Solo al SALIR de la app. Volviendo de segundo plano también
+                    // se pasa por aquí, y el velo tiene que seguir como estaba.
+                    if oldPhase == .active { veloPuesto = lockManager.isBiometricEnabled }
                 case .active:
+                    veloPuesto = false
                     lockManager.sceneWillEnterForeground()
                     AnalyticsService.shared.resumeSessionIfNeeded()
                     UNUserNotificationCenter.current().removeAllDeliveredNotifications()

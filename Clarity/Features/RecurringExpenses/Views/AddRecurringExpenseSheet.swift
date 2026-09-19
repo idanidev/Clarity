@@ -28,6 +28,10 @@ struct AddRecurringExpenseSheet: View {
     @State private var fin: FinRecurrente = .nunca
     @State private var fechaFin: Date = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
     @State private var numeroPlazos = 12
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
+    /// Foto del formulario al abrir, para saber si el usuario ha cambiado algo.
+    @State private var estadoInicial: EstadoFormularioRecurrente?
     
     private let monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -137,7 +141,10 @@ struct AddRecurringExpenseSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: hayCambios
+                    ) { dismiss() }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -166,7 +173,27 @@ struct AddRecurringExpenseSheet: View {
             .sheet(isPresented: $showEmojiPicker) {
                 EmojiPickerView(selectedEmoji: $selectedIcon)
             }
+            // Una sola vez: `onAppear` vuelve a saltar al regresar del selector
+            // de categoría, y para entonces la foto ya no sería la del principio.
+            .onAppear { if estadoInicial == nil { estadoInicial = estadoActual } }
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: hayCambios
+            ) { dismiss() }
         }
+    }
+
+    private var estadoActual: EstadoFormularioRecurrente {
+        EstadoFormularioRecurrente(
+            importe: amountString, nombre: name, categoria: selectedCategory,
+            subcategoria: selectedSubcategory, metodoDePago: paymentMethod,
+            frecuencia: frequency, dia: dayOfMonth, mesDeCobro: billingMonth,
+            icono: selectedIcon, fin: fin, fechaFin: fechaFin, plazos: numeroPlazos)
+    }
+
+    private var hayCambios: Bool {
+        guard let estadoInicial else { return false }
+        return estadoInicial != estadoActual
     }
     
     private func saveExpense() {

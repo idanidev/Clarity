@@ -352,8 +352,9 @@ struct MainTabView: View {
             Image(systemName: icono)
                 .font(.system(size: 20, weight: activa ? .semibold : .regular))
                 .foregroundStyle(activa ? Color.clarityPrimary : Color.textSecondary)
-                // Rebota al tocarlo, como los iconos del sistema.
-                .symbolEffect(.bounce, value: toquesPestana[tag, default: 0])
+                // Rebota al tocarlo, como los iconos del sistema (quieto con
+                // «Reducir movimiento»).
+                .reboteDeSimbolo(cuando: toquesPestana[tag, default: 0])
                 // El "+" gira a una "x" mientras el formulario está abierto.
                 .rotationEffect(.degrees(tag == 2 && showManualExpense ? 45 : 0))
                 .frame(maxWidth: .infinity)

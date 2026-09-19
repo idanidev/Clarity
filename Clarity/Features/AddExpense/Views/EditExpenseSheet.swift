@@ -7,8 +7,9 @@ import SwiftUI
 struct EditExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel: EditExpenseViewModel
-    @State private var speechManager = SpeechRecognitionManager.shared
     @FocusState private var focused: AddExpField?
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
     let onSave: () -> Void
 
     init(expense: Expense, onSave: @escaping () -> Void) {
@@ -19,18 +20,18 @@ struct EditExpenseSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                amountSection
-                descriptionSection
-                categorySection
-                dateSection
-                paymentSection
+                EditExpAmountSection(viewModel: viewModel)
+                EditExpDescriptionSection(viewModel: viewModel)
+                EditExpCategorySection(viewModel: viewModel)
+                EditExpDateSection(viewModel: viewModel)
+                EditExpPaymentSection(viewModel: viewModel)
                 GiftModeSection(
                     isShared: $viewModel.isShared,
                     debtors: $viewModel.debtors,
                     totalAmount: viewModel.amount ?? 0,
                     focused: $focused
                 )
-                notesSection
+                EditExpNotesSection(viewModel: viewModel)
             }
             .fondoClarity()
             .navigationTitle("Editar Gasto")
@@ -38,19 +39,14 @@ struct EditExpenseSheet: View {
             .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: viewModel.hayCambios
+                    ) { dismiss() }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Guardar") {
-                        Task {
-                            await viewModel.save()
-                            onSave()
-                            dismiss()
-                        }
-                    }
-                    .fontWeight(.semibold)
-                    .disabled(!viewModel.isValid)
+                    EditExpSaveToolbarButton(viewModel: viewModel, onSave: onSave, dismiss: dismiss)
                 }
             }
             .alert("Error", isPresented: $viewModel.showError) {
@@ -58,27 +54,37 @@ struct EditExpenseSheet: View {
             } message: {
                 Text(viewModel.errorMessage ?? "Error desconocido")
             }
+            // `hayCambios` se lee dentro del modificador, no aquí: este `body` no
+            // pasa a depender de cada campo del formulario.
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: viewModel.hayCambios
+            ) { dismiss() }
         }
-        .onChange(of: speechManager.transcript) { _, newTranscript in
-            if !newTranscript.isEmpty {
-                viewModel.name = newTranscript
-            }
-        }
+        .background(EditExpDictado(viewModel: viewModel))
         // Registro de cuelgues: ver `AddExpenseSheet`.
         .onAppear { Migas.deja("hoja editar: aparece") }
         .background(MigasDeFoco(hoja: "hoja editar", foco: $focused))
     }
+}
 
-    // MARK: - Sections
+// MARK: - Sections (structs separadas, como en `AddExpenseSheet`: @Observable solo
+// re-renderiza la sección cuyas propiedades cambian. Antes eran `var … : some View`
+// de la hoja y cada tecla reevaluaba el formulario entero.)
 
-    private var amountSection: some View {
+private struct EditExpAmountSection: View {
+    @Bindable var viewModel: EditExpenseViewModel
+
+    var body: some View {
         Section {
             HStack(alignment: .center) {
                 Text("€")
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
                     .foregroundStyle(Color.clarityPrimary)
 
-                TextField("0.00", value: $viewModel.amount, format: .number)
+                // Texto crudo y no `value:format:`, que convertía Double↔String en
+                // cada tecla. El importe sale del texto en el ViewModel.
+                TextField("0.00", text: $viewModel.amountText)
                     // Sin `monospacedDigit` sobre el campo: ver AddExpenseSheet (iOS 26).
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .keyboardType(.decimalPad)
@@ -88,22 +94,20 @@ struct EditExpenseSheet: View {
             .padding(.vertical, Spacing.sm)
         }
     }
+}
 
-    private var descriptionSection: some View {
+private struct EditExpDescriptionSection: View {
+    @Bindable var viewModel: EditExpenseViewModel
+    // Sin `@State`: es un singleton `@Observable`, no hay nada que conservar.
+    private let speechManager = SpeechRecognitionManager.shared
+
+    var body: some View {
         Section("Descripción") {
             TextField("¿En qué gastaste?", text: $viewModel.name)
                 .font(.clarityBody)
                 .accessibilityLabel("Descripción del gasto")
                 .onChange(of: viewModel.name) { _, newValue in
-                    if viewModel.category.isEmpty {
-                        guard newValue.count >= 3 else { return }
-                        // Solo aplicar sugerencia si match con categorías reales del user
-                        if let suggestion = SmartTransactionParser.suggestCategory(for: newValue),
-                           let resolved = resolveSuggestion(suggestion) {
-                            viewModel.category = resolved.0
-                            viewModel.subcategory = resolved.1
-                        }
-                    }
+                    viewModel.onNameChange(newValue)
                 }
 
             // Dictate button
@@ -126,8 +130,30 @@ struct EditExpenseSheet: View {
             }
         }
     }
+}
 
-    private var categorySection: some View {
+/// Vuelca lo dictado en la descripción. Vista aparte que no pinta nada, como
+/// `MigasDeFoco`: leer `transcript` en el `body` de la hoja la reevaluaba entera
+/// con cada palabra reconocida. Va de fondo de la hoja y no dentro de la sección
+/// para seguir viva aunque la fila de la descripción se salga de pantalla.
+private struct EditExpDictado: View {
+    let viewModel: EditExpenseViewModel
+    private let speechManager = SpeechRecognitionManager.shared
+
+    var body: some View {
+        Color.clear
+            .onChange(of: speechManager.transcript) { _, newTranscript in
+                if !newTranscript.isEmpty {
+                    viewModel.name = newTranscript
+                }
+            }
+    }
+}
+
+private struct EditExpCategorySection: View {
+    @Bindable var viewModel: EditExpenseViewModel
+
+    var body: some View {
         Section("Categoría") {
             NavigationLink {
                 CategoryPickerView(
@@ -147,8 +173,12 @@ struct EditExpenseSheet: View {
             }
         }
     }
+}
 
-    private var dateSection: some View {
+private struct EditExpDateSection: View {
+    @Bindable var viewModel: EditExpenseViewModel
+
+    var body: some View {
         Section("Fecha") {
             DatePicker(
                 "",
@@ -162,8 +192,12 @@ struct EditExpenseSheet: View {
             .accessibilityLabel("Fecha del gasto")
         }
     }
+}
 
-    private var paymentSection: some View {
+private struct EditExpPaymentSection: View {
+    @Bindable var viewModel: EditExpenseViewModel
+
+    var body: some View {
         Section("Método de pago") {
             Picker("", selection: $viewModel.paymentMethod) {
                 ForEach(paymentOptions) { method in
@@ -184,46 +218,37 @@ struct EditExpenseSheet: View {
         }
         return opts
     }
+}
 
-    private var notesSection: some View {
+private struct EditExpNotesSection: View {
+    @Bindable var viewModel: EditExpenseViewModel
+
+    var body: some View {
         Section("Notas") {
             TextField("Notas adicionales...", text: $viewModel.notes, axis: .vertical)
                 .lineLimit(3...6)
         }
     }
+}
 
-    /// Mapea sugerencia hardcoded del parser a categorías reales del usuario.
-    /// Devuelve nil si no hay match → no se aplica la sugerencia.
-    private func resolveSuggestion(_ suggestion: (String, String?)) -> (String, String?)? {
-        let userCats = UserDataManager.shared.categories
-        let target = suggestion.0
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        if let cat = userCats.first(where: {
-            $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .contains(target)
-        }) {
-            let sub = suggestion.1.flatMap { sugSub in
-                cat.subcategories.first {
-                    $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                        == sugSub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                }
+private struct EditExpSaveToolbarButton: View {
+    @Bindable var viewModel: EditExpenseViewModel
+    let onSave: () -> Void
+    let dismiss: DismissAction
+
+    var body: some View {
+        Button("Guardar") {
+            Task {
+                await viewModel.save()
+                // Si falla, la hoja se queda abierta con la alerta y lo escrito,
+                // como en Añadir. Antes se cerraba igual y el error no se veía.
+                guard !viewModel.showError else { return }
+                onSave()
+                dismiss()
             }
-            return (cat.name, sub)
         }
-        if let sugSub = suggestion.1?
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current),
-           let cat = userCats.first(where: {
-               $0.subcategories.contains {
-                   $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
-               }
-           }),
-           let realSub = cat.subcategories.first(where: {
-               $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
-           })
-        {
-            return (cat.name, realSub)
-        }
-        return nil
+        .fontWeight(.semibold)
+        .disabled(!viewModel.isValid)
     }
 }
 

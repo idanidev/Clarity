@@ -144,6 +144,12 @@ struct BotonPrincipalClarity: ButtonStyle {
 /// Botón secundario: cápsula tintada, para acciones dentro de una tarjeta.
 struct BotonSecundarioClarity: ButtonStyle {
     var color: Color = .clarityPrimary
+    /// Alto mínimo de la zona que responde al dedo. La cápsula se queda como
+    /// está (unos 38 pt con un icono); lo que crece es el hueco invisible de
+    /// alrededor. Para botones pequeños y seguidos, como los operadores del
+    /// importe, donde 38 pt se quedan cortos frente a los 44 que pide Apple.
+    /// `nil` = el botón de siempre, sin tocar nada.
+    var altoTactilMinimo: CGFloat? = nil
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -155,6 +161,9 @@ struct BotonSecundarioClarity: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+            // Después del fondo: agranda el toque, no la cápsula.
+            .frame(minHeight: altoTactilMinimo)
+            .contentShape(altoTactilMinimo == nil ? AnyShape(Capsule()) : AnyShape(Rectangle()))
     }
 }
 

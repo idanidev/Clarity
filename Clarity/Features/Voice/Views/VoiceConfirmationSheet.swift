@@ -152,6 +152,8 @@ struct VoiceConfirmationSheet: View {
                                         .foregroundStyle(Color.success)
                                 }
                                 .disabled(newSubcategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
+                                // Solo icono: sin etiqueta VoiceOver leía el nombre del símbolo.
+                                .accessibilityLabel("Confirmar subcategoría")
                                 Button {
                                     showAddSubcategory = false
                                     newSubcategoryName = ""
@@ -159,6 +161,7 @@ struct VoiceConfirmationSheet: View {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundStyle(Color.textSecondary)
                                 }
+                                .accessibilityLabel("Cancelar subcategoría")
                             }
                         } else {
                             Button {

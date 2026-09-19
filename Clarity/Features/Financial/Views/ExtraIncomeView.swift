@@ -238,13 +238,25 @@ private struct ExtraIncomeEditSheet: View {
     @State private var name: String
     @State private var amountText: String
     @FocusState private var amountFocused: Bool
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
+    /// El importe tal como se enseña al abrir, para compararlo con lo escrito.
+    private let importeInicial: String
 
     init(entry: IncomeEntry, viewModel: FinancialHubViewModel) {
         self.entry = entry
         self.viewModel = viewModel
         _name = State(initialValue: entry.name)
         // Sin decimales sobrantes: 12 en vez de 12.0, pero 12,5 se conserva.
-        _amountText = State(initialValue: String(format: "%g", entry.amount))
+        let importe = String(format: "%g", entry.amount)
+        _amountText = State(initialValue: importe)
+        importeInicial = importe
+    }
+
+    /// No basta con que haya texto —al editar siempre lo hay—: tiene que ser
+    /// distinto del ingreso que se abrió.
+    private var hayCambios: Bool {
+        name != entry.name || amountText != importeInicial
     }
 
     private var amount: Double? {
@@ -285,7 +297,10 @@ private struct ExtraIncomeEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: hayCambios
+                    ) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Guardar") {
@@ -304,6 +319,10 @@ private struct ExtraIncomeEditSheet: View {
                     Button("Cerrar") { amountFocused = false }
                 }
             }
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: hayCambios
+            ) { dismiss() }
         }
         .presentationDetents([.medium])
     }

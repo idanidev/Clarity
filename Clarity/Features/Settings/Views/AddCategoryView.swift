@@ -143,6 +143,8 @@ struct AddCategoryView: View {
                                     .font(.title3)
                             }
                             .disabled(newSubcategoryName.isEmpty)
+                            // Solo icono: sin etiqueta VoiceOver leía el nombre del símbolo.
+                            .accessibilityLabel("Confirmar subcategoría")
 
                             Button {
                                 withAnimation(.bouncy) {
@@ -154,6 +156,7 @@ struct AddCategoryView: View {
                                     .foregroundStyle(Color.textSecondary)
                                     .font(.title3)
                             }
+                            .accessibilityLabel("Cancelar subcategoría")
                         }
                     } else {
                         Button {

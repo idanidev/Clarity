@@ -24,6 +24,30 @@ class AddExpenseViewModel {
     var isShared: Bool = false
     var debtors: [Debtor] = []
 
+    // MARK: - Descarte
+
+    /// La descripción con la que abre la hoja (un dictado al que le faltó el
+    /// importe). Es el punto de partida, no un cambio: si el usuario no toca nada
+    /// más, «Cancelar» cierra sin preguntar.
+    @ObservationIgnored var descripcionInicial: String = ""
+    /// El día con el que abre el formulario, para saber si se ha movido la fecha.
+    private let fechaInicial = Date()
+
+    /// ¿Ha tocado algo el usuario? Con cambios, la hoja pregunta antes de tirarlos.
+    ///
+    /// La categoría que pone el autocategorizador no cuenta: no la ha elegido
+    /// nadie. En cuanto el usuario abre el selector, `wasAutoCategorized` pasa a
+    /// `false` y ya es suya.
+    var hayCambios: Bool {
+        if !amountText.trimmingCharacters(in: .whitespaces).isEmpty { return true }
+        if name != descripcionInicial { return true }
+        if !category.isEmpty && !wasAutoCategorized { return true }
+        if !Calendar.current.isDate(date, inSameDayAs: fechaInicial) { return true }
+        if paymentMethod != .tarjeta { return true }
+        if !notes.isEmpty { return true }
+        return isShared || !debtors.isEmpty
+    }
+
     /// Importe parseado del texto. Acepta coma o punto como decimal Y sumas/restas
     /// de importes ("1,50 + 2" = una fanta y unas patatas → 3,50).
     var amount: Double? {
@@ -197,7 +221,16 @@ class AddExpenseViewModel {
     private func resolveSuggestionAgainstUserCategories(
         _ suggestion: (category: String, subcategory: String?)
     ) -> (category: String, subcategory: String?)? {
-        let userCats = UserDataManager.shared.categories
+        Self.resolverSugerencia(suggestion, en: UserDataManager.shared.categories)
+    }
+
+    /// La misma resolución, sin estado: la comparte el formulario de editar
+    /// (`EditExpenseViewModel`), que antes llevaba su copia dentro de la vista.
+    /// Devuelve nil si la sugerencia no casa con ninguna categoría real → no se aplica.
+    static func resolverSugerencia(
+        _ suggestion: (category: String, subcategory: String?),
+        en userCats: [Category]
+    ) -> (category: String, subcategory: String?)? {
         let target = suggestion.category
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 
@@ -304,7 +337,13 @@ class AddExpenseViewModel {
     var wasAutoCategorized = false
 
     // MARK: - Dependencies
-    private let repository = DependencyContainer.shared.expenseRepository
+    private let repository: ExpenseRepositoryProtocol
+
+    /// `repository` solo se pasa en los tests; la app usa el del contenedor
+    /// (igual que `EditExpenseViewModel`).
+    init(repository: ExpenseRepositoryProtocol? = nil) {
+        self.repository = repository ?? DependencyContainer.shared.expenseRepository
+    }
 
     // MARK: - Validation
     var isValid: Bool {

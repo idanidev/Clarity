@@ -13,8 +13,9 @@ struct SuccessToast: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 20))
                 .foregroundStyle(Color.success)
-                // El check rebota al aparecer: se nota que se ha guardado.
-                .symbolEffect(.bounce, value: aparecido)
+                // El check rebota al aparecer: se nota que se ha guardado. Con
+                // «Reducir movimiento» aparece quieto.
+                .reboteDeSimbolo(cuando: aparecido)
 
             Text(message)
                 .font(.subheadline.weight(.semibold))

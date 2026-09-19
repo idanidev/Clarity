@@ -46,6 +46,8 @@ struct AddExpenseSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var viewModel = AddExpenseViewModel()
     @FocusState private var focused: AddExpField?
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
     /// Descripción que ya viene puesta: un dictado al que le faltó el importe.
     /// La frase no se tira; el foco va al importe, que es lo único que falta.
     var descripcionInicial: String = ""
@@ -76,6 +78,8 @@ struct AddExpenseSheet: View {
                 // Antes del `warmup`, que toca disco: que el campo no aparezca
                 // vacío y se rellene luego.
                 if !descripcionInicial.isEmpty, viewModel.name.isEmpty {
+                    // Lo dictado es el punto de partida, no un cambio del usuario.
+                    viewModel.descripcionInicial = descripcionInicial
                     viewModel.name = descripcionInicial
                 }
                 await viewModel.warmup()
@@ -90,7 +94,10 @@ struct AddExpenseSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: viewModel.hayCambios
+                    ) { dismiss() }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -117,6 +124,12 @@ struct AddExpenseSheet: View {
             } message: {
                 Text(viewModel.errorMessage ?? "Error desconocido")
             }
+            // `hayCambios` se lee dentro del modificador, no aquí: este `body` no
+            // pasa a depender de cada campo del formulario.
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: viewModel.hayCambios
+            ) { dismiss() }
         }
         // Registro de cuelgues: que el informe sepa si la hoja llegó a aparecer y
         // qué campo tenía el foco.
@@ -168,7 +181,8 @@ private struct AddExpAmountSection: View {
             }
             // Cápsulas tintadas, como las acciones secundarias del resto de la app.
             // Con un estilo propio cada botón conserva su toque dentro de la fila.
-            .buttonStyle(.secundarioClarity)
+            // La cápsula mide 38 pt de alto; el toque, los 44 que pide Apple.
+            .buttonStyle(BotonSecundarioClarity(altoTactilMinimo: 44))
 
             // Total en vivo en su PROPIA línea → nunca compite por el ancho ni se corta.
             if viewModel.amountIsExpression {

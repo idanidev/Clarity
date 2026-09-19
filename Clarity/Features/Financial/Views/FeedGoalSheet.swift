@@ -16,6 +16,13 @@ struct FeedGoalSheet: View {
 
     @State private var customAmount: String = ""
     @State private var selectedQuickAmount: Double?
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
+
+    /// La hoja abre vacía: cualquier cantidad, elegida o escrita, es un cambio.
+    private var hayCambios: Bool {
+        selectedQuickAmount != nil || !customAmount.isEmpty
+    }
 
     // Quick amount options
     private let quickAmounts: [Double] = [10, 25, 50, 100]
@@ -173,9 +180,16 @@ struct FeedGoalSheet: View {
             .keyboardDoneToolbar()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: hayCambios
+                    ) { dismiss() }
                 }
             }
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: hayCambios
+            ) { dismiss() }
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
