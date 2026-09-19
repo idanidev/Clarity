@@ -120,7 +120,12 @@ struct MainTabView: View {
             VeloBarraInferior(alto: medidaBarra.total + 30)
 
             barraInferior
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { medidaBarra.alto = $0 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    medidaBarra.alto = $0
+                    // Agrupadas: si esto entra en bucle, una sola miga con el
+                    // recuento en vez de llenar el rastro.
+                    Migas.deja("barra: alto=\(Int($0))", agrupando: "barra.alto")
+                }
         }
         // El área segura de abajo, medida desde algo que llega hasta el borde.
         // Solo el margen del dispositivo (0 o 34): cuando una hoja saca el
@@ -130,6 +135,8 @@ struct MainTabView: View {
             Color.clear
                 .ignoresSafeArea()
                 .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.bottom } action: {
+                    // La miga, antes del filtro: interesa también lo descartado.
+                    Migas.deja("barra: margen=\(Int($0))\($0 < 100 ? "" : " (descartado)")", agrupando: "barra.margen")
                     guard $0 < 100 else { return }
                     medidaBarra.margenInferior = $0
                 }
@@ -183,6 +190,10 @@ struct MainTabView: View {
             } else {
                 previousTab = newValue
             }
+        }
+        // Registro de cuelgues: la hoja se abre desde el "+", el widget y una URL.
+        .onChange(of: showManualExpense) { _, abierta in
+            Migas.deja(abierta ? "hoja añadir: se presenta" : "hoja añadir: se cierra")
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             OfflineBanner()
@@ -303,6 +314,7 @@ struct MainTabView: View {
     private func pestana(_ tag: Int, _ icono: String, _ nombre: String) -> some View {
         let activa = selectedTab == tag
         return Button {
+            if tag == 2 { Migas.deja("barra: pulsa +") }
             selectedTab = tag  // la 2 la intercepta el onChange y abre el formulario
             toquesPestana[tag, default: 0] += 1
             HapticManager.shared.selection()

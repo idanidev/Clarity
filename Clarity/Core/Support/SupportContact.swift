@@ -15,6 +15,12 @@ enum SupportContact {
 
     /// Datos técnicos que ahorran la primera ronda de preguntas. Solo versión,
     /// modelo e iOS: nada de la cuenta ni de los gastos de quien escribe.
+    ///
+    /// Si la app se quedó colgada alguna vez, detrás va el resumen de ese
+    /// cuelgue: cuándo, cuánto duró y por qué pantallas y acciones se pasó justo
+    /// antes. Si no, por cuáles se pasó en la sesión anterior: es lo que queda
+    /// cuando la app se cerró a mano sin estar colgada del todo. Siempre nombres
+    /// escritos a mano en el código (ver `Migas`), nunca datos de quien escribe.
     static var diagnosticsFooter: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
@@ -24,7 +30,15 @@ enum SupportContact {
         ---
         Clarity \(version) (\(build))
         \(deviceModel) · iOS \(UIDevice.current.systemVersion)
-        """
+        """ + resumenDeDiagnostico
+    }
+
+    /// Lo que dejó el `VigilanteDeCuelgues` o, si no dejó nada, el
+    /// `VolcadoDeMigas` de la sesión anterior. Acotado en largo por
+    /// `ResumenDeCuelgue`, que esto viaja dentro de una URL `mailto:`.
+    private static var resumenDeDiagnostico: String {
+        let almacen = AlmacenDeDiagnosticos.porDefecto
+        return ResumenDeCuelgue.paraElPie(cuelgue: almacen.ultimoCuelgue(), sesionAnterior: almacen.sesionAnterior())
     }
 
     /// Identificador de hardware ("iPhone16,2"). No identifica a la persona.
