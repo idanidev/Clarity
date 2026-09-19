@@ -85,9 +85,11 @@ final class UserDataManager {
 
         do {
             async let fetchedCategories = service.loadCategories(userId: userId, forceServer: false)
-            async let fetchedMethods = service.loadPaymentMethods(userId: userId)
             await self.loadExpenses() // Load expenses for cache
-            
+            // Después de `loadExpenses`: los métodos de pago salen de esos
+            // gastos, y solo se pregunta a Firestore si no había ninguno.
+            async let fetchedMethods = metodosDePagoHistoricos(userId: userId)
+
             let (catsResult, _) = try await fetchedCategories
             self.categories = catsResult
 
@@ -170,18 +172,45 @@ final class UserDataManager {
         }
     }
     
+    // MARK: - Payment Methods
+
+    /// Los métodos de pago vistos en la caché de SwiftData en la última carga.
+    /// `nil` si estaba vacía o no se pudo leer.
+    @ObservationIgnored private var metodosDePagoEnCache: Set<String>?
+
+    /// Los métodos de pago que el usuario ha usado alguna vez.
+    ///
+    /// Salen de los gastos que `loadExpenses` acaba de leer de SwiftData.
+    /// Antes se leían hasta 100 documentos de `expenses` en cada
+    /// `loadUserData()` —que se llama desde ocho sitios— solo para esto. La
+    /// consulta remota queda para cuando la caché local está vacía (primer
+    /// arranque tras iniciar sesión).
+    private func metodosDePagoHistoricos(userId: String) async throws -> Set<String> {
+        if let enCache = metodosDePagoEnCache { return enCache }
+        return try await service.loadPaymentMethods(userId: userId)
+    }
+
+    nonisolated static func metodosDePago(en gastos: [Expense]) -> Set<String> {
+        Set(gastos.map(\.paymentMethod))
+    }
+
     // MARK: - Expenses Cache
-    
+
     func loadExpenses() async {
         do {
             let descriptor = FetchDescriptor<ExpenseModel>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let models = try SwiftDataService.shared.context.fetch(descriptor)
             let all = models.map { $0.toDomain() }
+            // De todos, antes de sanear: un duplicado descartado también
+            // cuenta como método usado, igual que contaba su documento.
+            metodosDePagoEnCache = all.isEmpty ? nil : Self.metodosDePago(en: all)
             // Fetch recurring rules (cache-first) so ExpenseSanitizer can deduplicate
             // anomalies and misplaced annual expenses in addition to ID dedup.
             let rules = (try? await DependencyContainer.shared.recurringExpenseRepository.fetchAll()) ?? []
             self.expenses = ExpenseSanitizer.sanitize(expenses: all, rules: rules)
         } catch {
+            // Sin lectura no hay de dónde sacarlos: que se pregunte a Firestore.
+            metodosDePagoEnCache = nil
             logger.error("❌ Failed to cache expenses: \(error.localizedDescription)")
         }
     }

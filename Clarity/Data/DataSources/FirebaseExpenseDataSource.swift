@@ -19,13 +19,18 @@ actor FirebaseExpenseDataSource {
     }
 
     /// Legacy method - fetches ALL expenses (for backwards compatibility)
-    func getExpenses() async throws -> [Expense] {
+    ///
+    /// `soloServidor` es para la sincronización de fondo: sin red, la lectura
+    /// normal contesta con lo que haya en la caché de Firestore —puede que un
+    /// mes suelto— sin dar error, y eso pasaría por el historial entero.
+    func getExpenses(soloServidor: Bool = false) async throws -> [Expense] {
         guard let collection = expensesCollection else {
             throw URLError(.userAuthenticationRequired)
         }
-        
-        let snapshot = try await collection.order(by: "date", descending: true).getDocuments()
-        
+
+        let snapshot = try await collection.order(by: "date", descending: true)
+            .getDocuments(source: soloServidor ? .server : .default)
+
         return snapshot.documents.compactMap { doc in
             guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }
             return dto.toDomain(id: doc.documentID)
@@ -67,7 +72,8 @@ actor FirebaseExpenseDataSource {
     /// Fetch acotado por rango de fechas ("yyyy-MM-dd" inclusive). Rango sobre un solo
     /// campo + orderBy el mismo campo → NO requiere índice compuesto en Firestore.
     /// Pensado para dedupe de recurrentes y vistas de mes (evita bajar todo el historial).
-    func getExpenses(from startDate: String, to endDate: String) async throws -> [Expense] {
+    /// `soloServidor`: ver `getExpenses(soloServidor:)`.
+    func getExpenses(from startDate: String, to endDate: String, soloServidor: Bool = false) async throws -> [Expense] {
         guard let collection = expensesCollection else {
             throw URLError(.userAuthenticationRequired)
         }
@@ -76,7 +82,7 @@ actor FirebaseExpenseDataSource {
             .whereField("date", isGreaterThanOrEqualTo: startDate)
             .whereField("date", isLessThanOrEqualTo: endDate)
             .order(by: "date", descending: true)
-            .getDocuments()
+            .getDocuments(source: soloServidor ? .server : .default)
 
         return snapshot.documents.compactMap { doc in
             guard let dto = try? doc.data(as: ExpenseDTO.self) else { return nil }

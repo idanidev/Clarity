@@ -115,7 +115,11 @@ actor UserDataService {
         try await batch.commit()
     }
 
-    /// Carga métodos de pago únicos basados en el historial de gastos
+    /// Carga métodos de pago únicos basados en el historial de gastos.
+    ///
+    /// Solo como alternativa: `UserDataManager` los saca de los gastos que ya
+    /// tiene en SwiftData y llama aquí únicamente con la caché local vacía.
+    /// Son hasta 100 lecturas, y antes se hacían en cada `loadUserData()`.
     func loadPaymentMethods(userId: String) async throws -> Set<String> {
         let ref = db.collection("users").document(userId).collection("expenses").limit(to: 100)
         let snapshot: QuerySnapshot
@@ -244,6 +248,13 @@ actor UserDataService {
             }
             try await batch.commit()
         }
+
+        // Estos gastos se han reescrito en Firestore sin pasar por el
+        // repositorio, y pueden ser de cualquier año. La sincronización de
+        // fondo solo baja una ventana reciente: sin esto, los antiguos
+        // seguirían con la categoría vieja en la caché hasta la completa
+        // semanal. Olvidar las marcas hace que la próxima lo baje todo.
+        if !snapshot.documents.isEmpty { ExpenseSyncPolicy.olvidarMarcas() }
 
         logger.info(
             "✅ Actualizados \(snapshot.documents.count) gastos a la nueva categoría '\(newName)'")
@@ -395,6 +406,10 @@ actor UserDataService {
                     totalUpdated += 1
                 }
             }
+
+            // Mismo motivo que en `updateExpensesCategoryName`: reescritos por
+            // fuera del repositorio, la caché necesita una sincronización completa.
+            if totalUpdated > 0 { ExpenseSyncPolicy.olvidarMarcas() }
 
             // Marcar migración como completada
             UserDefaults.standard.set(true, forKey: migrationKey)

@@ -25,6 +25,21 @@ final class SwiftDataExpenseDataSource {
         try context.fetchCount(FetchDescriptor<ExpenseModel>())
     }
 
+    /// Cuántos hay con fecha dentro del tramo, sin cargarlos.
+    func count(en ventana: ExpenseSyncPolicy.Ventana) throws -> Int {
+        let (desde, hasta) = Self.limites(de: ventana)
+        return try context.fetchCount(FetchDescriptor<ExpenseModel>(
+            predicate: #Predicate { $0.date >= desde && $0.date <= hasta }))
+    }
+
+    /// El tramo, en las fechas del modelo. Un gasto se guarda como la
+    /// medianoche UTC de su día —con `Formatters.date(from:)`, el mismo parser
+    /// que aquí—, así que comparar `Date` equivale a comparar el texto.
+    private static func limites(de ventana: ExpenseSyncPolicy.Ventana) -> (desde: Date, hasta: Date) {
+        (Formatters.date(from: ventana.desde) ?? .distantPast,
+         Formatters.date(from: ventana.hasta) ?? .distantFuture)
+    }
+
     /// Vuelca lo remoto en bloque: un solo fetch de todo, se toca solo lo que
     /// difiere y un único `save` al final.
     ///
@@ -33,18 +48,35 @@ final class SwiftDataExpenseDataSource {
     /// app se quedaba congelada un segundo largo justo al aparecer el total del
     /// mes. Con `purgandoHuerfanos`, borra además los que ya no están en
     /// `expenses` (eliminados desde otro dispositivo).
-    func upsertAll(_ expenses: [Expense], purgandoHuerfanos: Bool = false) throws {
-        // Solo los modelos del lote, salvo al purgar, que hay que mirar todo el
-        // almacén. Cargarlo entero para guardar un mes —tres o cuatro veces al
-        // arrancar y en cada búsqueda— eran segundos de hilo principal con
-        // miles de gastos.
+    ///
+    /// Con `ventana`, `expenses` es solo ese tramo del remoto y la purga se
+    /// queda dentro de él: lo de fuera no se ha pedido, así que su ausencia no
+    /// dice nada. Sin `ventana` la purga es global, para cuando se baja todo.
+    func upsertAll(
+        _ expenses: [Expense],
+        purgandoHuerfanos: Bool = false,
+        soloEn ventana: ExpenseSyncPolicy.Ventana? = nil
+    ) throws {
+        // Solo los modelos del lote, salvo al purgar, que hay que mirar además
+        // el tramo purgado (o todo el almacén, sin tramo). Cargarlo entero para
+        // guardar un mes —tres o cuatro veces al arrancar y en cada búsqueda—
+        // eran segundos de hilo principal con miles de gastos.
         let ids = expenses.compactMap(\.id)
-        let existentes: [ExpenseModel]
-        if purgandoHuerfanos {
+        let limites = ventana.map(Self.limites(de:))
+        var existentes: [ExpenseModel]
+        if purgandoHuerfanos, limites == nil {
             existentes = try context.fetch(FetchDescriptor<ExpenseModel>())
         } else {
-            guard !ids.isEmpty else { return }
-            existentes = try context.fetch(FetchDescriptor<ExpenseModel>(predicate: #Predicate { ids.contains($0.id) }))
+            guard !ids.isEmpty || purgandoHuerfanos else { return }
+            // Por id aunque se purgue por tramo: un gasto cuya fecha se movió
+            // desde fuera hacia dentro de la ventana está en el lote, pero su
+            // modelo local sigue fuera de ella.
+            existentes = ids.isEmpty ? [] : try context.fetch(
+                FetchDescriptor<ExpenseModel>(predicate: #Predicate { ids.contains($0.id) }))
+            if purgandoHuerfanos, let (desde, hasta) = limites {
+                existentes += try context.fetch(FetchDescriptor<ExpenseModel>(
+                    predicate: #Predicate { $0.date >= desde && $0.date <= hasta }))
+            }
         }
         var porId: [String: ExpenseModel] = [:]
         porId.reserveCapacity(existentes.count)
@@ -62,10 +94,22 @@ final class SwiftDataExpenseDataSource {
         }
         if purgandoHuerfanos {
             for (id, modelo) in porId where !vistos.contains(id) {
+                // La fecha se mira con la que tenía antes del lote: los que
+                // están aquí sin haber venido en él no se han tocado.
+                if let (desde, hasta) = limites, modelo.date < desde || modelo.date > hasta { continue }
                 context.delete(modelo)
             }
         }
         if context.hasChanges { try context.save() }
+    }
+
+    /// Aplica una respuesta de sincronización: la ventana pedida, o el
+    /// historial entero si `ventana` es `nil`. La purga va con su salvaguarda,
+    /// medida contra los locales del mismo tramo que se pidió.
+    func volcarSincronizacion(_ remotos: [Expense], ventana: ExpenseSyncPolicy.Ventana?) throws {
+        let locales = try ventana.map { try count(en: $0) } ?? count()
+        let purgar = ExpenseSyncPolicy.debePurgar(remotos: remotos.count, locales: locales)
+        try upsertAll(remotos, purgandoHuerfanos: purgar, soloEn: ventana)
     }
     
     func addExpense(_ expense: Expense) throws {

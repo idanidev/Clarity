@@ -82,10 +82,20 @@ final class AuthViewModel {
         } catch {
             logger.error("wipeLocalData: SwiftData wipe failed: \(error.localizedDescription)")
         }
+        olvidarSincronizacion()
         UserDataManager.shared.clearCache()
         UserDataManager.shared.expenses = []
         UserDataManager.shared.userDocument = nil
         WidgetDataManager.shared.clearWidgetData()
+    }
+
+    /// Lo que se sabe de la sincronización es del usuario que se va y de la
+    /// caché que se borra con él. Si las marcas sobrevivieran, la caché del
+    /// siguiente —que empieza con el mes que guarda la Home— pasaría por
+    /// completa y su historial antiguo tardaría hasta una semana en bajar.
+    private func olvidarSincronizacion() {
+        ExpenseSyncPolicy.olvidarMarcas()
+        DependencyContainer.shared.recurringExpenseRepository.vaciarCache()
     }
 
     private func fetchUserDocument(userId: String) async {
@@ -183,6 +193,7 @@ final class AuthViewModel {
         }
 
         // 4. Reset in-memory user state
+        olvidarSincronizacion()
         UserDataManager.shared.clearCache()
         UserDataManager.shared.expenses = []
         UserDataManager.shared.userDocument = nil
@@ -241,6 +252,7 @@ final class AuthViewModel {
         try? await userRef.delete()
 
         // 3. Limpiar cache local
+        olvidarSincronizacion()
         UserDataManager.shared.clearCache()
 
         // 4. Borrar cuenta de Firebase Auth (requiere sesión reciente; si falla pide re-login)

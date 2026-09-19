@@ -149,11 +149,11 @@ nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
         
         // Categories service
         if !selectedCategories.isEmpty {
+            // Flexible matching (e.g. "Food 🍔" matches "Food"). La primera
+            // palabra de cada categoría se saca una vez, no por cada gasto.
+            let primerasPalabras = selectedCategories.map { $0.components(separatedBy: " ").first ?? $0 }
             result = result.filter { expense in
-                selectedCategories.contains { cat in
-                    // Flexible matching (e.g. "Food 🍔" matches "Food")
-                    expense.category.localizedCaseInsensitiveContains(cat.components(separatedBy: " ").first ?? cat)
-                }
+                primerasPalabras.contains { expense.category.localizedCaseInsensitiveContains($0) }
             }
         }
         
@@ -257,10 +257,10 @@ nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
         
         // Las fechas en queryRange se calculan con Calendar.current (LOCAL).
         // Las fechas guardadas (vía DatePicker → localDayString) también son LOCAL.
-        // Para que coincidan formateamos sin TZ explícita (= local del dispositivo).
-        let fmt = DateFormatter()
-        fmt.dateFormat = "yyyy-MM-dd"
-        fmt.locale = Locale(identifier: "en_US_POSIX")
-        return (fmt.string(from: startDate), fmt.string(from: endDate))
+        // Para que coincidan formateamos sin TZ explícita (= local del dispositivo):
+        // con el mismo formatter que escribe esas fechas, que además es estático
+        // (antes se creaba un DateFormatter en cada llamada, y esto se llama en
+        // cada carga y en cada filtrado).
+        return (Formatters.localDayString(from: startDate), Formatters.localDayString(from: endDate))
     }
 }
