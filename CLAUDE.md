@@ -89,7 +89,7 @@ Domain (innermost)  →  Data  →  Features/Presentation (outermost)
 ```
 
 - **Domain** (`Clarity/Domain/`): Models, repository protocols, use cases. No framework imports. Use cases son structs ligeros con un repo (`AddExpenseUseCase`, `GetExpensesUseCase`, `DeleteExpenseUseCase`).
-- **Data** (`Clarity/Data/`): Repository implementations. `ExpenseRepository` es híbrido: `FirebaseExpenseDataSource` (remoto) + `SwiftDataExpenseDataSource` (cache) + `LocalExpenseDataSource` (legacy JSON, deprecated).
+- **Data** (`Clarity/Data/`): Repository implementations. `ExpenseRepository` es híbrido: `FirebaseExpenseDataSource` (remoto) + `SwiftDataExpenseDataSource` (cache). La sincronización de fondo va **por ventana** (desde el día 1 de hace dos meses, con purga de huérfanos solo ahí) y hay una completa cada 7 días o con la caché vacía; la política está en funciones puras en `ExpenseSyncPolicy`. Quien escriba gastos en Firestore por fuera del repositorio debe llamar a `ExpenseSyncPolicy.olvidarMarcas()`.
 - **Features** (`Clarity/Features/`): Views + ViewModels (`@Observable`) + servicios específicos por feature.
 
 ### Dependency Injection
@@ -100,13 +100,15 @@ Domain (innermost)  →  Data  →  Features/Presentation (outermost)
 
 ### Concurrencia
 
-- Swift 6 strict concurrency. ViewModels + DI + tests = `@MainActor`.
+- El proyecto compila en **modo de lenguaje Swift 5** (`SWIFT_VERSION = 5.0`) con approachable concurrency y `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`: todo tipo sin anotar es `@MainActor`, y lo que deba correr fuera va `nonisolated` explícito. Las carreras de datos son avisos, no errores, y no hay comprobaciones de aislamiento en ejecución: que compile no prueba que sea seguro. Se escribe como si fuera Swift 6.
+- ViewModels + DI + tests = `@MainActor`.
 - Sólo `async/await`. Nunca callbacks ni Combine.
 - `@Observable` macro para estado. **NUNCA** `ObservableObject` ni `@Published`.
+- Lecturas remotas que gatean una pantalla: `withTimeout` (`Core/Utilities/AsyncTimeout.swift`). Firestore no atiende a la cancelación, por eso no usa `TaskGroup`.
 
 ### Testing
 
-Apple Swift Testing (`import Testing`). `@Test` + `#expect()`. **No XCTest**. Mock repos implementan los mismos protocolos.
+Apple Swift Testing (`import Testing`). `@Test` + `#expect()` + `try #require()`. **No XCTest** en `ClarityTests/`: además de la convención, XCTest enlaza un `TaskLocal` por método que hace abortar el proceso de tests con los deinit aislados de la app. Mock repos implementan los mismos protocolos. **Ningún test toca Firestore, Auth ni la red reales**: los tests corren dentro de la app con la sesión iniciada.
 
 ## Singletons / Managers clave
 
@@ -145,7 +147,7 @@ Apple Swift Testing (`import Testing`). `@Test` + `#expect()`. **No XCTest**. Mo
 `LocalRecurringExpenseManager`:
 - Corre en `MainTabView.task` al arrancar.
 - `checkAndCreatePendingExpenses()` — crea gastos de hoy (1× al día).
-- `recoverMissedExpenses()` — recupera del mes en curso.
+- `recoverMissedExpenses()` — recupera los cargos que falten en los últimos 12 meses, pero **solo desde el alta de la regla** (`RecurringScheduler.mesesRecuperables`). Se lanza desde la pantalla de Recurrentes, una vez al día.
 - Frecuencias: monthly, quarterly, semestral, yearly.
 - Usa `billingMonth` para ciclos no mensuales.
 - `expenseExistsForMonth()` evita duplicados.
@@ -160,12 +162,21 @@ Apple Swift Testing (`import Testing`). `@Test` + `#expect()`. **No XCTest**. Mo
 
 ## AI Service Architecture (deshabilitada, mantenida)
 
-`AIService` con provider pattern (`AIServiceProvider`). Implementaciones: `GeminiProvider`, `GroqProvider`. `PromptBuilder` arma contexto financiero (~500 tokens máx). Groq key en UserDefaults, Gemini en código (Secrets.swift).
+`AIService` con provider pattern (`AIServiceProvider`). Implementaciones: `GeminiProvider`, `GroqProvider`. `PromptBuilder` arma contexto financiero (~500 tokens máx). Las claves de Gemini y Groq se guardan en el llavero (`APIKeychain`), con migración desde UserDefaults.
+
+## Diagnóstico de cuelgues
+
+`Clarity/Core/Diagnostics/`: migas de pan (`Migas.deja("…")`, **solo nombres de pantalla y de acción, nunca importes, nombres de gasto ni datos de la cuenta**), vigilante del hilo principal (informe a disco si pasa de 3 s), suscriptor de MetricKit y volcado de las migas al salir de la app. El pie del correo de soporte (`SupportContact`) lleva el resumen del último cuelgue o de la sesión anterior. No quitar las migas al mover código de `MainTabView`, `AddExpenseSheet` o `EditExpenseSheet`.
+
+## Formularios
+
+- «Cancelar» y deslizar pasan por `confirmarDescarte(hayCambios:)` (`UI/Modifiers/ConfirmarDescarte.swift`): con cambios respecto al estado inicial, pregunta antes de tirar lo escrito.
+- La barra «Hecho» del teclado y la transición de zoom de las hojas dependen de la versión de iOS (`#unavailable(iOS 27)`, `transicionZoomDeHoja`). Cada detalle está ahí por un cuelgue real: no tocarlos sin poder probar en iOS 26 y en iOS 27.
 
 ## UI System
 
 - Design System en `Clarity/UI/Theme/DesignSystem.swift`. Tokens para corner radii, icon sizes, animation durations, paleta de 12 colores.
-- Glass morphism: `GlassCard`, `LiquidGlassCard`.
+- Vidrio: el helper `glassCard(cornerRadius:)` de `UI/Theme/Glass.swift` (trae la rama de iOS 26). `GlassCard` (struct) es el antiguo, sin vidrio de iOS 26.
 - Haptics: `HapticManager` + Core Haptics.
 - **Nunca hardcodear colores** — usar paleta del DesignSystem.
 - Esquinas 12-20pt, spacing 16-24pt, dark-first.
@@ -194,7 +205,7 @@ MCP server `claude-mem` disponible. Usar `mem-search` skill para contexto histó
 
 ## Convenciones Swift rápidas
 
-- Swift 6.0+ strict concurrency.
+- Modo de lenguaje Swift 5 con MainActor por defecto (ver «Concurrencia»); se escribe como si fuera Swift 6.
 - `@Observable` (no Combine).
 - SwiftUI > UIKit siempre que se pueda.
 - ViewModels solo importan Foundation + domain models (no `import SwiftUI`).
