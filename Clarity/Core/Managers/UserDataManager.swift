@@ -469,13 +469,12 @@ final class UserDataManager {
         //    `updateData(["settings": ...])`: escribir el mapa entero pisa los
         //    hermanos que no estén en memoria, que es justo cómo se perdieron
         //    las categorías en su día.
+        //    A través de `service` (mismo `setData(merge:)`, ahora dentro de
+        //    `UserDataService`): con `Firestore.firestore()` a pelo aquí, los
+        //    tests de esta función escribían en el Firestore de verdad.
         Task {
             do {
-                let data = try Firestore.Encoder().encode(filter)
-                try await Firestore.firestore()
-                    .collection("users")
-                    .document(userId)
-                    .setData(["settings": ["defaultFilter": data]], merge: true)
+                try await service.saveDefaultFilter(filter, userId: userId)
                 logger.info("✅ Default filter saved")
             } catch {
                 logger.error("❌ Error saving default filter: \(error.localizedDescription)")

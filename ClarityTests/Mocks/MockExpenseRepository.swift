@@ -23,8 +23,16 @@ final class MockExpenseRepository: ExpenseRepositoryProtocol, @unchecked Sendabl
         return expenses.filter { $0.date >= startDate && $0.date <= endDate }
     }
 
+    /// Lo que se pidió guardar, TAL CUAL llegó (abajo el id se sustituye por un
+    /// UUID, como haría un alta normal). Para quien necesita comprobar el id
+    /// que eligió el llamante: los recurrentes lo mandan determinista.
+    var addedExpenses: [Expense] = []
+    /// Solo falla el alta; las lecturas siguen funcionando.
+    var shouldFailAdd = false
+
     func addExpense(_ expense: Expense) async throws -> String {
-        if shouldFail { throw failureError }
+        if shouldFail || shouldFailAdd { throw failureError }
+        addedExpenses.append(expense)
         let id = UUID().uuidString
         var newExpense = expense
         newExpense.id = id

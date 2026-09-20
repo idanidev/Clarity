@@ -36,7 +36,7 @@ struct HomeNormalTests {
     }
 
     @Test("Mediana por categoría: los meses sin ella cuentan como 0 y los recurrentes no entran")
-    func medianaPorCategoria() {
+    func medianaPorCategoria() throws {
         let historico = [
             gasto(100, "Ocio", mes: 1, dia: 3), gasto(300, "Ocio", mes: 2, dia: 3), gasto(200, "Ocio", mes: 3, dia: 3),
             gasto(50, "Súper", mes: 1, dia: 4),
@@ -44,7 +44,7 @@ struct HomeNormalTests {
             gasto(600, "Vivienda", mes: 2, dia: 1, recurrente: true),
             gasto(600, "Vivienda", mes: 3, dia: 1, recurrente: true),
         ]
-        let n = HomeNormal.build(historico: historico, mes: abril, calendar: cal)!
+        let n = try #require(HomeNormal.build(historico: historico, mes: abril, calendar: cal))
         #expect(n.meses == 3)
         #expect(n.porCategoria["Ocio"] == 200)
         #expect(n.porCategoria["Súper"] == 0)
@@ -66,21 +66,21 @@ struct HomeNormalTests {
     }
 
     @Test("Ahorro medio: lo que quedó sin gastar de los ingresos, de media, solo en meses con presupuesto")
-    func ahorroMedio() {
+    func ahorroMedio() throws {
         let historico = [gasto(750, "Ocio", mes: 1, dia: 3), gasto(900, "Ocio", mes: 2, dia: 3), gasto(100, "Ocio", mes: 3, dia: 3)]
-        let n = HomeNormal.build(historico: historico, mes: abril,
-                                 presupuestos: ["2026-01": 1000, "2026-02": 1000], calendar: cal)!
+        let n = try #require(HomeNormal.build(historico: historico, mes: abril,
+                                              presupuestos: ["2026-01": 1000, "2026-02": 1000], calendar: cal))
         #expect(abs((n.ahorroMedio ?? 0) - 0.175) < 0.0001)
         #expect(HomeNormal.build(historico: historico, mes: abril, calendar: cal)?.ahorroMedio == nil)
     }
 
     @Test("Día de la semana: lo gastado entre las veces que cae ese día en el tramo")
-    func porDiaSemana() {
+    func porDiaSemana() throws {
         // Enero y febrero de 2026 tienen 9 viernes entre los dos: 2, 9, 16, 23, 30 y 6, 13, 20, 27.
         let viernes = [(1, 2), (1, 9), (1, 16), (1, 23), (1, 30), (2, 6), (2, 13), (2, 20), (2, 27)]
         let historico = viernes.map { gasto(10, "Ocio", mes: $0.0, dia: $0.1) }
         let marzo = cal.date(from: DateComponents(year: 2026, month: 3, day: 1))!
-        let n = HomeNormal.build(historico: historico, mes: marzo, meses: 2, calendar: cal)!
+        let n = try #require(HomeNormal.build(historico: historico, mes: marzo, meses: 2, calendar: cal))
         #expect(abs((n.porDiaSemana[6] ?? 0) - 10) < 0.0001)
         #expect(n.porDiaSemana[2] == nil)
         #expect(n.diasConGasto.count == 9)

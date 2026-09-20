@@ -128,7 +128,7 @@ final class AuthViewModel {
         do {
             try await Auth.auth().signIn(withEmail: email, password: password)
         } catch {
-            errorMessage = mapAuthError(error)
+            errorMessage = Self.mapAuthError(error)
             throw error
         }
     }
@@ -146,7 +146,7 @@ final class AuthViewModel {
             // Create user document
             try await createUserDocument(user: result.user, displayName: displayName)
         } catch {
-            errorMessage = mapAuthError(error)
+            errorMessage = Self.mapAuthError(error)
             throw error
         }
     }
@@ -310,7 +310,7 @@ final class AuthViewModel {
                 try await createUserDocument(user: result.user, displayName: displayName)
             }
         } catch {
-            errorMessage = mapAuthError(error)
+            errorMessage = Self.mapAuthError(error)
             throw error
         }
     }
@@ -360,7 +360,7 @@ final class AuthViewModel {
                 try await createUserDocument(user: authResult.user, displayName: displayName)
             }
         } catch {
-            errorMessage = mapAuthError(error)
+            errorMessage = Self.mapAuthError(error)
             throw error
         }
     }
@@ -382,7 +382,10 @@ final class AuthViewModel {
         return root
     }
 
-    private func mapAuthError(_ error: Error) -> String {
+    /// `static` e interna (antes `private` de instancia) solo para poder
+    /// probarla: no usa nada del ViewModel, y crear uno en un test arrastraría
+    /// Firebase Auth. Los mensajes no cambian.
+    static func mapAuthError(_ error: Error) -> String {
         let nsError = error as NSError
         switch nsError.code {
         case AuthErrorCode.wrongPassword.rawValue,

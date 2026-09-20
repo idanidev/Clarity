@@ -377,6 +377,21 @@ actor UserDataService {
         return try doc.data(as: UserDocument.self)
     }
 
+    // MARK: - Filtro predeterminado
+
+    /// La misma escritura que hacía `UserDataManager.saveDefaultFilter` contra
+    /// `Firestore.firestore()` directamente, traída aquí sin cambios para que
+    /// pase por `UserDataStore` y los tests la sustituyan por un doble.
+    /// `setData(merge:)` sobre la clave anidada, NO `updateData(["settings": …])`:
+    /// escribir el mapa entero pisa los hermanos que no estén en memoria.
+    func saveDefaultFilter(_ filter: ExpenseFilter, userId: String) async throws {
+        let data = try Firestore.Encoder().encode(filter)
+        try await db
+            .collection("users")
+            .document(userId)
+            .setData(["settings": ["defaultFilter": data]], merge: true)
+    }
+
     // MARK: - Helpers
 
     func createDefaultCategories() -> [Category] {

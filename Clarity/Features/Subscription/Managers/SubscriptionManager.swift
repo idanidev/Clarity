@@ -171,17 +171,52 @@ enum ProLimits {
     private static let voiceCountKey = "pro.voiceCount"
     private static let voiceMonthKey = "pro.voiceMonth"
 
+    // MARK: Reglas puras
+    //
+    // La cuenta del mes y su puesta a cero dependían de `UserDefaults.standard`
+    // y de la fecha de hoy, así que no había forma de probar un cambio de mes
+    // sin esperar a que llegara. Las reglas son estas tres funciones, sin
+    // estado; lo de abajo solo lee y escribe `UserDefaults` y delega aquí.
+    // Los meses son las claves «yyyy-MM» de `Formatters.monthString(from:)`.
+
+    /// Gastos por voz que cuentan para `mesActual`. Lo guardado solo vale si es
+    /// de este mismo mes (y año: la clave lleva los dos); si no, el mes empieza
+    /// de cero aunque el contador viejo siga escrito.
+    nonisolated static func vozUsadosEsteMes(guardados: Int, mesGuardado: String?, mesActual: String) -> Int {
+        guard mesGuardado == mesActual else { return 0 }
+        return guardados
+    }
+
+    /// Cuántos quedan hasta el tope. Nunca negativo, aunque el contador se
+    /// haya pasado (p. ej. si el límite se baja en una versión posterior).
+    nonisolated static func vozRestantes(usados: Int, limite: Int) -> Int {
+        max(0, limite - usados)
+    }
+
+    /// Contador tras apuntar un gasto por voz: si el mes guardado no es el
+    /// actual se arranca de cero ANTES de sumar, así que el primero del mes
+    /// deja el contador en 1 y no en «los del mes pasado + 1».
+    nonisolated static func vozTrasRegistrar(
+        guardados: Int, mesGuardado: String?, mesActual: String
+    ) -> (usados: Int, mes: String) {
+        (vozUsadosEsteMes(guardados: guardados, mesGuardado: mesGuardado, mesActual: mesActual) + 1, mesActual)
+    }
+
+    // MARK: Estado (UserDefaults + fecha de hoy)
+
     @MainActor
     static var voiceExpensesUsedThisMonth: Int {
         let defaults = UserDefaults.standard
-        guard defaults.string(forKey: voiceMonthKey) == currentMonthKey() else { return 0 }
-        return defaults.integer(forKey: voiceCountKey)
+        return vozUsadosEsteMes(
+            guardados: defaults.integer(forKey: voiceCountKey),
+            mesGuardado: defaults.string(forKey: voiceMonthKey),
+            mesActual: currentMonthKey())
     }
 
     @MainActor
     static var remainingVoiceExpenses: Int {
         guard ProConfig.paywallEnabled, !SubscriptionManager.shared.isPro else { return .max }
-        return max(0, voiceExpensesPerMonth - voiceExpensesUsedThisMonth)
+        return vozRestantes(usados: voiceExpensesUsedThisMonth, limite: voiceExpensesPerMonth)
     }
 
     /// ¿Puede registrar otro gasto por voz?
@@ -194,11 +229,16 @@ enum ProLimits {
     static func registerVoiceExpense() {
         guard ProConfig.paywallEnabled, !SubscriptionManager.shared.isPro else { return }
         let defaults = UserDefaults.standard
-        if defaults.string(forKey: voiceMonthKey) != currentMonthKey() {
-            defaults.set(currentMonthKey(), forKey: voiceMonthKey)
-            defaults.set(0, forKey: voiceCountKey)
+        let mesGuardado = defaults.string(forKey: voiceMonthKey)
+        let nuevo = vozTrasRegistrar(
+            guardados: defaults.integer(forKey: voiceCountKey),
+            mesGuardado: mesGuardado,
+            mesActual: currentMonthKey())
+        // Igual que antes: el mes solo se reescribe cuando cambia.
+        if mesGuardado != nuevo.mes {
+            defaults.set(nuevo.mes, forKey: voiceMonthKey)
         }
-        defaults.set(defaults.integer(forKey: voiceCountKey) + 1, forKey: voiceCountKey)
+        defaults.set(nuevo.usados, forKey: voiceCountKey)
     }
 
     private static func currentMonthKey() -> String {

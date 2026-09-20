@@ -105,17 +105,34 @@ final class HomeViewModel {
         didSet {
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms
+                try? await Task.sleep(for: esperaBusqueda)
                 if !Task.isCancelled {
                     // Reload with allTime filter when searching so results cross all months;
                     // applyFilters() will skip the date filter while searchText is non-empty.
-                    await loadExpenses(silent: true)
+                    if let sustituta = recargaTrasBuscar {
+                        await sustituta()  // solo en tests; ver `recargaTrasBuscar`
+                    } else {
+                        await loadExpenses(silent: true)
+                    }
                 }
             }
         }
     }
 
-    private var searchTask: Task<Void, Never>?
+    /// Espera del debounce de la búsqueda (los 300 ms de siempre). Los tests la
+    /// acortan, como `EditExpenseViewModel.esperaSugerencia`.
+    @ObservationIgnored var esperaBusqueda: Duration = .milliseconds(300)
+
+    /// Sustituto de la recarga que se lanza al vencer la espera. En la app es
+    /// siempre `nil` y se llama a `loadExpenses(silent:)`, como antes. Solo lo
+    /// ponen los tests, y no por comodidad: `loadExpenses` lee el presupuesto y
+    /// los recurrentes de Firestore y reescribe los datos del widget, y los
+    /// tests corren dentro de la app con la sesión real.
+    @ObservationIgnored var recargaTrasBuscar: (@MainActor () async -> Void)?
+
+    /// La recarga pendiente de la última tecla. `private(set)` para que los
+    /// tests puedan esperarla en vez de dormir a ojo.
+    private(set) var searchTask: Task<Void, Never>?
     private var monthChangeTask: Task<Void, Never>?
 
     // Data for View

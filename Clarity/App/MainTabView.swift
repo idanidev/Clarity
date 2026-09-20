@@ -287,30 +287,28 @@ struct MainTabView: View {
             }
         }
         .onOpenURL { url in
-            guard url.scheme == "clarity", url.host == "add-expense",
-                  let components = URLComponents(url: url, resolvingAgainstBaseURL: true)
-            else { return }
-
-            let queryItems = components.queryItems ?? []
-            let merchant = queryItems.first(where: { $0.name == "merchant" })?.value
-            let amountStr = queryItems.first(where: { $0.name == "amount" })?.value
-            let inputPhrase = queryItems.first(where: { $0.name == "input" })?.value
+            // Qué pide el enlace lo decide `EnlaceAnadirGasto` (función pura,
+            // con tests); aquí solo quedan los efectos.
+            let enlace = EnlaceAnadirGasto.interpretar(url)
+            if case .ignorar = enlace { return }
 
             // Small delay to ensure clean state transition if coming from background
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
-                if let merchant, !merchant.isEmpty,
-                   let amountStr, let amount = Double(amountStr) {
+                switch enlace {
+                case .applePay(let merchant, let amount):
                     await prepararConfirmacionDeFuera()
                     voiceCoordinator.populateFromApplePay(merchant: merchant, amount: amount)
-                } else if let phrase = inputPhrase, !phrase.isEmpty {
+                case .fraseDictada(let phrase):
                     await prepararConfirmacionDeFuera()
                     // Solo Siri y los Atajos abren la app con `input`: el micro
                     // de dentro llama al coordinator directamente.
                     voiceCoordinator.marcarOrigenSiri()
                     voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
-                } else {
+                case .abrirFormulario:
                     abrirFormularioSiNoHayNadaAbierto()
+                case .ignorar:
+                    break  // ya se salió arriba, antes de lanzar el Task
                 }
             }
         }

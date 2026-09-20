@@ -91,11 +91,13 @@ struct CategorySeedingTests {
     }
 
     @Test("buildSeedMap: id con carácter prohibido → reasigna UUID, conserva nombre")
-    func buildReassignsForbiddenId() {
+    func buildReassignsForbiddenId() throws {
         let bad = cat(id: "Comida/Bebida", name: "Comida/Bebida")
         let map = CategorySeeding.buildSeedMap(from: [bad])
         #expect(map.count == 1)
-        let key = map.keys.first!
+        // `#require` y no `!`: `#expect` apunta el fallo y SIGUE, así que con el
+        // mapa vacío la línea siguiente tumbaba el proceso de tests entero.
+        let key = try #require(map.keys.first)
         // La clave NO es el id prohibido; es un UUID (36 chars).
         #expect(key != "Comida/Bebida")
         #expect(key.count == 36)
@@ -104,12 +106,13 @@ struct CategorySeedingTests {
     }
 
     @Test("buildSeedMap: id nil → clave UUID")
-    func buildNilIdUsesUUID() {
+    func buildNilIdUsesUUID() throws {
         let c = cat(id: nil, name: "Nueva")
         let map = CategorySeeding.buildSeedMap(from: [c])
         #expect(map.count == 1)
-        #expect(map.keys.first!.count == 36)
-        #expect(map[map.keys.first!]?["name"] as? String == "Nueva")
+        let key = try #require(map.keys.first)
+        #expect(key.count == 36)
+        #expect(map[key]?["name"] as? String == "Nueva")
     }
 
     // MARK: - Escenario del bug (regresión completa)
