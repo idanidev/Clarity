@@ -131,10 +131,9 @@ Apple Swift Testing (`import Testing`). `@Test` + `#expect()` + `try #require()`
 | `AIAdvisor` | `Features/AIAdvisor/` | **Deshabilitado** — sin entrada en la UI |
 | `Voice` | `Features/Voice/` | Speech → parser → expense |
 | `Expenses` / `AddExpense` | `Features/Expenses/`, `Features/AddExpense/` | CRUD + paginación |
-| `Budgets` | `Features/Budgets/` | Presupuestos mensuales + metas |
 | `RecurringExpenses` | `Features/RecurringExpenses/` | LOCAL (NO Cloud Functions) |
-| `Financial` | `Features/Financial/` | Analytics, charts, trends |
-| `Charts` | `Features/Charts/` | Donut + monthly evolution |
+| `Financial` | `Features/Financial/` | Pestaña Metas (`FinancialDashboardView`): metas, nómina/presupuesto mensual (`MonthlyBudgetsViewModel`), ingresos extra |
+| `Charts` | `Features/Charts/` | Solo `CategoryBreakdownTable` (desglose de una categoría, menú contextual de `ResumenPage`). Las gráficas viven en la Home: `Presentation/Screens/Home/Pages/GraficasPage.swift` |
 
 ## Data Persistence
 

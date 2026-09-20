@@ -286,31 +286,3 @@ struct GoalCardView: View {
             : "de \(Formatters.currency(goal.targetAmount))"
     }
 }
-
-// Simple Progress Bar
-struct ProgressBar: View {
-    var value: Double
-    var total: Double
-    var color: Color
-    var isWarning: Bool
-
-    private var percentage: Int {
-        total > 0 ? Int(min(value / total, 1.0) * 100) : 0
-    }
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.fill.tertiary)
-
-                Capsule()
-                    .fill(color)
-                    .frame(width: min(CGFloat(value / total) * geo.size.width, geo.size.width))
-            }
-        }
-        .accessibilityElement()
-        .accessibilityLabel("Progreso \(percentage) por ciento")
-        .accessibilityValue("\(percentage)%")
-    }
-}

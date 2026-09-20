@@ -10,7 +10,6 @@ struct MainTabView: View {
     @State private var showManualExpense = false
     /// Sube cuando el control "Dictar gasto" abre la app: el micro arranca solo.
     @State private var arrancarVoz = 0
-    @State private var showRecurring = false
     /// Toques por pestaña: cada uno hace rebotar su icono.
     @State private var toquesPestana: [Int: Int] = [:]
     /// El formulario de añadir crece desde el "+" (solo hasta iOS 26: ver `transicionZoomDeHoja`).
@@ -18,44 +17,13 @@ struct MainTabView: View {
     /// Lo que ocupa la barra flotante. Cada pestaña deja ese hueco al final y el
     /// carrusel de la Home, que llega hasta el borde, lo lee del entorno.
     @State private var medidaBarra = MedidaBarraInferior(alto: 66, margenInferior: 34)
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
     private var userDataManager = UserDataManager.shared
     @State private var homeViewModel = DependencyContainer.shared.makeHomeViewModel()
 
-    // Centralized managers
-    @State private var coordinator = AppCoordinator()
-
     // Voice components
     @State private var speechManager = SpeechRecognitionManager.shared
     @State private var voiceCoordinator = VoiceExpenseCoordinator()
-
-    init() {
-        // Configure Glassmorphic Tab Bar (adapts to light/dark mode)
-        let appearance = UITabBarAppearance()
-        appearance.configureWithTransparentBackground()
-        appearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
-        appearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.85)
-
-        // Item appearance - adapts to color scheme
-        let itemAppearance = UITabBarItemAppearance()
-        itemAppearance.normal.iconColor = UIColor.secondaryLabel
-        itemAppearance.normal.titleTextAttributes = [
-            .foregroundColor: UIColor.secondaryLabel
-        ]
-
-        itemAppearance.selected.iconColor = UIColor(Color.clarityPrimary)
-        itemAppearance.selected.titleTextAttributes = [
-            .foregroundColor: UIColor(Color.clarityPrimary)
-        ]
-
-        appearance.stackedLayoutAppearance = itemAppearance
-        appearance.inlineLayoutAppearance = itemAppearance
-        appearance.compactInlineLayoutAppearance = itemAppearance
-
-        UITabBar.appearance().standardAppearance = appearance
-        UITabBar.appearance().scrollEdgeAppearance = appearance
-    }
 
     var body: some View {
         // La barra de pestañas del diseño —píldora de vidrio con los cuatro
@@ -115,7 +83,6 @@ struct MainTabView: View {
                 .tag(3)
             }
             .tint(Color.clarityPrimary)
-            .modifier(iPadTabViewModifier())
 
             VeloBarraInferior(alto: medidaBarra.total + 30)
 
@@ -163,13 +130,6 @@ struct MainTabView: View {
             // Con zoom en iOS 18–26 y hoja normal en iOS 27+: cada versión con
             // lo que funciona en ella. Ver `transicionZoomDeHoja`.
             .transicionZoomDeHoja(id: "pestana-2", en: zoomBarra)
-        }
-        .sheet(isPresented: $showRecurring) {
-            NavigationStack {
-                RecurringExpensesView()
-            }
-            .presentationDetents([.large])
-            .presentationBackground(.regularMaterial)
         }
         .sheet(isPresented: $voiceCoordinator.showVoicePaywall) {
             ProPaywallView(reason: .voiceLimit)
@@ -416,7 +376,7 @@ private extension MainTabView {
 private extension MainTabView {
     var hayHojaAbierta: Bool {
         if case .confirming = voiceCoordinator.state { return true }
-        return showManualExpense || showRecurring || voiceCoordinator.showVoicePaywall
+        return showManualExpense || voiceCoordinator.showVoicePaywall
             || voiceCoordinator.showError
     }
 
@@ -431,13 +391,12 @@ private extension MainTabView {
         guard hayHojaAbierta else { return }
         Migas.deja("hojas: se cierran para atender una petición de fuera")
         showManualExpense = false
-        showRecurring = false
         voiceCoordinator.showVoicePaywall = false
         voiceCoordinator.clearError()
         if case .confirming = voiceCoordinator.state { voiceCoordinator.reset() }
         // El cierre de una hoja dura ~0,35–0,5 s; presentar antes de que acabe
-        // es volver al problema. Tiempo fijo y no `onDismiss`: son cuatro hojas
-        // y un alert, y un retardo corto se entiende mejor que cinco avisos.
+        // es volver al problema. Tiempo fijo y no `onDismiss`: son tres hojas
+        // y un alert, y un retardo corto se entiende mejor que cuatro avisos.
         try? await Task.sleep(for: .milliseconds(600))
     }
 
@@ -448,20 +407,6 @@ private extension MainTabView {
     func prepararConfirmacionDeFuera() async {
         await cerrarHojasAbiertas()
         await userDataManager.esperarCategoriasDelUsuario()
-    }
-}
-
-// MARK: - iPad Sidebar Adaptation
-
-private struct iPadTabViewModifier: ViewModifier {
-    @Environment(\.horizontalSizeClass) private var sizeClass
-
-    func body(content: Content) -> some View {
-        if sizeClass == .regular, #available(iOS 18.0, *) {
-            content.tabViewStyle(.sidebarAdaptable)
-        } else {
-            content
-        }
     }
 }
 

@@ -35,7 +35,6 @@ struct HomeView: View {
     @State private var irALista = 0
     /// Para saltar a otra pestaña (Metas). Lo pone MainTabView, que es quien las tiene.
     var abrirPestana: (Int) -> Void = { _ in }
-    @State private var voiceCoordinator = VoiceExpenseCoordinator()
     @State private var speechManager = SpeechRecognitionManager.shared
 
     @MainActor
@@ -110,12 +109,6 @@ struct HomeView: View {
             }
             // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
             // VoiceConfirmationSheet is now handled by VoiceExpenseButton directly
-            .onChange(of: voiceCoordinator.errorMessage) { _, newValue in
-                if let error = newValue {
-                    FeedbackManager.shared.show(.error, title: "Error de Voz", message: error)
-                    voiceCoordinator.clearError()
-                }
-            }
         // onChange for silence removed - logic moved to VoiceExpenseCoordinator inside Button
             .task { await viewModel.loadMetas() }
             .task { await viewModel.loadMesAnterior() }

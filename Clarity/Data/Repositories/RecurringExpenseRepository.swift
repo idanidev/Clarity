@@ -73,21 +73,6 @@ class RecurringExpenseRepository {
         return results
     }
 
-    func fetchActive() async throws -> [RecurringExpense] {
-        guard let collection = collection else {
-            throw RepositoryError.notAuthenticated
-        }
-        let query = collection.whereField("active", isEqualTo: true)
-        let snapshot: QuerySnapshot
-        do {
-            let cached = try await query.getDocuments(source: .cache)
-            snapshot = cached.isEmpty ? try await query.getDocuments(source: .server) : cached
-        } catch {
-            snapshot = try await query.getDocuments(source: .server)
-        }
-        return snapshot.documents.compactMap { try? $0.data(as: RecurringExpense.self) }
-    }
-
     // Las escrituras invalidan la caché al empezar y al terminar. Al empezar,
     // porque Firestore aplica el cambio en local antes de que vuelva el
     // `await`; al terminar —también si falla—, para que una lectura hecha a

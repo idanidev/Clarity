@@ -53,30 +53,8 @@ enum Shadows {
     }
 }
 
-// MARK: - Modificadores de Tarjeta Glassmórfica
-struct ModernGlassCard: ViewModifier {
-    var cornerRadius: CGFloat = CornerRadius.medium
-    var blur: Material = .ultraThinMaterial
-    var opacity: Double = 0.05
-    var borderOpacity: Double = 0.1
-    var shadowIntensity: GlassShadowIntensity = .medium
-    
-
-    
-    func body(content: Content) -> some View {
-        content
-            .background(blur)
-            .background(Color.white.opacity(opacity))
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(Color.white.opacity(borderOpacity), lineWidth: 1)
-            )
-            .applyShadow(intensity: shadowIntensity)
-    }
-}
-
-// Extensión para aplicar sombras según intensidad
+// MARK: - Sombras de las tarjetas de vidrio
+// Extensión para aplicar sombras según intensidad (la usa `GlassCard`)
 extension View {
     func applyShadow(intensity: GlassShadowIntensity) -> some View {
         Group {
@@ -98,31 +76,6 @@ extension View {
                     .shadow(color: .black.opacity(0.06), radius: 6, y: 2)
             }
         }
-    }
-}
-
-
-
-extension View {
-    /// Tarjeta con efecto glass moderno y sombras multi-capa
-    func modernGlassCard(
-        cornerRadius: CGFloat = CornerRadius.medium,
-        blur: Material = .ultraThinMaterial,
-        opacity: Double = 0.05,
-        borderOpacity: Double = 0.1,
-        shadowIntensity: GlassShadowIntensity = .medium
-    ) -> some View {
-        modifier(ModernGlassCard(
-            cornerRadius: cornerRadius,
-            blur: blur,
-            opacity: opacity,
-            borderOpacity: borderOpacity,
-            shadowIntensity: shadowIntensity
-        ))
-    }
-    
-    func liquidGlassCard(color: Color) -> some View {
-        modifier(LiquidGlassCard(color: color))
     }
 }
 

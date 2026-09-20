@@ -132,21 +132,6 @@ final class SwiftDataExpenseDataSource {
         }
     }
 
-    /// Inserts or Updates based on ID existence
-    func upsertExpense(_ expense: Expense) throws {
-         guard let id = expense.id else { return }
-         let descriptor = FetchDescriptor<ExpenseModel>(predicate: #Predicate { $0.id == id })
-         
-         if let model = try context.fetch(descriptor).first {
-             model.apply(expense)
-         } else {
-             // Insert
-             let model = ExpenseModel(from: expense)
-             context.insert(model)
-         }
-         try context.save()
-    }
-    
     func deleteExpense(_ expenseId: String) throws {
         let descriptor = FetchDescriptor<ExpenseModel>(predicate: #Predicate { $0.id == expenseId })
         if let model = try context.fetch(descriptor).first {

@@ -1054,7 +1054,7 @@ final class HomeViewModel {
 
     // MARK: - Helpers
 
-    /// Updates the filter to match the selected month (used by MonthSelectorView)
+    /// Updates the filter to match the selected month (al cambiar `selectedMonth` y en `limpiarFiltros`)
     private func updateFilterForSelectedMonth() {
         let calendar = Calendar.current
         let components = calendar.dateComponents([.year, .month], from: selectedMonth)

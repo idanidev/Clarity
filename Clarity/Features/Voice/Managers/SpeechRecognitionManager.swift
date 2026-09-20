@@ -84,28 +84,6 @@ class SpeechRecognitionManager {
         retryRecognitionTask?.cancel()
     }
 
-    // MARK: - Pre-warming (Crucial for Speed)
-
-    func prepare() {
-        Task {
-            #if targetEnvironment(simulator)
-            logger.info("🔧 Simulador detectado — skip pre-warm de audio engine")
-            return
-            #else
-            SoundManager.shared.configureAudioSession()
-            // Pre-warm speech recognizer by checking availability
-            guard let recognizer = speechRecognizer else { return }
-            if !recognizer.isAvailable {
-                logger.warning("⚠️ Speech recognizer not available during pre-warm")
-                return
-            }
-            // Touch the audio engine to pre-initialize hardware
-            _ = audioEngine.inputNode
-            logger.info("🔥 Speech Engine Pre-warmed — on-device: \(recognizer.supportsOnDeviceRecognition)")
-            #endif
-        }
-    }
-
     // MARK: - Recording Control
 
     func startRecording() async throws {

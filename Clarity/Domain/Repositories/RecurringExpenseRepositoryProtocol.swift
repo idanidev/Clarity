@@ -9,7 +9,7 @@
 //
 // Mismo criterio que `UserDataStore`: cubre EXACTAMENTE lo que consume el
 // manager (`fetchAll` y `update`), ni más ni menos. El resto de la clase
-// (`add`, `delete`, `toggleActive`, `fetchActive`, `vaciarCache`) lo siguen
+// (`add`, `delete`, `toggleActive`, `vaciarCache`) lo siguen
 // usando las vistas contra el tipo concreto. La caché de 60 s es un detalle de
 // la clase real y se queda dentro de ella: quien pide `fetchAll()` no la ve.
 
