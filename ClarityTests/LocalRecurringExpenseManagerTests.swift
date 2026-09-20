@@ -71,13 +71,15 @@ struct LocalRecurringExpenseManagerTests {
         dia: Int,
         billingMonth: Int = 0,
         activa: Bool = true,
-        fin: String? = nil
+        fin: String? = nil,
+        inicio: String? = nil,
+        creada: String? = nil
     ) -> RecurringExpense {
         RecurringExpense(
             id: id, amount: importe, name: nombre, category: "Suscripciones📺",
             subcategory: "Streaming", paymentMethod: "Tarjeta", frequency: frecuencia,
             dayOfMonth: dia, billingMonth: billingMonth, active: activa, icon: nil,
-            startDate: nil, endDate: fin, lastCreated: nil, createdAt: nil, updatedAt: nil)
+            startDate: inicio, endDate: fin, lastCreated: nil, createdAt: creada, updatedAt: nil)
     }
 
     private func cargo(de reglaId: String, fecha: String) -> Expense {
@@ -469,20 +471,57 @@ struct LocalRecurringExpenseManagerTests {
         #expect(entorno.defaults.string(forKey: Self.claveRecuperacion) == nil)
     }
 
-    // CARACTERIZACIÓN, no contrato. Es lo que el manager hace HOY: la ventana
-    // de recuperación son 12 meses y no mira ni `startDate` ni `createdAt`, así
-    // que a una regla mensual sin historial —p. ej. recién creada— le rellena
-    // también los 11 meses anteriores. Si se decide acotar la recuperación a
-    // partir del alta de la regla, este es el test que hay que cambiar.
-    @Test("HOY: una regla mensual sin historial rellena los 12 meses de la ventana")
-    func reglaSinHistorialRellenaLaVentana() async throws {
+    // La recuperación no inventa gastos anteriores al alta de la regla. Antes la
+    // ventana eran 12 meses a secas: a una regla mensual recién creada se le
+    // rellenaban los 11 meses anteriores en cuanto se abría Recurrentes.
+    @Test("una regla dada de alta el mes pasado solo recupera desde ese mes")
+    func reglaNuevaNoRellenaAntesDeSuAlta() async throws {
         let entorno = try Entorno()
         defer { entorno.limpiar() }
-        entorno.reglas.rules = [regla(id: "nueva", dia: 1)]
+        entorno.reglas.rules = [regla(id: "nueva", dia: 1, inicio: "2026-08-20")]
+
+        await entorno.manager(hoy: try quinceDeSeptiembre()).recoverMissedExpenses()
+
+        let meses = entorno.gastos.addedExpenses.map { String($0.date.prefix(7)) }.sorted()
+        // Agosto entero cuenta aunque el alta fuera el día 20 y el cobro el 1,
+        // igual que al guardar la regla (`createCurrentPeriodExpenseIfDue`).
+        #expect(meses == ["2026-08", "2026-09"])
+    }
+
+    @Test("sin `startDate`, el alta sale de `createdAt`")
+    func altaDesdeCreatedAt() async throws {
+        let entorno = try Entorno()
+        defer { entorno.limpiar() }
+        entorno.reglas.rules = [regla(id: "nueva", dia: 1, creada: "2026-09-03T10:15:00Z")]
+
+        await entorno.manager(hoy: try quinceDeSeptiembre()).recoverMissedExpenses()
+
+        let meses = entorno.gastos.addedExpenses.map { String($0.date.prefix(7)) }
+        #expect(meses == ["2026-09"])
+    }
+
+    @Test("una regla antigua sin fechas conserva la ventana de 12 meses")
+    func reglaSinFechasRellenaLaVentana() async throws {
+        let entorno = try Entorno()
+        defer { entorno.limpiar() }
+        entorno.reglas.rules = [regla(id: "antigua", dia: 1)]
 
         await entorno.manager(hoy: try quinceDeSeptiembre()).recoverMissedExpenses()
 
         let meses = entorno.gastos.addedExpenses.map { String($0.date.prefix(7)) }.sorted()
         #expect(meses == Self.octubreAAgosto + ["2026-09"])
+    }
+
+    @Test("el mes de alta se lee de fechas válidas y se ignora lo ilegible", arguments: [
+        ("2026-08-20", nil, "2026-08"),
+        (nil, "2026-09-03T10:15:00Z", "2026-09"),
+        ("", "2025-12-01", "2025-12"),
+        ("ayer", nil, nil),
+        ("2026-13-01", nil, nil),
+        (nil, nil, nil),
+    ] as [(String?, String?, String?)])
+    func mesDeAlta(inicio: String?, creada: String?, esperado: String?) {
+        let r = regla(dia: 1, inicio: inicio, creada: creada)
+        #expect(RecurringScheduler.mesDeAlta(de: r) == esperado)
     }
 }
