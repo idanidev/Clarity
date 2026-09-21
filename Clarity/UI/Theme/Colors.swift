@@ -5,11 +5,11 @@ import SwiftUI
 
 extension Color {
     // MARK: - Brand Colors
-    static let clarityPrimary = Color(hex: "#BF4DCB")    // Orquídea (prueba; antes #8B5CF6 violeta)
-    static let claritySecondary = Color(hex: "#DA8DE2")  // Orquídea clara (prueba; antes #A855F7)
-    static let clarityAccent = Color(hex: "#8D3B96")     // Berry medio (prueba; antes #6366F1 índigo)
+    static let clarityPrimary = Color(hex: "#BF4DCB")    // Orquídea (hasta la 2.3.0: #8B5CF6, violeta)
+    static let claritySecondary = Color(hex: "#DA8DE2")  // Orquídea clara (hasta la 2.3.0: #A855F7)
+    static let clarityAccent = Color(hex: "#8D3B96")     // Berry medio (hasta la 2.3.0: #6366F1, índigo)
 
-    // MARK: - Prueba de paleta (rama `prueba-home-colores`)
+    // MARK: - Acento y fondo (paleta Deep Berry, 2.3.1)
     /// Acento cálido, complementario del violeta: para lo que tiene que destacar.
     static let clarityMango = Color(hex: "#FFCE6B")      // Melted Mango
     /// Morado profundo, de la familia del violeta de marca: brillo del fondo y

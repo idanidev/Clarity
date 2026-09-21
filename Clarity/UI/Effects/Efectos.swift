@@ -140,7 +140,7 @@ extension View {
 
 // MARK: - Fondo
 
-/// El fondo de la app: negro con un brillo violeta arriba que se apaga hacia la
+/// El fondo de la app: negro con un brillo Deep Berry arriba que se apaga hacia la
 /// mitad. Sin nada detrás, el vidrio no tiene qué refractar y parece gris plano.
 ///
 /// Antes era una aurora de varios colores que cambiaba con el mes. Se comparó
@@ -162,8 +162,8 @@ struct HomeFondo: View {
         ZStack {
             DesignTokens.Colors.background
             EllipticalGradient(
-                // Prueba de paleta: en la Home el brillo tira a Deep Berry, más
-                // profundo y cálido que el violeta de marca, y baja un poco más.
+                // En la Home el brillo tira a Deep Berry, más
+                // profundo y cálido que el color de marca, y baja un poco más.
                 colors: intensidad == .home
                     ? [Color.clarityBerry, Color.clarityBerry.opacity(0.55), .clear]
                     // El resto de pestañas, en berry también: la barra de abajo es
