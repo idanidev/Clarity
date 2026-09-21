@@ -1,16 +1,16 @@
 What's new in this version:
 
-YOU DECIDE WHAT THE HOME SHOWS
-Home cards can now be hidden and reordered: "Personalizar tarjetas" below them, or long-press a card to remove it. Whatever you put on top shows first.
-
-DATA THAT ACTUALLY TELLS YOU SOMETHING
-"Out of the ordinary" now only shows up when you're spending well above your usual in a category you use regularly. Spending less than usual — the month after the garage bill — is no longer news.
-
-GOALS: SAVE X A MONTH
-A new kind of goal: tell it how much you want left at the end of the month and it tracks itself from your income and expenses, nothing to top up. It starts from zero every month.
-
-EDIT GOALS WITH ONE TAP
-Tap a shield or a piggy bank to edit it. And editing a piggy bank no longer loses its contributions.
+NEW COLOURS
+The app has a new palette: a warmer purple and a touch of gold for what matters, like how much you've spent when you're on track with your budget.
 
 FIXES
-• A goal you had just created couldn't be edited or deleted until you reopened the app.
+• Restoring a backup brings your expenses back again.
+• Editing an expense no longer unlinks it from its piggy bank or its recurring expense, and an unusual payment method is kept.
+• Opening Recurring no longer shows charges from months before the rule was created.
+• The start-of-month setup in Goals can be finished if you have no income this month.
+• Long-pressing a category shows its details for two-word category names too.
+• With poor signal, loading your expenses no longer waits forever.
+• Siri asks you to unlock your iPhone before telling you how much you've spent.
+• Typing in forms with the keyboard open works better.
+
+If something freezes, write to us from Settings → "Algo no funciona" right after reopening the app: the email will include what we need to fix it.

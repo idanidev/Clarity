@@ -1,16 +1,16 @@
 Novedades de esta versión:
 
-TÚ DECIDES QUÉ VES EN LA HOME
-Las tarjetas de la Home se pueden ocultar y ordenar: «Personalizar tarjetas» al final de ellas, o mantén pulsada una para quitarla. Lo que pongas arriba sale primero.
-
-DATOS QUE AVISAN DE ALGO
-«Fuera de lo normal» ya solo aparece cuando gastas bastante más de lo que sueles en una categoría habitual. Gastar menos que de costumbre —el mes después del taller— ya no es noticia.
-
-METAS: AHORRAR X AL MES
-Un objetivo nuevo: dile cuánto quieres que te quede a fin de mes y se mide solo, con tus ingresos y tus gastos, sin aportar nada. Empieza de cero cada mes.
-
-EDITAR METAS CON UN TOQUE
-Tocar un escudo o una hucha abre su edición. Y editar una hucha ya no pierde sus aportaciones.
+NUEVOS COLORES
+La app estrena paleta: un morado más cálido y un toque dorado para lo que importa, como cuánto llevas gastado cuando vas bien de presupuesto.
 
 CORRECCIONES
-• Una meta recién creada no se podía editar ni borrar hasta reabrir la app.
+• Restaurar una copia de seguridad vuelve a recuperar tus gastos.
+• Editar un gasto ya no lo desvincula de su hucha ni de su gasto recurrente, y un método de pago poco habitual se conserva.
+• Al abrir Recurrentes ya no aparecen cargos de meses anteriores a crear la regla.
+• El inicio de mes en Metas tiene salida si este mes no tienes ingresos.
+• Mantener pulsada una categoría enseña su detalle también en las de nombre de dos palabras.
+• Con mala cobertura, la carga de tus gastos ya no se queda esperando para siempre.
+• Siri pide desbloquear el iPhone antes de decir cuánto llevas gastado.
+• Mejoras al escribir en los formularios con el teclado abierto.
+
+Si algo se queda congelado, escríbenos desde Ajustes → «Algo no funciona» nada más volver a abrir la app: el correo incluirá lo necesario para arreglarlo.
