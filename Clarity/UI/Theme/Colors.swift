@@ -15,6 +15,9 @@ extension Color {
     /// Morado profundo, de la familia del violeta de marca: brillo del fondo y
     /// texto sobre el mango (8:1).
     static let clarityBerry = Color(hex: "#58215E")      // Deep Berry
+    /// Deep Berry aclarado, mismo tono (294°): para iconos y botones sobre el
+    /// fondo oscuro. El violeta de marca es más azulado y no casaba con el brillo.
+    static let clarityOrchid = Color(hex: "#BF4DCB")
 
     // MARK: - Background Colors (OLED / True Black)
     static let bgPrimary = Color(UIColor { trait in
