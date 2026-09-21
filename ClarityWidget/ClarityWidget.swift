@@ -116,8 +116,8 @@ struct ClarityWidgetEntryView: View {
 /// Los colores del estilo nuevo, repetidos aquí: el widget es otro target y no
 /// ve `Color.clarityPrimary` ni el resto de tokens de la app.
 enum EstiloWidget {
-    /// #8B5CF6, el `clarityPrimary` de la app.
-    static let marca = Color(red: 0x8B / 255, green: 0x5C / 255, blue: 0xF6 / 255)
+    /// #BF4DCB, el `clarityPrimary` de la app (prueba de paleta; antes #8B5CF6).
+    static let marca = Color(red: 0xBF / 255, green: 0x4D / 255, blue: 0xCB / 255)
     /// #10B981, `success`.
     static let exito = Color(red: 0x10 / 255, green: 0xB9 / 255, blue: 0x81 / 255)
     /// #F59E0B, `warning`.

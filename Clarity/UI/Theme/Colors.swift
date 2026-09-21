@@ -5,9 +5,9 @@ import SwiftUI
 
 extension Color {
     // MARK: - Brand Colors
-    static let clarityPrimary = Color(hex: "#8B5CF6")    // Violet
-    static let claritySecondary = Color(hex: "#A855F7")  // Purple
-    static let clarityAccent = Color(hex: "#6366F1")     // Indigo
+    static let clarityPrimary = Color(hex: "#BF4DCB")    // Orquídea (prueba; antes #8B5CF6 violeta)
+    static let claritySecondary = Color(hex: "#DA8DE2")  // Orquídea clara (prueba; antes #A855F7)
+    static let clarityAccent = Color(hex: "#8D3B96")     // Berry medio (prueba; antes #6366F1 índigo)
 
     // MARK: - Prueba de paleta (rama `prueba-home-colores`)
     /// Acento cálido, complementario del violeta: para lo que tiene que destacar.
@@ -17,7 +17,7 @@ extension Color {
     static let clarityBerry = Color(hex: "#58215E")      // Deep Berry
     /// Deep Berry aclarado, mismo tono (294°): para iconos y botones sobre el
     /// fondo oscuro. El violeta de marca es más azulado y no casaba con el brillo.
-    static let clarityOrchid = Color(hex: "#BF4DCB")
+    static let clarityOrchid = clarityPrimary
 
     // MARK: - Background Colors (OLED / True Black)
     static let bgPrimary = Color(UIColor { trait in
@@ -53,7 +53,7 @@ extension Color {
     // Tertiary: Subtle details
     static let textTertiary = Color.primary.opacity(0.4)
     
-    static let textAccent = Color(hex: "#8B5CF6")
+    static let textAccent = clarityPrimary
     
     // MARK: - Semantic Colors
     static let success = Color(hex: "#10B981")
@@ -102,13 +102,13 @@ extension Color {
     )
     
     static let brandGradient = LinearGradient(
-        colors: [Color(hex: "#3B82F6"), Color(hex: "#8B5CF6")],
+        colors: [clarityAccent, clarityPrimary],
         startPoint: .leading,
         endPoint: .trailing
     )
     
     static let brandGradientDiagonal = LinearGradient(
-        colors: [Color(hex: "#8B5CF6"), Color(hex: "#6366F1")],
+        colors: [clarityPrimary, clarityAccent],
         startPoint: .topLeading,
         endPoint: .bottomTrailing
     )
