@@ -10,39 +10,22 @@ import Foundation
 import OSLog
 import UIKit
 
-/// Pro-Audio Manager implementing robust playback and session management.
-/// Ensures audio plays even in silent mode and handles session lifecycles correctly.
+/// La sesión de audio del dictado: tomarla para grabar y soltarla al terminar.
+///
+/// Aquí vivían también los sonidos de inicio, fin, éxito y error, pero la app
+/// nunca llevó los ficheros de audio y la alternativa con sonidos del sistema
+/// se desactivó por vibrar demasiado: no sonaba nada. El aviso al usuario es
+/// háptico (`HapticManager`).
 @MainActor
 final class SoundManager: NSObject {
 
     static let shared = SoundManager()
 
-    // MARK: - Configuration
-
-    enum SoundEffect: String {
-        case startRecording = "start_record"
-        case endRecording = "end_record"
-        case success = "success"
-        case error = "error"
-
-        // System Sound IDs as fallback
-        var systemSoundID: SystemSoundID {
-            switch self {
-            case .startRecording: return 1104  // Tock
-            case .endRecording: return 1105  // Tock (High)
-            case .success: return 1001  // Mail Sent (placeholder)
-            case .error: return 1002  // Mail Received (placeholder)
-            }
-        }
-    }
-
-    private var players: [SoundEffect: AVAudioPlayer] = [:]
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "SoundManager")
 
     override private init() {
         super.init()
-        preloadSounds()
     }
 
     // MARK: - Session Management
@@ -97,11 +80,9 @@ final class SoundManager: NSObject {
     /// abierta. Ahora:
     ///
     /// 1. Se desactiva avisando a las demás, que recuperan volumen y ruta.
-    /// 2. Queda puesta una categoría que NO graba para los sonidos de éxito y
-    ///    error. `AVAudioPlayer` activa la sesión por su cuenta al sonar; con
-    ///    `.playback` + `.mixWithOthers` suena aunque el móvil esté en silencio
-    ///    —igual que con `.playAndRecord`— sin cortar ni atenuar a nadie y, al no
-    ///    haber entrada, sin HFP.
+    /// 2. Queda puesta una categoría que NO graba ni molesta a nadie
+    ///    (`.ambient`): la app no reproduce audio, así que no tiene nada que
+    ///    reclamar hasta el siguiente dictado.
     ///
     /// El orden importa: primero soltar (todavía con la categoría de grabación,
     /// que es la que tiene tomada la ruta) y luego cambiar la categoría, que con
@@ -110,9 +91,8 @@ final class SoundManager: NSObject {
     func restoreAfterRecording() {
         deactivateSession()
         do {
-            try AVAudioSession.sharedInstance().setCategory(
-                .playback, mode: .default, options: [.mixWithOthers])
-            logger.info("✅ Audio Session released after recording (playback, mixable)")
+            try AVAudioSession.sharedInstance().setCategory(.ambient, mode: .default)
+            logger.info("✅ Audio Session released after recording (ambient)")
         } catch {
             logger.error("❌ Failed to restore audio session: \(error.localizedDescription)")
         }
@@ -128,55 +108,4 @@ final class SoundManager: NSObject {
         }
     }
 
-    // MARK: - Playback
-
-    /// Plays a sound effect with robust fallback and silent mode override.
-    /// - Parameter effect: The specific sound cue to play.
-    func play(_ effect: SoundEffect) {
-        // 1. Ensure Session is Active (Crucial for silent mode override)
-        // We do not force configure here to avoid overriding specific SpeechManager settings,
-        // but we ensure category is correct if strictly playing.
-        // In the context of VoiceExpenseButton, SpeechManager handles the session activation usually.
-
-        // 2. Try AVAudioPlayer (File-based)
-        if let player = players[effect] {
-            logger.info("🔊 Playing \(effect.rawValue) via AVAudioPlayer")
-            if player.isPlaying { player.stop() }
-            player.currentTime = 0
-            player.play()
-        } else {
-            // 3. Fallback: Log only (To prevent unwanted system vibrations)
-            // User feedback indicated SystemID 1104 was too strong.
-            // We rely on HapticManager for tactile feedback.
-            logger.warning(
-                "⚠️ File not found for \(effect.rawValue). Skipping fallback to avoid vibration conflict."
-            )
-            // AudioServicesPlaySystemSound(effect.systemSoundID)
-        }
-    }
-
-    // MARK: - Setup
-
-    private func preloadSounds() {
-        for effect in [SoundEffect.startRecording, .endRecording, .success, .error] {
-            guard
-                let url = Bundle.main.url(forResource: effect.rawValue, withExtension: "m4a")
-                    ?? Bundle.main.url(forResource: effect.rawValue, withExtension: "wav")
-                    ?? Bundle.main.url(forResource: effect.rawValue, withExtension: "mp3")
-            else {
-                logger.warning("⚠️ Sound file not found: \(effect.rawValue) (Will use fallback)")
-                continue
-            }
-
-            do {
-                let player = try AVAudioPlayer(contentsOf: url)
-                player.prepareToPlay()
-                players[effect] = player
-                logger.debug("✅ Preloaded sound: \(effect.rawValue)")
-            } catch {
-                logger.error(
-                    "❌ Failed to load sound \(effect.rawValue): \(error.localizedDescription)")
-            }
-        }
-    }
 }

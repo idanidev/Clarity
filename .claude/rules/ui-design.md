@@ -45,8 +45,6 @@ Lista verificada con grep (sep 2026): todo lo de aquí existe y tiene usos reale
 
 Reutilizar siempre estos componentes antes de crear nuevos.
 
-**Siguen en el repo pero sin ningún uso** (no tomarlos como referencia): `CategoryBadge`, `ModernExpenseCard`, `SearchBarView`.
-
 ## Estética
 - Modo oscuro como base (dark-first)
 - Glass morphism con `.ultraThinMaterial` o `.regularMaterial`

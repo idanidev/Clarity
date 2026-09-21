@@ -128,7 +128,6 @@ class VoiceExpenseCoordinator {
             } catch {
                 await MainActor.run {
                     state = .error("Error al iniciar: \(error.safeUserMessage)")  // Will revert UI
-                    SoundManager.shared.play(.error)
                 }
             }
         }
@@ -154,7 +153,6 @@ class VoiceExpenseCoordinator {
         guard state == .recording || state == .locked else { return }
 
         speechManager.stopRecording()
-        SoundManager.shared.play(.endRecording)
         if settings.vibration { VoiceHapticsEngine.shared.playRecordingEnd() }
 
         let text = (speechManager.transcript + " " + speechManager.interimTranscript)
@@ -191,7 +189,6 @@ class VoiceExpenseCoordinator {
                 history: UserDataManager.shared.expenses
             )
 
-            SoundManager.shared.play(.success)
             if settings.vibration { VoiceHapticsEngine.shared.playSuccess() }
 
             switch result {
@@ -249,7 +246,6 @@ class VoiceExpenseCoordinator {
                 }
 
                 // Specific error messages
-                SoundManager.shared.play(.error)
                 if settings.vibration { VoiceHapticsEngine.shared.playError() }
 
                 state = .error(error.safeUserMessage)

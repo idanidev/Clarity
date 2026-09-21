@@ -35,7 +35,6 @@ struct HomeView: View {
     @State private var irALista = 0
     /// Para saltar a otra pestaña (Metas). Lo pone MainTabView, que es quien las tiene.
     var abrirPestana: (Int) -> Void = { _ in }
-    @State private var speechManager = SpeechRecognitionManager.shared
 
     @MainActor
     init(viewModel: HomeViewModel? = nil, abrirPestana: @escaping (Int) -> Void = { _ in }) {
