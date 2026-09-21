@@ -16,7 +16,7 @@ struct VoiceSettingsPanel: View {
                     .scaledFont(size: 24)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [.purple, .blue],
+                            colors: [Color.clarityPrimary, Color.clarityAccent],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -79,7 +79,7 @@ struct VoiceSettingsPanel: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Image(systemName: "timer")
-                            .foregroundColor(.purple)
+                            .foregroundColor(Color.clarityPrimary)
                         
                         Text("Tiempo de silencio")
                             .scaledFont(size: 16, weight: .medium)
@@ -92,7 +92,7 @@ struct VoiceSettingsPanel: View {
                     }
                     
                     Slider(value: $settings.silenceTimeout, in: 1...5, step: 0.5)
-                        .tint(.purple)
+                        .tint(Color.clarityPrimary)
                         .onChange(of: settings.silenceTimeout) { _, _ in
                             settings.save()
                         }
@@ -140,7 +140,7 @@ struct VoiceSettingsPanel: View {
                         }
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.purple.opacity(0.1))
+                        .background(Color.clarityPrimary.opacity(0.1))
                         .cornerRadius(12)
                     }
                     
@@ -184,7 +184,7 @@ struct SettingRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .scaledFont(size: 20)
-                .foregroundColor(.purple)
+                .foregroundColor(Color.clarityPrimary)
                 .frame(width: 24)
             
             VStack(alignment: .leading, spacing: 4) {

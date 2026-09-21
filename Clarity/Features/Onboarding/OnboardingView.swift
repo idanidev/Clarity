@@ -759,7 +759,7 @@ private struct AIAdvisorPage: View {
                 .offset(x: 60, y: -80)
 
             Circle()
-                .fill(Color(hex: "#8B5CF6").opacity(0.12))
+                .fill(Color.clarityPrimary.opacity(0.12))
                 .frame(width: 200)
                 .blur(radius: 70)
                 .offset(x: -80, y: 60)
@@ -772,7 +772,7 @@ private struct AIAdvisorPage: View {
                     ZStack {
                         Circle()
                             .fill(LinearGradient(
-                                colors: [Color(hex: "#8B5CF6"), Color(hex: "#EC4899")],
+                                colors: [Color.clarityPrimary, Color(hex: "#EC4899")],
                                 startPoint: .topLeading, endPoint: .bottomTrailing))
                             .frame(width: 44, height: 44)
                         Text("✦")
@@ -851,7 +851,7 @@ private struct AIAdvisorPage: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(Color(hex: "#8B5CF6"))
+                .background(Color.clarityPrimary)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
         }
     }
@@ -859,7 +859,7 @@ private struct AIAdvisorPage: View {
     private func claraBubble(_ text: String) -> some View {
         HStack(alignment: .bottom, spacing: 8) {
             Circle()
-                .fill(LinearGradient(colors: [Color(hex: "#8B5CF6"), Color(hex: "#EC4899")], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .fill(LinearGradient(colors: [Color.clarityPrimary, Color(hex: "#EC4899")], startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 26, height: 26)
                 .overlay(Text("✦").font(.system(size: 11, weight: .bold)).foregroundStyle(.white))
 
