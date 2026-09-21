@@ -177,7 +177,7 @@ struct SimpleVoiceButton: View {
     private var buttonColor: Color {
         if isRecording { return .red }
         if isProcessing { return .orange }
-        return .clarityPrimary
+        return .clarityOrchid
     }
 
     private func handleTap() {
@@ -521,7 +521,7 @@ private struct AudioWaveformBarsView: View {
                 Capsule()
                     .fill(
                         LinearGradient(
-                            colors: [Color.clarityPrimary, Color.clarityPrimary.opacity(0.6)],
+                            colors: [Color.clarityOrchid, Color.clarityOrchid.opacity(0.6)],
                             startPoint: .top,
                             endPoint: .bottom
                         )

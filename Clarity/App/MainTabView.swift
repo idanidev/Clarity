@@ -321,7 +321,7 @@ struct MainTabView: View {
         } label: {
             Image(systemName: icono)
                 .font(.system(size: 20, weight: activa ? .semibold : .regular))
-                .foregroundStyle(activa ? Color.clarityPrimary : Color.textSecondary)
+                .foregroundStyle(activa ? Color.clarityOrchid : Color.textSecondary)
                 // Rebota al tocarlo, como los iconos del sistema.
                 .symbolEffect(.bounce, value: toquesPestana[tag, default: 0])
                 // El "+" gira a una "x" mientras el formulario está abierto.
@@ -330,7 +330,7 @@ struct MainTabView: View {
                 .frame(height: 48)
                 .background {
                     if activa {
-                        Capsule().fill(Color.clarityPrimary.opacity(0.18))
+                        Capsule().fill(Color.clarityOrchid.opacity(0.2))
                     }
                 }
                 .contentShape(Rectangle())

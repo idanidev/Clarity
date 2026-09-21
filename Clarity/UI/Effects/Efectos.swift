@@ -166,7 +166,9 @@ struct HomeFondo: View {
                 // profundo y cálido que el violeta de marca, y baja un poco más.
                 colors: intensidad == .home
                     ? [Color.clarityBerry, Color.clarityBerry.opacity(0.55), .clear]
-                    : [Color.clarityPrimary.opacity(0.42), Color.clarityPrimary.opacity(0.12), .clear],
+                    // El resto de pestañas, en berry también: la barra de abajo es
+                    // la misma en todas y tiene que casar con lo de arriba.
+                    : [Color.clarityBerry.opacity(0.8), Color.clarityBerry.opacity(0.35), .clear],
                 center: UnitPoint(x: 0.5, y: 0),
                 startRadiusFraction: 0,
                 endRadiusFraction: intensidad == .home ? 0.9 : 0.65
