@@ -5,6 +5,9 @@ import SwiftUI
 
 struct CategoryBreakdownTable: View {
     let category: CategoryChartData
+    /// Los gastos de ESTA categoría, ya elegidos por quien la pinta. La tabla
+    /// los filtraba otra vez por nombre exacto, y con un nombre de grupo que no
+    /// es el de la categoría tal cual se quedaba sin filas.
     let expenses: [Expense]
 
     @State private var sort: SortField = .amount
@@ -22,7 +25,7 @@ struct CategoryBreakdownTable: View {
     }
 
     private var rows: [Expense] {
-        let own = expenses.filter { $0.category == category.name }
+        let own = expenses
         switch sort {
         case .amount: return own.sorted { $0.amount > $1.amount }
         case .date: return own.sorted { $0.date > $1.date }
