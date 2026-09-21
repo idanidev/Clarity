@@ -120,19 +120,20 @@ struct CirculoIconoClarity: View {
 
 // MARK: - Botones
 
-/// Botón principal a lo ancho: morado de marca y texto blanco.
+/// Botón principal a lo ancho. Prueba de paleta: mango con texto Deep Berry
+/// (8:1); el blanco sobre mango no se leería.
 struct BotonPrincipalClarity: ButtonStyle {
     @Environment(\.isEnabled) private var activo
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(.white)
+            .foregroundStyle(Color.clarityBerry)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 52)
             .padding(.horizontal, 16)
             .background(
-                Color.clarityPrimary.opacity(activo ? 1 : 0.4),
+                Color.clarityMango.opacity(activo ? 1 : 0.4),
                 in: RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
             )
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
