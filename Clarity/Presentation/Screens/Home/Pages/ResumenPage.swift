@@ -283,7 +283,7 @@ private struct HeroCard: View {
                 .tracking(-1.2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
-                // Prueba de paleta: la cifra en mango mientras vas bien de
+                // La cifra en mango mientras vas bien de
                 // presupuesto; cerca del tope vuelve al color normal y ya avisa
                 // la barra.
                 .foregroundStyle(vaBien ? Color.clarityMango : Color.primary)

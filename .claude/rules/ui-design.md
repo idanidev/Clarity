@@ -48,7 +48,9 @@ Reutilizar siempre estos componentes antes de crear nuevos.
 ## Estética
 - Modo oscuro como base (dark-first)
 - Glass morphism con `.ultraThinMaterial` o `.regularMaterial`
-- Gradientes suaves en morado/índigo
+- Paleta de marca en la familia Deep Berry (desde la 2.3.1): `clarityPrimary` #BF4DCB (orquídea), `claritySecondary` #DA8DE2, `clarityAccent` #8D3B96, y `clarityBerry` #58215E para el brillo del fondo
+- Un único acento cálido, `clarityMango` #FFCE6B, para lo que tiene que destacar (cifra del héroe cuando vas bien, barra de presupuesto, botón principal). Sobre mango el texto va en `clarityBerry` (8:1), nunca en blanco
+- Los colores de categorías y de métodos de pago son DATOS, no marca: no se tocan al cambiar la paleta
 - Esquinas muy redondeadas (12-20pt)
 - Spacing generoso (16-24pt entre elementos)
 

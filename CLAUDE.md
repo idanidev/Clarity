@@ -174,7 +174,7 @@ Apple Swift Testing (`import Testing`). `@Test` + `#expect()` + `try #require()`
 
 ## UI System
 
-- Design System en `Clarity/UI/Theme/DesignSystem.swift`. Tokens para corner radii, icon sizes, animation durations, paleta de 12 colores.
+- Design System en `Clarity/UI/Theme/DesignSystem.swift`. Tokens para corner radii, icon sizes, animation durations, paleta de 12 colores. Los colores de marca viven en `UI/Theme/Colors.swift`: familia Deep Berry (`clarityPrimary` #BF4DCB) con `clarityMango` #FFCE6B como único acento cálido; el widget repite el de marca en `EstiloWidget.marca`.
 - Vidrio: el helper `glassCard(cornerRadius:)` de `UI/Theme/Glass.swift` (trae la rama de iOS 26). `GlassCard` (struct) es el antiguo, sin vidrio de iOS 26.
 - Haptics: `HapticManager` + Core Haptics.
 - **Nunca hardcodear colores** — usar paleta del DesignSystem.

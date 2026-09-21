@@ -120,7 +120,7 @@ struct CirculoIconoClarity: View {
 
 // MARK: - Botones
 
-/// Botón principal a lo ancho. Prueba de paleta: mango con texto Deep Berry
+/// Botón principal a lo ancho: mango con texto Deep Berry
 /// (8:1); el blanco sobre mango no se leería.
 struct BotonPrincipalClarity: ButtonStyle {
     @Environment(\.isEnabled) private var activo
