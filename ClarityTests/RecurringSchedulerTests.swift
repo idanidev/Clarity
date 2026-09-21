@@ -35,14 +35,52 @@ struct RecurringSchedulerTests {
         dayOfMonth: Int,
         billingMonth: Int = 0,
         active: Bool = true,
-        endDate: String? = nil
+        endDate: String? = nil,
+        startDate: String? = nil,
+        createdAt: String? = nil
     ) -> RecurringExpense {
         RecurringExpense(
             id: id, amount: amount, name: "Netflix", category: "Suscripciones📺",
             subcategory: "Netflix", paymentMethod: "Tarjeta", frequency: frequency,
             dayOfMonth: dayOfMonth, billingMonth: billingMonth, active: active, icon: nil,
-            startDate: nil, endDate: endDate, lastCreated: nil, createdAt: nil, updatedAt: nil
+            startDate: startDate, endDate: endDate, lastCreated: nil, createdAt: createdAt, updatedAt: nil
         )
+    }
+
+    // MARK: - mesesRecuperables (la recuperación no inventa gastos anteriores al alta)
+
+    @Test("una regla dada de alta el mes pasado solo recupera desde ese mes")
+    func recuperablesDesdeElAlta() {
+        let rule = makeRule(frequency: .monthly, dayOfMonth: 1, startDate: "2026-05-20")
+        let months = RecurringScheduler.mesesRecuperables(for: rule, anchor: date(2026, 6, 12), calendar: utc)
+        #expect(months.sorted() == ["2026-05", "2026-06"])
+    }
+
+    @Test("sin `startDate`, el alta sale de `createdAt`")
+    func recuperablesDesdeCreatedAt() {
+        let rule = makeRule(frequency: .monthly, dayOfMonth: 1, createdAt: "2026-06-03T10:15:00Z")
+        let months = RecurringScheduler.mesesRecuperables(for: rule, anchor: date(2026, 6, 12), calendar: utc)
+        #expect(months == ["2026-06"])
+    }
+
+    @Test("una regla antigua sin fechas conserva la ventana de 12 meses")
+    func recuperablesSinFechas() {
+        let rule = makeRule(frequency: .monthly, dayOfMonth: 1)
+        let months = RecurringScheduler.mesesRecuperables(for: rule, anchor: date(2026, 6, 12), calendar: utc)
+        #expect(months.count == 12)
+    }
+
+    @Test("el mes de alta se lee de fechas válidas y se ignora lo ilegible", arguments: [
+        ("2026-08-20", nil, "2026-08"),
+        (nil, "2026-09-03T10:15:00Z", "2026-09"),
+        ("", "2025-12-01", "2025-12"),
+        ("ayer", nil, nil),
+        ("2026-13-01", nil, nil),
+        (nil, nil, nil),
+    ] as [(String?, String?, String?)])
+    func mesDeAlta(inicio: String?, creada: String?, esperado: String?) {
+        let rule = makeRule(frequency: .monthly, dayOfMonth: 1, startDate: inicio, createdAt: creada)
+        #expect(RecurringScheduler.mesDeAlta(de: rule) == esperado)
     }
 
     private func makeExpense(recurringId: String?, date: String) -> Expense {

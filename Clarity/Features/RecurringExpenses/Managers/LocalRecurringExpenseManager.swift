@@ -172,7 +172,8 @@ final class LocalRecurringExpenseManager {
                     continue
                 }
 
-                let expectedMonths = expectedBillingMonths(for: recurring, anchor: today)
+                // Solo desde el alta de la regla: ver `mesesRecuperables`.
+                let expectedMonths = RecurringScheduler.mesesRecuperables(for: recurring, anchor: today)
                 for expectedMonth in expectedMonths {
                     // Solo intentar recuperar meses cuyo día de cobro ya haya pasado
                     if expectedMonth == currentMonth && recurring.dayOfMonth > currentDay {
@@ -287,10 +288,6 @@ final class LocalRecurringExpenseManager {
             today: today,
             existingExpenses: existingExpenses
         )
-    }
-
-    private func expectedBillingMonths(for rule: RecurringExpense, anchor: Date) -> [String] {
-        RecurringScheduler.expectedBillingMonths(for: rule, anchor: anchor)
     }
 
     private func expenseExists(in expenses: [Expense], recurringId: String, month: String) -> Bool {

@@ -35,6 +35,36 @@ enum RecurringScheduler {
 
     // MARK: - Billing months
 
+    /// El mes en que se dio de alta la regla ("YYYY-MM"): de `startDate` y, si
+    /// falta, de `createdAt`. `nil` en las reglas antiguas que no guardan ninguno.
+    static func mesDeAlta(de rule: RecurringExpense) -> String? {
+        for origen in [rule.startDate, rule.createdAt] {
+            guard let mes = origen?.prefix(7), mes.count == 7 else { continue }
+            let partes = mes.split(separator: "-")
+            if partes.count == 2, partes[0].count == 4, Int(partes[0]) != nil,
+               let m = Int(partes[1]), (1...12).contains(m) {
+                return String(mes)
+            }
+        }
+        return nil
+    }
+
+    /// Los meses que la recuperación puede rellenar: los que tocan por frecuencia
+    /// Y en los que la regla ya existía. Sin esto, a una regla mensual recién
+    /// creada se le «recuperaban» los 11 meses anteriores: gastos que nunca
+    /// existieron. El mes del alta sí cuenta entero, como en
+    /// `createCurrentPeriodExpenseIfDue`. Una regla antigua sin fechas se queda
+    /// con la ventana completa, que es para lo que se hizo la recuperación.
+    static func mesesRecuperables(
+        for rule: RecurringExpense,
+        anchor: Date,
+        calendar: Calendar = .current
+    ) -> [String] {
+        let meses = expectedBillingMonths(for: rule, anchor: anchor, calendar: calendar)
+        guard let alta = mesDeAlta(de: rule) else { return meses }
+        return meses.filter { $0 >= alta }
+    }
+
     /// Devuelve los meses ("YYYY-MM") en los que debería existir un cobro de esta regla
     /// dentro de los últimos 12 meses (incluyendo el actual). Soporta recovery cross-month
     /// para frecuencias trimestrales / semestrales / anuales.
