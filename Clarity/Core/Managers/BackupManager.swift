@@ -101,6 +101,69 @@ nonisolated struct MonthlyBudgetBackup: Codable, Sendable {
     }
 }
 
+/// Una meta (hucha, escudo o ahorro mensual) con su saldo y sus aportaciones.
+/// Las copias no las guardaban: tras restaurar, las huchas volvían a cero.
+nonisolated struct GoalBackup: Codable, Sendable {
+    var id: String?   // documentId (sin @DocumentID wrapper)
+    var userId: String
+    var name: String
+    var type: GoalType
+    var recurrence: GoalRecurrence
+    var targetAmount: Double
+    var currentAmount: Double
+    var linkedCategoryId: String?
+    var savingsExpenseCategory: String?
+    var savingsExpenseSubcategory: String?
+    var deadline: Date?
+    var icon: String?
+    var systemImage: String?
+    var colorHex: String?
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var savedHistory: [Goal.SavedEntry]
+
+    @MainActor
+    init(_ g: Goal) {
+        id = g.documentId
+        userId = g.userId
+        name = g.name
+        type = g.type
+        recurrence = g.recurrence
+        targetAmount = g.targetAmount
+        currentAmount = g.currentAmount
+        linkedCategoryId = g.linkedCategoryId
+        savingsExpenseCategory = g.savingsExpenseCategory
+        savingsExpenseSubcategory = g.savingsExpenseSubcategory
+        deadline = g.deadline
+        icon = g.icon
+        systemImage = g.systemImage
+        colorHex = g.colorHex
+        isArchived = g.isArchived
+        createdAt = g.createdAt
+        updatedAt = g.updatedAt
+        savedHistory = g.savedHistory
+    }
+
+    @MainActor
+    func toGoal() -> Goal {
+        var goal = Goal(
+            userId: userId, name: name, type: type, recurrence: recurrence,
+            targetAmount: targetAmount, currentAmount: currentAmount,
+            linkedCategoryId: linkedCategoryId,
+            savingsExpenseCategory: savingsExpenseCategory,
+            savingsExpenseSubcategory: savingsExpenseSubcategory,
+            deadline: deadline, icon: icon, colorHex: colorHex
+        )
+        goal.systemImage = systemImage
+        goal.isArchived = isArchived
+        goal.createdAt = createdAt
+        goal.updatedAt = updatedAt
+        goal.savedHistory = savedHistory
+        return goal
+    }
+}
+
 /// Representa un backup completo del usuario
 nonisolated struct UserBackup: Codable, Sendable {
     let userId: String
@@ -113,6 +176,8 @@ nonisolated struct UserBackup: Codable, Sendable {
     let categories: [Category]
     let recurringExpenses: [RecurringExpenseBackup]   // sin @DocumentID
     let monthlyBudgets: [MonthlyBudgetBackup]         // sin @DocumentID
+    /// Opcional: las copias anteriores a la 2.3.1 no lo traen.
+    let goals: [GoalBackup]?
     let savedFilters: [ExpenseFilter]
 
     // Metadata
@@ -131,7 +196,7 @@ nonisolated struct UserBackup: Codable, Sendable {
             userId: userId, timestamp: timestamp, version: version,
             userDocument: userDocument, expenses: gastos, categories: categories,
             recurringExpenses: recurringExpenses, monthlyBudgets: monthlyBudgets,
-            savedFilters: savedFilters, deviceInfo: deviceInfo
+            goals: goals, savedFilters: savedFilters, deviceInfo: deviceInfo
         )
     }
 }
@@ -187,6 +252,7 @@ final class BackupManager {
         let categories = UserDataManager.shared.categories
         let recurring = try await fetchRecurringExpenses(userId: userId)
         let budgets = try await fetchMonthlyBudgets(userId: userId)
+        let goals = try await fetchGoals(userId: userId)
         let filters = UserDataManager.shared.savedFilters
 
         // 2. Crear objeto de backup
@@ -203,6 +269,7 @@ final class BackupManager {
             categories: categories,
             recurringExpenses: recurringBackup,
             monthlyBudgets: budgetsBackup,
+            goals: goals.map { GoalBackup($0) },
             savedFilters: filters,
             deviceInfo: .init(
                 model: UIDevice.current.model,
@@ -280,6 +347,7 @@ final class BackupManager {
         logger.info("   - \(categories.count) categories")
         logger.info("   - \(recurring.count) recurring expenses")
         logger.info("   - \(budgets.count) monthly budgets")
+        logger.info("   - \(goals.count) goals")
 
         // Actualizar lista + limpiar backups antiguos (máximo 3)
         await loadAvailableBackups()
@@ -460,6 +528,11 @@ final class BackupManager {
                 try await restoreMonthlyBudget(budget, userId: userId)
             }
 
+            // 5b. Restaurar metas (las copias antiguas no las traen)
+            for goal in backup.goals ?? [] {
+                try await restoreGoal(goal, userId: userId)
+            }
+
             // 6. Restaurar documento de usuario (settings, filters, etc)
             if let userDoc = backup.userDocument {
                 logger.info("   Restoring user document...")
@@ -499,6 +572,7 @@ final class BackupManager {
         let categories = UserDataManager.shared.categories
         let recurring = try await fetchRecurringExpenses(userId: userId)
         let budgets = try await fetchMonthlyBudgets(userId: userId)
+        let goals = try await fetchGoals(userId: userId)
         let filters = UserDataManager.shared.savedFilters
 
         let backup = UserBackup(
@@ -510,6 +584,7 @@ final class BackupManager {
             categories: categories,
             recurringExpenses: recurring.map { RecurringExpenseBackup($0) },
             monthlyBudgets: budgets.map { MonthlyBudgetBackup($0) },
+            goals: goals.map { GoalBackup($0) },
             savedFilters: filters,
             deviceInfo: .init(
                 model: UIDevice.current.model,
@@ -579,6 +654,10 @@ final class BackupManager {
 
         for budget in backup.monthlyBudgets {
             try await restoreMonthlyBudget(budget, userId: userId)
+        }
+
+        for goal in backup.goals ?? [] {
+            try await restoreGoal(goal, userId: userId)
         }
 
         if let userDoc = backup.userDocument {
@@ -847,6 +926,38 @@ final class BackupManager {
             .document(userId)
             .collection("monthly_budgets")
             .document(docId)
+            .setData(data, merge: true)
+    }
+
+    /// Las metas: huchas con su saldo y sus aportaciones, escudos y ahorro
+    /// mensual. `goals`, como `FinancialService`.
+    private func fetchGoals(userId: String) async throws -> [Goal] {
+        try await withRetry {
+            let snapshot = try await self.db.collection("users")
+                .document(userId)
+                .collection("goals")
+                .getDocuments(source: .server)
+            return snapshot.documents.compactMap { doc -> Goal? in
+                do {
+                    return try doc.data(as: Goal.self)
+                } catch {
+                    self.logger.error("Backup: meta \(doc.documentID) no decodificable: \(error.localizedDescription)")
+                    return nil
+                }
+            }
+        }
+    }
+
+    /// Restaurar es volver a como estaba: la meta de la copia pisa a la actual,
+    /// saldo y aportaciones incluidos, igual que el resto de lo restaurado. Una
+    /// meta creada después de la copia no está en ella y se queda como está.
+    private func restoreGoal(_ backup: GoalBackup, userId: String) async throws {
+        guard let id = backup.id, !id.isEmpty else { return }
+        let data = try Firestore.Encoder().encode(backup.toGoal())
+        try await db.collection("users")
+            .document(userId)
+            .collection("goals")
+            .document(id)
             .setData(data, merge: true)
     }
 

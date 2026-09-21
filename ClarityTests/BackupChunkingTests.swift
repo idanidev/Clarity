@@ -21,14 +21,62 @@ struct BackupChunkingTests {
         )
     }
 
-    private func copia(_ gastos: [Expense]) -> UserBackup {
+    private func hucha() -> GoalBackup {
+        var meta = Goal(userId: "test-uid", name: "Viaje ✈️", type: .savingsTarget,
+                        targetAmount: 1_200, currentAmount: 350, icon: "✈️", colorHex: "#00AAFF")
+        meta.documentId = "hucha-1"
+        meta.savedHistory = [
+            .init(id: "a1", amount: 200, date: Date(timeIntervalSince1970: 1_795_000_000), note: "Paga extra"),
+            .init(id: "a2", amount: 150, date: Date(timeIntervalSince1970: 1_797_000_000), note: nil),
+        ]
+        return GoalBackup(meta)
+    }
+
+    private func copia(_ gastos: [Expense], metas: [GoalBackup]? = nil) -> UserBackup {
         UserBackup(
             userId: "test-uid", timestamp: Date(timeIntervalSince1970: 1_800_000_000), version: "1.0",
             userDocument: nil, expenses: gastos,
             categories: [Category(id: "c1", name: "Ocio 🍻", color: "#fff", subcategories: ["Cine"], order: 0)],
-            recurringExpenses: [], monthlyBudgets: [], savedFilters: [ExpenseFilter(name: "Mío")],
+            recurringExpenses: [], monthlyBudgets: [], goals: metas,
+            savedFilters: [ExpenseFilter(name: "Mío")],
             deviceInfo: .init(model: "iPhone", systemVersion: "26.0", appVersion: "2.3.1")
         )
+    }
+
+    // MARK: - Metas
+
+    @Test("Las huchas viajan en la copia con su saldo y sus aportaciones, también por partes")
+    func metasEnLaCopia() throws {
+        let documentos = try BackupChunking.trocear(copia((0..<200).map { gasto($0) }, metas: [hucha()]),
+                                                     limite: 4_000)
+        #expect(documentos.partes.count > 1)
+
+        let vuelta = try BackupChunking.recomponer(principal: documentos.principal,
+                                                   partes: porIndice(documentos.partes),
+                                                   partesEsperadas: documentos.partes.count)
+        let meta = try #require(vuelta.goals?.first)
+        #expect(meta.id == "hucha-1")
+        #expect(meta.currentAmount == 350)
+        #expect(meta.savedHistory.map(\.amount) == [200, 150])
+
+        // Y de vuelta al modelo de la app, con todo lo que el init no cubre.
+        let goal = meta.toGoal()
+        #expect(goal.name == "Viaje ✈️")
+        #expect(goal.type == .savingsTarget)
+        #expect(goal.savedHistory.count == 2)
+    }
+
+    @Test("Una copia anterior, sin metas, se sigue leyendo")
+    func copiaSinMetas() throws {
+        let documentos = try BackupChunking.trocear(copia([gasto(1)]))
+        // Como la guardaba la 2.3.0: sin la clave `goals`.
+        var json = try #require(JSONSerialization.jsonObject(with: Data(documentos.principal.utf8)) as? [String: Any])
+        json.removeValue(forKey: "goals")
+        let antigua = String(decoding: try JSONSerialization.data(withJSONObject: json), as: UTF8.self)
+
+        let vuelta = try BackupChunking.recomponer(principal: antigua)
+        #expect(vuelta.goals == nil)
+        #expect(vuelta.expenses.count == 1)
     }
 
     private func porIndice(_ partes: [String]) -> [Int: String] {
