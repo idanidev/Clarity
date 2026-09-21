@@ -8,7 +8,14 @@ extension Color {
     static let clarityPrimary = Color(hex: "#8B5CF6")    // Violet
     static let claritySecondary = Color(hex: "#A855F7")  // Purple
     static let clarityAccent = Color(hex: "#6366F1")     // Indigo
-    
+
+    // MARK: - Prueba de paleta (rama `prueba-home-colores`)
+    /// Acento cálido, complementario del violeta: para lo que tiene que destacar.
+    static let clarityMango = Color(hex: "#FFCE6B")      // Melted Mango
+    /// Morado profundo, de la familia del violeta de marca: brillo del fondo y
+    /// texto sobre el mango (8:1).
+    static let clarityBerry = Color(hex: "#58215E")      // Deep Berry
+
     // MARK: - Background Colors (OLED / True Black)
     static let bgPrimary = Color(UIColor { trait in
         trait.userInterfaceStyle == .dark ? .black : .systemGroupedBackground

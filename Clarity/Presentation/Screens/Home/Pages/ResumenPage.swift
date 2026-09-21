@@ -260,6 +260,13 @@ private struct HeroCard: View {
     /// La cifra sube desde cero al aparecer: los dígitos ruedan hasta el total.
     @State private var mostrado = false
 
+    /// Con presupuesto y por debajo del 85 %: el mismo umbral en el que la barra
+    /// empieza a ondular.
+    private var vaBien: Bool {
+        guard let progreso = resumen.progresoPresupuesto else { return false }
+        return progreso < 0.85
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
@@ -276,6 +283,10 @@ private struct HeroCard: View {
                 .tracking(-1.2)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
+                // Prueba de paleta: la cifra en mango mientras vas bien de
+                // presupuesto; cerca del tope vuelve al color normal y ya avisa
+                // la barra.
+                .foregroundStyle(vaBien ? Color.clarityMango : Color.primary)
                 // Los dígitos ruedan al nuevo valor en vez de parpadear.
                 .contentTransition(.numericText(value: mostrado ? resumen.total : 0))
                 .animation(.snappy(duration: 0.9), value: mostrado)
@@ -315,7 +326,7 @@ private struct HeroCard: View {
                     BarraOndulada(progreso: progreso, color: progreso >= 1 ? .error : .warning, alto: 6)
                         .padding(.top, 14)
                 } else {
-                    Barra(progreso: progreso, color: .clarityPrimary)
+                    Barra(progreso: progreso, color: .clarityMango)
                         .padding(.top, 14)
                 }
                 HStack {

@@ -208,12 +208,14 @@ struct HomeFondo: View {
         ZStack {
             DesignTokens.Colors.background
             EllipticalGradient(
+                // Prueba de paleta: en la Home el brillo tira a Deep Berry, más
+                // profundo y cálido que el violeta de marca, y baja un poco más.
                 colors: intensidad == .home
-                    ? [Color.clarityPrimary.opacity(0.6), Color.clarityPrimary.opacity(0.2), .clear]
+                    ? [Color.clarityBerry, Color.clarityBerry.opacity(0.55), .clear]
                     : [Color.clarityPrimary.opacity(0.42), Color.clarityPrimary.opacity(0.12), .clear],
                 center: UnitPoint(x: 0.5, y: 0),
                 startRadiusFraction: 0,
-                endRadiusFraction: intensidad == .home ? 0.8 : 0.65
+                endRadiusFraction: intensidad == .home ? 0.9 : 0.65
             )
         }
         .ignoresSafeArea()
