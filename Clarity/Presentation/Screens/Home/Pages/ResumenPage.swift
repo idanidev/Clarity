@@ -142,7 +142,12 @@ struct ResumenPage: View {
                           systemImage: plegadas.contains(grupo.id) ? "chevron.down" : "chevron.up")
                 }
             } preview: {
-                CategoriaDetalleView(grupo: grupo, gastos: viewModel.gastosDelMes, total: total)
+                // Los gastos del propio grupo, no los del mes filtrados otra vez
+                // por nombre: el grupo se forma con la primera palabra de la
+                // categoría y la tabla comparaba el nombre entero, así que en
+                // las categorías con un espacio («Suscripciones 📺», las de dos
+                // palabras) no casaba ninguno y la ficha salía vacía.
+                CategoriaDetalleView(grupo: grupo, gastos: grupo.subcategories.flatMap(\.expenses), total: total)
                     .frame(width: 360, height: 520)
             }
             .filaDeTarjeta(arriba: 10)
