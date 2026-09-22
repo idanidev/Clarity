@@ -203,7 +203,7 @@ struct MainTabView: View {
 
             // Refresh notification content (fixes stale/empty bodies)
             NotificationsView.refreshOnLaunch()
-            // Resumen semanal y diario con los datos de la caché; desde aquí
+            // Resumen semanal con los datos de la caché; desde aquí
             // se rehacen solos al cambiar los gastos (#57).
             RecordatoriosService.shared.arrancar()
 

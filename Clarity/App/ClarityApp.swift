@@ -125,8 +125,8 @@ struct ClarityApp: App {
                     if oldPhase == .active { veloPuesto = lockManager.isBiometricEnabled }
                     lockManager.sceneDidEnterBackground()
                     AnalyticsService.shared.endSession()
-                    // Último momento seguro para dejar el resumen semanal y el
-                    // diario con los datos al día antes de que salgan.
+                    // Último momento seguro para dejar el resumen semanal con
+                    // los datos al día antes de que salga.
                     RecordatoriosService.shared.reprogramarAhora()
                 case .inactive:
                     // Solo al SALIR de la app. Volviendo de segundo plano también
@@ -156,8 +156,8 @@ struct ClarityApp: App {
     private func removeStaleNotifications() {
         let center = UNUserNotificationCenter.current()
         // Ojo: cualquier ID que la app programe debe estar en esa lista, o se
-        // borra en el siguiente foreground (los de inactividad y el diario se
-        // perdían así). Vive junto a quien programa el semanal y el diario.
+        // borra en el siguiente foreground (los de inactividad se perdían
+        // así). Vive junto a quien programa el semanal.
         let validIDs = RecordatoriosService.Identificador.todos
         center.getPendingNotificationRequests { requests in
             let stale = requests.map(\.identifier).filter { !validIDs.contains($0) }

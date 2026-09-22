@@ -1,5 +1,5 @@
 // PlanDeRecordatorios.swift
-// Qué dicen y cuándo salen el resumen semanal y el recordatorio diario (#57).
+// Qué dice y cuándo sale el resumen semanal (#57).
 //
 // Una notificación local lleva el texto fijado al programarla: no hay forma de
 // calcularlo en el momento de salir. Por eso `RecordatoriosService` la vuelve a
@@ -193,63 +193,5 @@ nonisolated enum ResumenSemanal {
     static func claveDia(_ fecha: Date, calendar: Calendar) -> String {
         let c = calendar.dateComponents([.year, .month, .day], from: fecha)
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
-    }
-}
-
-// MARK: - Recordatorio diario
-
-nonisolated enum RecordatorioDiario {
-
-    /// Avisos sueltos programados por delante. No es una notificación
-    /// repetitiva porque tiene que poder saltarse el día en que ya se ha
-    /// apuntado algo, y eso solo se sabe al programar.
-    static let avisosPorDelante = 7
-
-    /// Hora por defecto si el usuario no ha elegido otra.
-    static let horaPorDefecto = 21
-
-    /// ¿Se ha apuntado ya algún gasto con fecha de hoy? Los recurrentes no
-    /// cuentan: los crea la app sola al abrirse, y un Netflix cobrado hoy no
-    /// quiere decir que el usuario haya apuntado lo que ha gastado.
-    static func hayGastoApuntadoHoy(_ gastos: [Expense], ahora: Date, calendar: Calendar) -> Bool {
-        let hoy = ResumenSemanal.claveDia(ahora, calendar: calendar)
-        return gastos.contains { !$0.esRecurrente && String($0.date.prefix(10)) == hoy }
-    }
-
-    /// Los próximos avisos, siempre `avisosPorDelante`, a la hora elegida. El de
-    /// hoy entra si su hora aún no ha pasado y no hay gasto de hoy: avisar a
-    /// quien ya ha hecho los deberes es la vía rápida a que apague las
-    /// notificaciones.
-    static func proximosAvisos(
-        desde ahora: Date,
-        hora: Int,
-        minuto: Int,
-        hayGastoHoy: Bool,
-        calendar: Calendar
-    ) -> [Date] {
-        let hoy = calendar.startOfDay(for: ahora)
-        let hora = min(max(hora, 0), 23)
-        let minuto = min(max(minuto, 0), 59)
-
-        var avisos: [Date] = []
-        // Un día de más: si hoy se salta, el séptimo cae el octavo.
-        for desplazamiento in 0...avisosPorDelante where avisos.count < avisosPorDelante {
-            if desplazamiento == 0 && hayGastoHoy { continue }
-            guard let dia = calendar.date(byAdding: .day, value: desplazamiento, to: hoy),
-                  let aviso = calendar.date(bySettingHour: hora, minute: minuto, second: 0, of: dia),
-                  aviso > ahora
-            else { continue }
-            avisos.append(aviso)
-        }
-        return avisos
-    }
-
-    static var contenido: ContenidoRecordatorio {
-        ContenidoRecordatorio(
-            titulo: String(localized: "notifications.daily.title", defaultValue: "¿Algún gasto hoy?"),
-            cuerpo: String(localized: "notifications.daily.body",
-                           defaultValue: "Apúntalo en 5 segundos: pulsa el micro y dilo en voz alta."),
-            semanaConGastos: false
-        )
     }
 }

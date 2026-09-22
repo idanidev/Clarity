@@ -17,12 +17,6 @@ struct NotificationsView: View {
     // weekday: 1=domingo, 2=lunes, ..., 7=sábado (Calendar convention)
     @AppStorage("notifications.weeklyDay") private var weeklyDay = 1
 
-    // Recordatorio diario (#57): el hábito es lo que sostiene una app de gastos.
-    // Apagado por defecto y con claves nuevas (ver `RecordatoriosService.Clave`).
-    @AppStorage(RecordatoriosService.Clave.diario) private var dailyCheckIn = false
-    @AppStorage(RecordatoriosService.Clave.horaDiario) private var dailyCheckInHour = RecordatorioDiario.horaPorDefecto
-    @AppStorage(RecordatoriosService.Clave.minutoDiario) private var dailyCheckInMinute = 0
-
     private let weekdayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
     private enum NotificationID {
@@ -30,10 +24,10 @@ struct NotificationsView: View {
         static let daily = "clarity.daily.reminder"
     }
 
-    /// Qué hora se está cambiando en la hoja del selector: la misma hoja sirve
-    /// para el resumen semanal y para el diario.
+    /// Qué hora se está cambiando en la hoja del selector. Hoy solo la del
+    /// resumen semanal.
     private enum HoraEditable: String, Identifiable {
-        case semanal, diaria
+        case semanal
         var id: String { rawValue }
     }
 
@@ -101,42 +95,6 @@ struct NotificationsView: View {
                     Text(String(
                         localized: "notifications.weekly.footer",
                         defaultValue: "Cada \(weekdayNames[weeklyDay - 1].lowercased()) a las \(String(format: "%02d:%02d", dailyHour, dailyMinute)) te contamos cuánto llevas gastado en la semana y cómo va frente a la anterior."
-                    ))
-                }
-            }
-
-            // Recordatorio diario (#57)
-            Section {
-                Toggle(String(localized: "notifications.daily.toggle", defaultValue: "Recordatorio diario"), isOn: $dailyCheckIn)
-                    .onChange(of: dailyCheckIn) { _, activo in
-                        HapticManager.shared.selection()
-                        if activo && !pushEnabled {
-                            // Encender las push pide el permiso (ver su
-                            // `onChange`) y, si se concede, se programa todo.
-                            pushEnabled = true
-                        } else if activo {
-                            RecordatoriosService.shared.reprogramarAhora()
-                        } else {
-                            // Quita los diarios y devuelve el de inactividad.
-                            RecordatoriosService.shared.diarioApagado()
-                        }
-                    }
-
-                if dailyCheckIn {
-                    filaHora(.diaria, hora: dailyCheckInHour, minuto: dailyCheckInMinute)
-                }
-            } header: {
-                Text(String(localized: "notifications.daily.header", defaultValue: "Recordatorio diario"))
-            } footer: {
-                if dailyCheckIn {
-                    Text(String(
-                        localized: "notifications.daily.footerOn",
-                        defaultValue: "Cada día a las \(String(format: "%02d:%02d", dailyCheckInHour, dailyCheckInMinute)) te preguntamos si has tenido algún gasto. Si ese día ya has apuntado alguno, no te avisamos."
-                    ))
-                } else {
-                    Text(String(
-                        localized: "notifications.daily.footerOff",
-                        defaultValue: "Un toque al día para que no se te acumulen los gastos sin apuntar."
                     ))
                 }
             }
@@ -213,9 +171,6 @@ struct NotificationsView: View {
                             case .semanal:
                                 dailyHour = components.hour ?? 20
                                 dailyMinute = components.minute ?? 0
-                            case .diaria:
-                                dailyCheckInHour = components.hour ?? RecordatorioDiario.horaPorDefecto
-                                dailyCheckInMinute = components.minute ?? 0
                             }
                             horaEditando = nil
 
@@ -287,7 +242,7 @@ struct NotificationsView: View {
     /// y cambios en el código no actualizan notificaciones ya registradas en el sistema.
     private func refreshActiveNotifications() {
         guard pushEnabled else { return }
-        // Resumen semanal y diario, con los datos de ahora.
+        // Resumen semanal, con los datos de ahora.
         RecordatoriosService.shared.reprogramarAhora()
         if endOfMonthReminder { scheduleEndOfMonthReminder() }
     }
@@ -309,7 +264,7 @@ struct NotificationsView: View {
             DispatchQueue.main.async {
                 if granted {
                     notificationStatus = .authorized
-                    // El semanal y el diario, si están encendidos.
+                    // El semanal, si está encendido.
                     RecordatoriosService.shared.reprogramarAhora()
                 } else {
                     pushEnabled = false
@@ -381,7 +336,7 @@ struct NotificationsView: View {
 
         guard defaults.bool(forKey: "notifications.pushEnabled") else { return }
 
-        // El resumen semanal (y el diario) ya no se programan aquí: los rehace
+        // El resumen semanal ya no se programa aquí: lo rehace
         // `RecordatoriosService.arrancar()` con las cifras de la caché.
 
         if defaults.bool(forKey: "notifications.endOfMonthReminder") {
@@ -420,11 +375,6 @@ struct NotificationsView: View {
 
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [inactivityID, inactivityRecurringID])
-
-        // Con el recordatorio diario encendido este sobra: el diario ya pregunta
-        // cada día, y juntos llegarían a sonar los dos el mismo día. Al apagar
-        // el diario, `RecordatoriosService.diarioApagado()` vuelve a llamar aquí.
-        guard !defaults.bool(forKey: RecordatoriosService.Clave.diario) else { return }
 
         let cal = Calendar.current
         let now = Date()

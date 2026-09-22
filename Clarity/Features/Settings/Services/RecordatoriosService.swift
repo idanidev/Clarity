@@ -1,5 +1,11 @@
 // RecordatoriosService.swift
-// Programa el resumen semanal y el recordatorio diario con los datos al día (#57).
+// Programa el resumen semanal con los datos al día (#57).
+//
+// Hubo también un recordatorio diario opcional; se quitó antes de publicar la
+// 2.4.0 (no se quería: basta con el resumen del domingo). Sus avisos
+// («clarity.checkin.daily.N») ya no están en `Identificador.todos`, así que si
+// alguno quedó programado en una build de pruebas se borra al volver a
+// primer plano.
 //
 // Una notificación local lleva el texto fijado al programarla, así que un
 // resumen con cifras hay que rehacerlo cada vez que cambian: tras cada cambio
@@ -27,14 +33,6 @@ final class RecordatoriosService {
         /// renombran: quien ya lo tiene configurado perdería su día y su hora.
         static let horaSemanal = "notifications.dailyHour"
         static let minutoSemanal = "notifications.dailyMinute"
-        /// Nuevas a propósito. `notifications.dailyReminder` era el diario que
-        /// se retiró antes de la 2.2.0 (4f90319), y en las builds que lo
-        /// llevaron se encendía solo al aceptar el permiso que se pedía tras el
-        /// segundo gasto: reutilizarla se lo volvería a encender a gente que
-        /// nunca lo eligió, y este va apagado por defecto.
-        static let diario = "notifications.dailyCheckIn"
-        static let horaDiario = "notifications.dailyCheckInHour"
-        static let minutoDiario = "notifications.dailyCheckInMinute"
     }
 
     enum Identificador {
@@ -42,15 +40,11 @@ final class RecordatoriosService {
         /// semanas de después.
         static let semanales: [String] = ["clarity.weekly.reminder"]
             + (1..<ResumenSemanal.avisosPorDelante).map { "clarity.weekly.reminder.\($0)" }
-        /// Distintos de `clarity.daily.reminder`, el del diario retirado, que
-        /// `NotificationsView.refreshOnLaunch` cancela en cada arranque.
-        static let diarios: [String] = (0..<RecordatorioDiario.avisosPorDelante)
-            .map { "clarity.checkin.daily.\($0)" }
 
         /// Todo lo que la app programa. Lo que no esté aquí se borra al volver
         /// a primer plano (`ClarityApp.removeStaleNotifications`), así que
         /// cualquier id nuevo tiene que entrar en esta lista.
-        static let todos: Set<String> = Set(semanales + diarios + [
+        static let todos: Set<String> = Set(semanales + [
             "clarity.endofmonth.reminder",
             "clarity.daily.reminder",
             "clarity.inactivity.reminder",
@@ -119,17 +113,6 @@ final class RecordatoriosService {
         Task { [weak self] in await self?.reprogramar() }
     }
 
-    /// Al apagar el diario vuelve el aviso de inactividad, que con el diario
-    /// encendido no se programa. Sin esto no volvería hasta el siguiente
-    /// arranque en frío.
-    func diarioApagado() {
-        reprogramarAhora()
-        Task {
-            let ultimo = await leerGastos().map(\.dateAsDate).max()
-            NotificationsView.scheduleInactivityReminderIfNeeded(lastExpenseDate: ultimo)
-        }
-    }
-
     private func reprogramar() async {
         let gastos = Ajustes(defaults).hayAlgunoActivo ? await leerGastos() : []
 
@@ -138,7 +121,6 @@ final class RecordatoriosService {
         // reprogramaciones que se crucen no pueden mezclar sus avisos.
         let ajustes = Ajustes(defaults)
         let semanalActivo = ajustes.push && ajustes.semanal
-        let diarioActivo = ajustes.push && ajustes.diario
         let ahora = Date()
         let calendario = Calendar.current
         var peticiones: [UNNotificationRequest] = []
@@ -164,32 +146,10 @@ final class RecordatoriosService {
             }
         }
 
-        if diarioActivo {
-            // Con el diario encendido, el de inactividad sobra: el diario ya
-            // pregunta cada día y los dos juntos llegarían a sonar el mismo día
-            // (10:00 «llevas 7 días sin registrar» y por la noche «¿algún
-            // gasto hoy?»). `scheduleInactivityReminderIfNeeded` tampoco lo
-            // programa mientras el diario siga encendido.
-            NotificationsView.cancelInactivityReminder()
-
-            let hayGastoHoy = RecordatorioDiario.hayGastoApuntadoHoy(gastos, ahora: ahora, calendar: calendario)
-            let avisos = RecordatorioDiario.proximosAvisos(
-                desde: ahora,
-                hora: ajustes.horaDiario,
-                minuto: ajustes.minutoDiario,
-                hayGastoHoy: hayGastoHoy,
-                calendar: calendario
-            )
-            for (id, fecha) in zip(Identificador.diarios, avisos) {
-                peticiones.append(peticion(id: id, contenido: RecordatorioDiario.contenido, fecha: fecha,
-                                           calendario: calendario, esResumen: false))
-            }
-        }
-
         aplicar(peticiones)
 
         // Sin importes ni número de gastos: solo qué hay programado.
-        logger.debug("Recordatorios: semanal=\(semanalActivo), diario=\(diarioActivo), avisos=\(peticiones.count)")
+        logger.debug("Recordatorios: semanal=\(semanalActivo), avisos=\(peticiones.count)")
     }
 
     /// Síncrona a propósito: el alta sin esperar respuesta se entrega al
@@ -200,7 +160,7 @@ final class RecordatoriosService {
         // ya sustituye al anterior, y así no depende del orden en que el
         // sistema atienda el borrado y el alta.
         let programados = Set(peticiones.map(\.identifier))
-        let sobrantes = (Identificador.semanales + Identificador.diarios).filter { !programados.contains($0) }
+        let sobrantes = Identificador.semanales.filter { !programados.contains($0) }
         centro.removePendingNotificationRequests(withIdentifiers: sobrantes)
         for peticion in peticiones {
             centro.add(peticion, withCompletionHandler: nil)
@@ -304,12 +264,9 @@ private extension RecordatoriosService {
         let diaSemanal: Int
         let horaSemanal: Int
         let minutoSemanal: Int
-        let diario: Bool
-        let horaDiario: Int
-        let minutoDiario: Int
 
         /// Solo entonces hace falta leer los gastos.
-        var hayAlgunoActivo: Bool { push && (semanal || diario) }
+        var hayAlgunoActivo: Bool { push && semanal }
 
         init(_ defaults: UserDefaults) {
             push = defaults.bool(forKey: Clave.push)
@@ -317,9 +274,6 @@ private extension RecordatoriosService {
             diaSemanal = defaults.object(forKey: Clave.diaSemanal) as? Int ?? 1
             horaSemanal = defaults.object(forKey: Clave.horaSemanal) as? Int ?? 20
             minutoSemanal = defaults.object(forKey: Clave.minutoSemanal) as? Int ?? 0
-            diario = defaults.bool(forKey: Clave.diario)
-            horaDiario = defaults.object(forKey: Clave.horaDiario) as? Int ?? RecordatorioDiario.horaPorDefecto
-            minutoDiario = defaults.object(forKey: Clave.minutoDiario) as? Int ?? 0
         }
     }
 }
