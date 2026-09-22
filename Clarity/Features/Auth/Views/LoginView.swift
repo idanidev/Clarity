@@ -12,6 +12,9 @@ struct LoginView: View {
     @State private var showRegister = false
     @State private var showForgotPassword = false
     @State private var showPassword = false
+    /// Qué campo tiene el teclado: ↩ en el correo pasa a la contraseña y ↩ en
+    /// la contraseña entra.
+    @FocusState private var enfocado: CampoLogin?
 
     // Animaciones de entrada
     @State private var headerVisible = false
@@ -24,170 +27,205 @@ struct LoginView: View {
                 // El fondo de la app: quien entra ya ve el brillo de la Home.
                 HomeFondo()
 
+                // Con desplazamiento: sin él, el teclado tapaba los botones de
+                // entrar y no había forma de llegar a ellos sin cerrarlo.
                 GeometryReader { geo in
-                    VStack(spacing: 0) {
+                    ScrollViewReader { desplazamiento in
+                        ScrollView {
+                            VStack(spacing: 0) {
 
-                        // MARK: — Cabecera
-                        VStack(spacing: Spacing.sm) {
-                            Image("HomeIcon")
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 88, height: 88)
-                                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                .shadow(color: Color.clarityPrimary.opacity(0.55), radius: 28, y: 10)
+                                // MARK: — Cabecera
+                                VStack(spacing: Spacing.sm) {
+                                    Image("HomeIcon")
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 88, height: 88)
+                                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                        .shadow(color: Color.clarityPrimary.opacity(0.55), radius: 28, y: 10)
 
-                            Text("Clarity")
-                                .font(.clarityLargeTitle)
-                                .foregroundStyle(Color.clarityGradient)
+                                    Text("Clarity")
+                                        .font(.clarityLargeTitle)
+                                        .foregroundStyle(Color.clarityGradient)
 
-                            Text("Gestión inteligente de gastos")
-                                .font(.claritySubheadline)
-                                .foregroundStyle(Color.textSecondary)
-                        }
-                        .padding(.top, geo.safeAreaInsets.top + Spacing.lg)
-                        .opacity(headerVisible ? 1 : 0)
-                        .offset(y: headerVisible ? 0 : -16)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.05), value: headerVisible)
-
-                        Spacer(minLength: Spacing.xl)
-
-                        // MARK: — Formulario en tarjeta de vidrio
-                        VStack(spacing: Spacing.sm) {
-                            VStack(spacing: Spacing.sm) {
-                                AuthTextField(
-                                    icon: "envelope",
-                                    placeholder: "tu@email.com",
-                                    text: $email,
-                                    contentType: .emailAddress,
-                                    keyboardType: .emailAddress
-                                )
-
-                                AuthTextField(
-                                    icon: "lock",
-                                    placeholder: "Contraseña",
-                                    text: $password,
-                                    contentType: .password,
-                                    isSecure: true,
-                                    showPassword: $showPassword
-                                )
-                            }
-                            .padding(Spacing.md)
-                            .glassCard(cornerRadius: CornerRadius.xlarge)
-
-                            HStack {
-                                Spacer()
-                                Button("¿Olvidaste tu contraseña?") {
-                                    showForgotPassword = true
+                                    Text("Gestión inteligente de gastos")
+                                        .font(.claritySubheadline)
+                                        .foregroundStyle(Color.textSecondary)
                                 }
-                                .font(.clarityCaption)
-                                .foregroundStyle(Color.clarityPrimary)
-                            }
-                            .padding(.horizontal, Spacing.xs)
-                        }
-                        .padding(.horizontal, Spacing.lg)
-                        .opacity(formVisible ? 1 : 0)
-                        .offset(y: formVisible ? 0 : 12)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: formVisible)
+                                .padding(.top, geo.safeAreaInsets.top + Spacing.lg)
+                                .opacity(headerVisible ? 1 : 0)
+                                .offset(y: headerVisible ? 0 : -16)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.05), value: headerVisible)
 
-                        if let error = authViewModel.errorMessage {
-                            Text(error)
-                                .font(.clarityCaption)
-                                .foregroundStyle(Color.error)
-                                .padding(.horizontal, Spacing.lg)
-                                .padding(.top, Spacing.xs)
-                                .transition(.opacity.combined(with: .move(edge: .top)))
-                        }
+                                Spacer(minLength: Spacing.xl)
 
-                        Spacer(minLength: Spacing.lg)
+                                // MARK: — Formulario en tarjeta de vidrio
+                                VStack(spacing: Spacing.sm) {
+                                    VStack(spacing: Spacing.sm) {
+                                        AuthTextField(
+                                            icon: "envelope",
+                                            placeholder: "tu@email.com",
+                                            text: $email,
+                                            contentType: .emailAddress,
+                                            keyboardType: .emailAddress,
+                                            campo: .email,
+                                            enfoque: $enfocado,
+                                            submitLabel: .next
+                                        ) {
+                                            enfocado = .contrasena
+                                        }
 
-                        // MARK: — Botones de acción
-                        VStack(spacing: Spacing.sm) {
-                            Button(action: login) {
-                                Group {
-                                    if isLoading {
-                                        ProgressView().tint(.white)
-                                    } else {
-                                        Text("Iniciar sesión con email")
-                                            .font(.clarityHeadline)
+                                        AuthTextField(
+                                            icon: "lock",
+                                            placeholder: "Contraseña",
+                                            text: $password,
+                                            contentType: .password,
+                                            isSecure: true,
+                                            showPassword: $showPassword,
+                                            campo: .contrasena,
+                                            enfoque: $enfocado,
+                                            submitLabel: .go
+                                        ) {
+                                            guard isValidForm, !isLoading else { return }
+                                            enfocado = nil
+                                            login()
+                                        }
                                     }
-                                }
-                            }
-                            .buttonStyle(.principalClarity)
-                            .disabled(!isValidForm || isLoading)
+                                    .padding(Spacing.md)
+                                    .glassCard(cornerRadius: CornerRadius.xlarge)
 
-                            HStack(spacing: Spacing.sm) {
-                                Rectangle()
-                                    .frame(height: 1)
-                                    .foregroundStyle(Color.primary.opacity(0.12))
-                                Text("o continúa con")
-                                    .font(.clarityCaption)
-                                    .foregroundStyle(Color.textTertiary)
-                                    .fixedSize()
-                                Rectangle()
-                                    .frame(height: 1)
-                                    .foregroundStyle(Color.primary.opacity(0.12))
-                            }
-
-                            // Apple primero. Su guía deja elegir alto y esquinas:
-                            // los mismos que el botón principal, para que la pila cuadre.
-                            SignInWithAppleButton(.signIn) { request in
-                                request.requestedScopes = [.fullName, .email]
-                                request.nonce = authViewModel.prepareAppleSignIn()
-                            } onCompletion: { result in
-                                handleAppleSignIn(result)
-                            }
-                            .signInWithAppleButtonStyle(.white)
-                            .frame(height: 52)
-                            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
-
-                            // Google después: mismo relleno y logo; solo alto y esquinas.
-                            Button {
-                                Task {
-                                    do {
-                                        try await authViewModel.signInWithGoogle()
-                                    } catch {}
+                                    HStack {
+                                        Spacer()
+                                        Button("¿Olvidaste tu contraseña?") {
+                                            showForgotPassword = true
+                                        }
+                                        .font(.clarityCaption)
+                                        .foregroundStyle(Color.clarityPrimary)
+                                    }
+                                    .padding(.horizontal, Spacing.xs)
                                 }
-                            } label: {
-                                HStack(spacing: Spacing.xs) {
-                                    GoogleIcon()
-                                        .frame(width: 18, height: 18)
-                                    Text("Continuar con Google")
-                                        .font(.clarityHeadline)
-                                        .foregroundStyle(.primary)
+                                .padding(.horizontal, Spacing.lg)
+                                .opacity(formVisible ? 1 : 0)
+                                .offset(y: formVisible ? 0 : 12)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.15), value: formVisible)
+
+                                if let error = authViewModel.errorMessage {
+                                    Text(error)
+                                        .font(.clarityCaption)
+                                        .foregroundStyle(Color.error)
+                                        .padding(.horizontal, Spacing.lg)
+                                        .padding(.top, Spacing.xs)
+                                        .transition(.opacity.combined(with: .move(edge: .top)))
                                 }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 52)
-                                .background(.ultraThinMaterial)
-                                .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
-                                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
-                                )
+
+                                Spacer(minLength: Spacing.lg)
+
+                                // MARK: — Botones de acción
+                                VStack(spacing: Spacing.sm) {
+                                    Button(action: login) {
+                                        Group {
+                                            if isLoading {
+                                                ProgressView().tint(.white)
+                                            } else {
+                                                Text("Iniciar sesión con email")
+                                                    .font(.clarityHeadline)
+                                            }
+                                        }
+                                    }
+                                    .buttonStyle(.principalClarity)
+                                    .disabled(!isValidForm || isLoading)
+                                    .id(Self.idBotonEntrar)
+
+                                    HStack(spacing: Spacing.sm) {
+                                        Rectangle()
+                                            .frame(height: 1)
+                                            .foregroundStyle(Color.primary.opacity(0.12))
+                                        Text("o continúa con")
+                                            .font(.clarityCaption)
+                                            .foregroundStyle(Color.textTertiary)
+                                            .fixedSize()
+                                        Rectangle()
+                                            .frame(height: 1)
+                                            .foregroundStyle(Color.primary.opacity(0.12))
+                                    }
+
+                                    // Apple primero. Su guía deja elegir alto y esquinas:
+                                    // los mismos que el botón principal, para que la pila cuadre.
+                                    SignInWithAppleButton(.signIn) { request in
+                                        request.requestedScopes = [.fullName, .email]
+                                        request.nonce = authViewModel.prepareAppleSignIn()
+                                    } onCompletion: { result in
+                                        handleAppleSignIn(result)
+                                    }
+                                    .signInWithAppleButtonStyle(.white)
+                                    .frame(height: 52)
+                                    .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
+
+                                    // Google después: mismo relleno y logo; solo alto y esquinas.
+                                    Button {
+                                        Task {
+                                            do {
+                                                try await authViewModel.signInWithGoogle()
+                                            } catch {}
+                                        }
+                                    } label: {
+                                        HStack(spacing: Spacing.xs) {
+                                            GoogleIcon()
+                                                .frame(width: 18, height: 18)
+                                            Text("Continuar con Google")
+                                                .font(.clarityHeadline)
+                                                .foregroundStyle(.primary)
+                                        }
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 52)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous)
+                                                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                        )
+                                    }
+                                    .buttonStyle(PressScaleButtonStyle())
+                                }
+                                .padding(.horizontal, Spacing.lg)
+                                .opacity(actionsVisible ? 1 : 0)
+                                .offset(y: actionsVisible ? 0 : 20)
+                                .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: actionsVisible)
+
+                                Spacer(minLength: Spacing.md)
+
+                                HStack(spacing: Spacing.xxs) {
+                                    Text("¿No tienes cuenta?")
+                                        .foregroundStyle(Color.textSecondary)
+                                    Button("Regístrate") {
+                                        showRegister = true
+                                    }
+                                    .foregroundStyle(Color.clarityPrimary)
+                                    .fontWeight(.semibold)
+                                }
+                                .font(.claritySubheadline)
+                                .opacity(actionsVisible ? 1 : 0)
+                                .animation(.easeIn(duration: 0.3).delay(0.4), value: actionsVisible)
+                                .padding(.bottom, Spacing.lg)
                             }
-                            .buttonStyle(PressScaleButtonStyle())
+                            .frame(width: geo.size.width)
+                            // Sin teclado ocupa la pantalla justa, como antes; con él, lo
+                            // que no cabe se desplaza.
+                            .frame(minHeight: geo.size.height)
                         }
-                        .padding(.horizontal, Spacing.lg)
-                        .opacity(actionsVisible ? 1 : 0)
-                        .offset(y: actionsVisible ? 0 : 20)
-                        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.25), value: actionsVisible)
-
-                        Spacer(minLength: Spacing.md)
-
-                        HStack(spacing: Spacing.xxs) {
-                            Text("¿No tienes cuenta?")
-                                .foregroundStyle(Color.textSecondary)
-                            Button("Regístrate") {
-                                showRegister = true
+                        .scrollDismissesKeyboard(.interactively)
+                        .scrollBounceBehavior(.basedOnSize)
+                        .scrollIndicators(.hidden)
+                        .onChange(of: enfocado) { _, campo in
+                            guard campo != nil else { return }
+                            // Que el botón de entrar quede a la vista encima del
+                            // teclado. Tras lo que tarda en subir: antes, la página
+                            // aún no ha encogido y no hay nada que desplazar.
+                            Task {
+                                try? await Task.sleep(for: .milliseconds(350))
+                                withAnimation(.snappy) { desplazamiento.scrollTo(Self.idBotonEntrar, anchor: .bottom) }
                             }
-                            .foregroundStyle(Color.clarityPrimary)
-                            .fontWeight(.semibold)
                         }
-                        .font(.claritySubheadline)
-                        .opacity(actionsVisible ? 1 : 0)
-                        .animation(.easeIn(duration: 0.3).delay(0.4), value: actionsVisible)
-                        .padding(.bottom, Spacing.lg)
                     }
-                    .frame(width: geo.size.width)
                 }
             }
             .onAppear {
@@ -215,10 +253,11 @@ struct LoginView: View {
                 Text("Introduce tu email para recibir un enlace de recuperación")
             }
         }
-        // Login diseñado dark-first (fondo OLED + glow violeta + glass materials).
-        // En light mode queda mal — forzamos dark.
-        .preferredColorScheme(.dark)
+        // Diseñado solo en oscuro. El modo se fuerza en la raíz (ClarityApp):
+        // desde aquí dentro, en iOS 27 no se aplicaba.
     }
+
+    private static let idBotonEntrar = "login.entrar"
 
     private var isValidForm: Bool {
         !email.isEmpty && !password.isEmpty && password.count >= 6
@@ -252,6 +291,11 @@ struct LoginView: View {
     }
 }
 
+private enum CampoLogin: Hashable {
+    case email
+    case contrasena
+}
+
 // MARK: — Campo con icono leading, dentro de la tarjeta de vidrio
 private struct AuthTextField: View {
     let icon: String
@@ -261,6 +305,11 @@ private struct AuthTextField: View {
     var keyboardType: UIKeyboardType = .default
     var isSecure: Bool = false
     @Binding var showPassword: Bool
+    let campo: CampoLogin
+    let enfoque: FocusState<CampoLogin?>.Binding
+    let submitLabel: SubmitLabel
+    /// Lo que hace ↩ en este campo.
+    let alEnviar: () -> Void
 
     init(
         icon: String,
@@ -269,7 +318,11 @@ private struct AuthTextField: View {
         contentType: UITextContentType? = nil,
         keyboardType: UIKeyboardType = .default,
         isSecure: Bool = false,
-        showPassword: Binding<Bool> = .constant(false)
+        showPassword: Binding<Bool> = .constant(false),
+        campo: CampoLogin,
+        enfoque: FocusState<CampoLogin?>.Binding,
+        submitLabel: SubmitLabel,
+        alEnviar: @escaping () -> Void
     ) {
         self.icon = icon
         self.placeholder = placeholder
@@ -278,9 +331,13 @@ private struct AuthTextField: View {
         self.keyboardType = keyboardType
         self.isSecure = isSecure
         self._showPassword = showPassword
+        self.campo = campo
+        self.enfoque = enfoque
+        self.submitLabel = submitLabel
+        self.alEnviar = alEnviar
     }
 
-    @FocusState private var focused: Bool
+    private var focused: Bool { enfoque.wrappedValue == campo }
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
@@ -302,7 +359,9 @@ private struct AuthTextField: View {
                         .autocorrectionDisabled()
                 }
             }
-            .focused($focused)
+            .focused(enfoque, equals: campo)
+            .submitLabel(submitLabel)
+            .onSubmit(alEnviar)
             .font(.clarityBody)
 
             if isSecure {

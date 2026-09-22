@@ -78,7 +78,11 @@ struct ClarityApp: App {
             .environment(feedbackManager)
             .environment(lockManager)
             .dynamicTypeSize(.xSmall ... .accessibility1)
-            .preferredColorScheme(colorScheme)
+            // Sin sesión, oscuro siempre: el login está pensado solo en oscuro.
+            // Tiene que decidirse aquí, en la raíz: en iOS 27 el
+            // `preferredColorScheme(.dark)` que llevaba el propio login no
+            // ganaba a este y, con el móvil en claro, salía en claro.
+            .preferredColorScheme(authViewModel.isAuthenticated ? colorScheme : .dark)
             .task {
                 authViewModel.startListening()
 
