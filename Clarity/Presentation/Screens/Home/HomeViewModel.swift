@@ -304,7 +304,9 @@ final class HomeViewModel {
     private let deleteExpenseUseCase: DeleteExpenseUseCase
     private let addExpenseUseCase: AddExpenseUseCase
     private let recurringRepository = DependencyContainer.shared.recurringExpenseRepository
-    private let financialService = FinancialService()
+    // El del contenedor, como los repositorios: así el modo demo (DEBUG) le
+    // pone el suyo en memoria. Sin estado propio: da igual una instancia u otra.
+    private let financialService = DependencyContainer.shared.financialService
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "HomeViewModel")
 

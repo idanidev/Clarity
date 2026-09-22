@@ -163,9 +163,7 @@ class FinancialHubViewModel {
 
         do {
             // 0. Load User Settings first to check recurring preference
-            if let userId = Auth.auth().currentUser?.uid,
-                let doc = try await UserDataService.shared.loadUserDocument(userId: userId)
-            {
+            if let doc = try await documentoDelUsuario() {
                 self.isSalaryRecurring = doc.settings?.isSalaryRecurring ?? false
             }
 
@@ -176,8 +174,7 @@ class FinancialHubViewModel {
                 currentBudget = budget
             } else {
                 // CHECK RECURRING HERE
-                if let userId = Auth.auth().currentUser?.uid,
-                    let doc = try await UserDataService.shared.loadUserDocument(userId: userId),
+                if let doc = try await documentoDelUsuario(),
                     let baseIncome = doc.income,
                     doc.settings?.isSalaryRecurring == true
                 {
@@ -221,6 +218,16 @@ class FinancialHubViewModel {
         }
 
         isLoading = false
+    }
+
+    /// El documento del usuario, recién leído de Firestore; `nil` sin sesión.
+    /// En modo demo (DEBUG), el de la demo, sin Auth ni Firestore.
+    private func documentoDelUsuario() async throws -> UserDocument? {
+        #if DEBUG
+        if ModoDemo.activo { return UserDataManager.shared.userDocument }
+        #endif
+        guard let userId = Auth.auth().currentUser?.uid else { return nil }
+        return try await UserDataService.shared.loadUserDocument(userId: userId)
     }
 
     // MARK: - Monthly Setup Actions

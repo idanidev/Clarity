@@ -192,6 +192,15 @@ struct MainTabView: View {
         .task {
             await userDataManager.loadUserData()
 
+            #if DEBUG
+            // Modo demo (capturas): nada de avisos, recurrentes ni copias de
+            // seguridad; solo la pantalla pedida con `-demoPantalla`.
+            if ModoDemo.activo {
+                if ModoDemo.pantalla == .metas { selectedTab = 1 }
+                return
+            }
+            #endif
+
             // Refresh notification content (fixes stale/empty bodies)
             NotificationsView.refreshOnLaunch()
             // Resumen semanal y diario con los datos de la caché; desde aquí

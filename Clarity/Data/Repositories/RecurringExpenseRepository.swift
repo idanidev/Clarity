@@ -7,7 +7,8 @@ import OSLog
 
 class RecurringExpenseRepository {
     private let logger = Logger(subsystem: "com.idanidev.clarity", category: "RecurringExpenseRepository")
-    private let db = Firestore.firestore()
+    // `lazy`: el modo demo (DEBUG) hereda de esta clase sin tocar Firestore.
+    private lazy var db = Firestore.firestore()
 
     private var userId: String? {
         Auth.auth().currentUser?.uid

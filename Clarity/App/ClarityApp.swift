@@ -84,7 +84,12 @@ struct ClarityApp: App {
 
                 // Retención: cuenta la sesión, para pedir la reseña más adelante.
                 ReviewRequestManager.shared.registerSession()
+                #if DEBUG
+                // En modo demo ni se engancha el destino de Firebase.
+                if !ModoDemo.activo { AnalyticsBootstrap.configure() }
+                #else
                 AnalyticsBootstrap.configure()
+                #endif
                 // La reseña que deja pendiente abrir el resumen semanal no se
                 // pide con la pantalla de bloqueo delante.
                 RecordatoriosService.shared.estaBloqueada = { [lockManager] in lockManager.isLocked }
@@ -177,6 +182,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Lo primero, para que el vigilante cubra también el arranque. Aquí solo
         // registra observadores: ver `Diagnosticos`.
         Diagnosticos.arranca()
+
+        #if DEBUG
+        // Modo demo (capturas): Firebase no se configura. Si algo llegara a
+        // pedirlo, la app se para en vez de hablar con el proyecto real.
+        if ModoDemo.activo {
+            ModoDemo.preparar()
+            return true
+        }
+        #endif
 
         FirebaseApp.configure()
 

@@ -64,6 +64,16 @@ struct HomeView: View {
             .navigationTitle("")
             .refreshable { await viewModel.refresh() }
             .task {
+                #if DEBUG
+                // Modo demo (capturas): la página o el modo pedidos con `-demoPantalla`.
+                if ModoDemo.activo {
+                    switch ModoDemo.pantalla {
+                    case .graficas: pagina = .graficas
+                    case .edicion: edicion.entrar()
+                    case .home, .metas: break
+                    }
+                }
+                #endif
                 // Si el documento ya había llegado antes de montarse la Home,
                 // su aviso no se vuelve a oír: se mira aquí.
                 viewModel.sincronizarDisposicion()

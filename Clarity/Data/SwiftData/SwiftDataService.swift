@@ -23,6 +23,14 @@ final class SwiftDataService {
         let schema = Schema([
             ExpenseModel.self
         ])
+        #if DEBUG
+        // Modo demo: la caché, solo en memoria. El almacén de disco no se abre.
+        if ModoDemo.activo {
+            self.container = try! ModelContainer(
+                for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
+            return
+        }
+        #endif
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
         // Cada paso de esta escalera tiraba la caché sin decir nada: si un día
