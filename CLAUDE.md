@@ -30,10 +30,23 @@ Clarity is a native iOS expense tracking app built with SwiftUI, targeting iOS 1
 ### App Store (fastlane)
 
 ```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT=180 FASTLANE_XCODEBUILD_SETTINGS_RETRIES=3 \
 LANG=en_US.UTF-8 fastlane release
 ```
 
-Dos trampas que ya han costado un intento fallido cada una:
+Cuatro trampas que ya han costado un intento fallido cada una:
+
+- **Para la tienda, Xcode 26.5.** El Xcode activo (`xcode-select`) es el 27.1
+  de `/Volumes/SSDani/Xcode/Xcode-27.app`, necesario para instalar en el iPhone
+  18 Pro, pero App Store Connect aún no acepta builds suyas: la 2.3.1 (43) se
+  subió y al enviarla dio `The build's Xcode build is not yet supported`. Con
+  `DEVELOPER_DIR` apuntando al 26.5 se compila con él sin tocar `xcode-select`.
+  Cuando Apple admita el 27, quitar esa línea.
+- **`xcodebuild -showBuildSettings` tarda ~50 s** con Xcode en el disco externo
+  y fastlane solo espera unos segundos por defecto: sin las dos variables
+  `FASTLANE_XCODEBUILD_SETTINGS_*` falla antes de compilar, con el número de
+  build ya subido.
 
 - **`LANG` en UTF-8 es obligatorio.** Sin él, `xcodeproj` revienta leyendo el
   pbxproj con `invalid byte sequence in US-ASCII` (hay acentos dentro). Peta
@@ -44,7 +57,11 @@ Dos trampas que ya han costado un intento fallido cada una:
   Gemfile". Se invoca `fastlane` a pelo.
 
 La lane `release` lleva `submit_for_review: false`: sube binario + metadata y
-deja la versión lista, pero enviar a revisión es siempre manual.
+deja la versión lista, pero enviar a revisión es siempre manual (o con
+spaceship: `Build.all(app_id:build_number:)` hasta `VALID`,
+`version.select_build`, `get_ready_review_submission || create_review_submission`,
+`add_app_store_version_to_review_items`, `submit_for_review`; Ruby de rbenv
+`/Users/dani/.rbenv/versions/3.3.0/bin/ruby`, el del sistema no tiene spaceship).
 
 ### Simulador (test + dev rápido)
 ```bash
@@ -60,15 +77,19 @@ xcodebuild -project Clarity.xcodeproj -scheme Clarity -sdk iphonesimulator -dest
 
 ### iPhone físico (deploy real)
 ```bash
-# Build para device
-xcodebuild -project Clarity.xcodeproj -scheme Clarity -sdk iphoneos -configuration Debug -destination 'generic/platform=iOS' build
+# Build para el iPhone 18 Pro (con Xcode 27.1, el activo: el 26.5 no lo reconoce)
+xcodebuild -project Clarity.xcodeproj -scheme Clarity -configuration Debug \
+  -destination 'id=00008160-00092C9C28C1400A' -allowProvisioningUpdates build
 
 # Install (sin uninstall previo)
-xcrun devicectl device install app --device DC3A9753-6C32-5B4D-9DB5-7384A631B0C4 \
+xcrun devicectl device install app --device 00008160-00092C9C28C1400A \
   /Volumes/SSDani/Xcode_DerivedData/Clarity-cjwlvudtapgvkvajnodrsdfvozgs/Build/Products/Debug-iphoneos/Clarity.app
 ```
 
-- **Device ID iPhone Dani**: `DC3A9753-6C32-5B4D-9DB5-7384A631B0C4`
+- **iPhone Dani (18 Pro, iOS 27)**: `00008160-00092C9C28C1400A`. Xcode 27.1 necesita
+  el Metal Toolchain (`xcodebuild -downloadComponent MetalToolchain`) por los
+  shaders de la Home.
+- **iPhone anterior (15 Pro Max)**: `DC3A9753-6C32-5B4D-9DB5-7384A631B0C4`
 - **DerivedData**: `/Volumes/SSDani/Xcode_DerivedData/Clarity-cjwlvudtapgvkvajnodrsdfvozgs/`
 
 ## Rules autoaplicadas
