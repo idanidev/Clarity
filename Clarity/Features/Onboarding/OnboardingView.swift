@@ -115,16 +115,16 @@ struct OnboardingView: View {
     /// pantalla arreglar—. Va por `onChange` y no por `.trackScreen` en cada
     /// página porque el TabView precarga las vecinas: con `.task` contaría como
     /// vistas páginas por las que nadie ha pasado.
+    ///
+    /// Además de la pantalla, `onboarding_step` con la posición y un nombre
+    /// estable (`PasoOnboarding`): con un evento propio el embudo sale directo
+    /// en Analytics, sin filtrar entre todas las pantallas de la app (#57).
     private func trackOnboardingPage(_ index: Int) {
-        let nombre: String
-        switch index {
-        case 0: nombre = "onboarding_bienvenida"
-        case 1: nombre = "onboarding_voz"
-        case 2: nombre = "onboarding_tutorial"
-        case 3: nombre = "onboarding_primer_gasto"
-        default: nombre = "onboarding_listo"
-        }
-        AnalyticsService.shared.track(.screenViewed(name: nombre))
+        // Las páginas van de 0 a 4 (sus `tag`); cualquier otro valor cuenta
+        // como la última, como antes.
+        let paso = PasoOnboarding(rawValue: index) ?? .listo
+        AnalyticsService.shared.track(.screenViewed(name: paso.nombrePantalla))
+        AnalyticsService.shared.track(paso.evento)
     }
 
     private func trackOnboardingStart() {

@@ -38,6 +38,10 @@ enum AnalyticsEvent: Sendable {
     case microphonePermission(granted: Bool)
     /// Primer gasto registrado durante el onboarding, con el método usado.
     case onboardingFirstExpense(method: String)
+    /// Cada vez que se enseña una página del onboarding: su posición y un
+    /// nombre que no cambia aunque cambie el orden. El 33 % abandonaba entre
+    /// empezar y terminar, y sin esto no se sabe en qué página (#57).
+    case onboardingStep(index: Int, name: String)
 
     /// El sink de Firebase traduce este evento a su evento canónico de pantalla;
     /// los demás destinos lo mandan tal cual. Los nombres viven aquí para que el
@@ -67,6 +71,7 @@ enum AnalyticsEvent: Sendable {
         case .emptyStateAction: return "sin_gastos_accion"
         case .microphonePermission: return "permiso_microfono"
         case .onboardingFirstExpense: return "onboarding_primer_gasto"
+        case .onboardingStep: return "onboarding_step"
         }
     }
 
@@ -101,6 +106,9 @@ enum AnalyticsEvent: Sendable {
             return ["granted": granted ? "true" : "false"]
         case .onboardingFirstExpense(let method):
             return ["method": method]
+        case .onboardingStep(let index, let name):
+            // Solo la página: nada del usuario.
+            return ["index": String(index), "step": name]
         default:
             return [:]
         }
