@@ -1,16 +1,22 @@
 Novedades de esta versión:
 
-NUEVOS COLORES
-La app estrena paleta: un morado más cálido y un toque dorado para lo que importa, como cuánto llevas gastado cuando vas bien de presupuesto.
+TU HOME, A TU MANERA
+Mantén pulsada una tarjeta y elige «Editar Home»: las tarjetas se mueven como los iconos de la pantalla de inicio. Arrástralas, quita las que no uses, añade otras con «+» y elige si las quieres pequeñas o anchas. Las pilas enseñan en cada momento lo más útil, y tu Home se guarda en tu cuenta.
 
-CORRECCIONES
-• Restaurar una copia de seguridad vuelve a recuperar tus gastos.
-• Editar un gasto ya no lo desvincula de su hucha ni de su gasto recurrente, y un método de pago poco habitual se conserva.
-• Al abrir Recurrentes ya no aparecen cargos de meses anteriores a crear la regla.
-• El inicio de mes en Metas tiene salida si este mes no tienes ingresos.
-• Mantener pulsada una categoría enseña su detalle también en las de nombre de dos palabras.
-• Con mala cobertura, la carga de tus gastos ya no se queda esperando para siempre.
-• Siri pide desbloquear el iPhone antes de decir cuánto llevas gastado.
-• Mejoras al escribir en los formularios con el teclado abierto.
+RESUMEN DE LA SEMANA
+El aviso semanal ahora te cuenta cuánto llevas gastado y cómo vas frente a la semana anterior. Si tienes la app bloqueada con Face ID, no enseña importes.
 
-Si algo se queda congelado, escríbenos desde Ajustes → «Algo no funciona» nada más volver a abrir la app: el correo incluirá lo necesario para arreglarlo.
+MENOS COSAS QUE SE PIERDEN
+• Si cierras un formulario con cambios, te pregunta antes de descartarlos.
+• Si dictas un gasto sin decir el importe, se abre el formulario con lo que dijiste.
+• La voz ya no guarda sola un gasto cuando no está segura de la categoría.
+
+Y ADEMÁS
+• Calendario renovado en Gráficas: cada día se colorea según lo que gastaste y, al tocarlo, ves su semana.
+• Barras de presupuesto y de límites más claras cuando te acercas al tope o te pasas.
+• La copia de seguridad guarda también tus metas y presupuestos.
+• La sincronización es más rápida y gasta menos datos.
+• El bloqueo con Face ID tiene la opción «Usar código».
+• Al iniciar sesión, el teclado ya no tapa los botones.
+
+Si algo no funciona, escríbenos desde Ajustes → «Algo no funciona».

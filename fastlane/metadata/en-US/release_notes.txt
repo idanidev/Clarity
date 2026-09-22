@@ -1,16 +1,22 @@
 What's new in this version:
 
-NEW COLOURS
-The app has a new palette: a warmer purple and a touch of gold for what matters, like how much you've spent when you're on track with your budget.
+YOUR HOME, YOUR WAY
+Long-press a card and choose "Editar Home": cards move like the icons on your Home Screen. Drag them around, remove the ones you don't use, add others with "+" and choose small or wide. Stacks show what's most useful at each moment, and your Home is saved to your account.
 
-FIXES
-• Restoring a backup brings your expenses back again.
-• Editing an expense no longer unlinks it from its piggy bank or its recurring expense, and an unusual payment method is kept.
-• Opening Recurring no longer shows charges from months before the rule was created.
-• The start-of-month setup in Goals can be finished if you have no income this month.
-• Long-pressing a category shows its details for two-word category names too.
-• With poor signal, loading your expenses no longer waits forever.
-• Siri asks you to unlock your iPhone before telling you how much you've spent.
-• Typing in forms with the keyboard open works better.
+YOUR WEEK IN REVIEW
+The weekly notification now tells you how much you've spent and how you're doing compared with the week before. If the app is locked with Face ID, it doesn't show amounts.
 
-If something freezes, write to us from Settings → "Algo no funciona" right after reopening the app: the email will include what we need to fix it.
+LESS GETS LOST
+• If you close a form with changes, it asks before discarding them.
+• If you dictate an expense without saying the amount, the form opens with what you said.
+• Voice no longer saves an expense on its own when it isn't sure of the category.
+
+AND ALSO
+• A redesigned calendar in Charts: each day is shaded by what you spent, and tapping it shows its week.
+• Clearer budget and limit bars when you're close to the cap or over it.
+• Backups now include your goals and budgets too.
+• Syncing is faster and uses less data.
+• The Face ID lock has a "Usar código" (use passcode) option.
+• When signing in, the keyboard no longer covers the buttons.
+
+If something isn't working, write to us from Settings → "Algo no funciona".
