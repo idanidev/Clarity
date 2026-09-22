@@ -58,4 +58,13 @@ final class MockUserDataStore: UserDataStore, @unchecked Sendable {
         recordedCalls.append("deleteCategory(\(id))")
         storedCategories.removeAll { $0.id == id }
     }
+
+    /// Filtros que habrían ido a Firestore, con el uid al que iban. Aquí se
+    /// quedan: es lo que impide que los tests escriban en el proyecto real.
+    var savedDefaultFilters: [(filter: ExpenseFilter, userId: String)] = []
+
+    func saveDefaultFilter(_ filter: ExpenseFilter, userId: String) async throws {
+        recordedCalls.append("saveDefaultFilter(\(filter.name ?? "-"))")
+        savedDefaultFilters.append((filter, userId))
+    }
 }

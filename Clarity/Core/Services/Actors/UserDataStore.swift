@@ -24,6 +24,11 @@ protocol UserDataStore: Sendable {
     func addSubcategory(_ subcategoryName: String, toCategoryId categoryId: String, userId: String) async throws
     func updateExpensesCategoryName(userId: String, oldName: String, newName: String) async throws
     func deleteCategory(id: String, userId: String) async throws
+    /// Escritura remota del filtro predeterminado. Está en el protocolo para
+    /// que los tests de `saveDefaultFilter` no lleguen al Firestore real: antes
+    /// el manager llamaba a `Firestore.firestore()` a pelo y cada pasada de
+    /// tests dejaba un «Permission denied» contra `users/test-uid-…`.
+    func saveDefaultFilter(_ filter: ExpenseFilter, userId: String) async throws
 }
 
 extension UserDataService: UserDataStore {}

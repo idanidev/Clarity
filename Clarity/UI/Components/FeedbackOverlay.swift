@@ -38,14 +38,14 @@ struct FeedbackOverlay: View {
                 .opacity(1)
             }
             .padding(24)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large))
-            .overlay(
-                RoundedRectangle(cornerRadius: CornerRadius.large)
-                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
-            )
-            .shadow(color: Color.clarityPrimary.opacity(0.2), radius: 20, y: 8)
-            .shadow(color: .black.opacity(0.15), radius: 12, y: 4)
+            // El recorte va sobre el contenido y el vidrio por fuera (regla 1 de
+            // `Efectos.swift`): el confeti del check no se sale de la tarjeta.
+            .clipShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
+            // El vidrio de la app, con su rama de iOS 26, en vez de un material a
+            // pelo. El borde ya lo pone `glassCard`; la sombra no, y se conserva.
+            .glassCard(cornerRadius: CornerRadius.large)
+            .sombraDeAviso(color: Color.clarityPrimary.opacity(0.2), radius: 20, y: 8)
+            .sombraDeAviso(color: .black.opacity(0.15), radius: 12, y: 4)
             .onTapGesture {
                 onDismiss()
             }
@@ -99,9 +99,8 @@ struct FeedbackOverlay: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(.thinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            .glassCard(cornerRadius: CornerRadius.medium)
+            .sombraDeAviso(color: .black.opacity(0.1), radius: 10, y: 5)
             .padding(.horizontal, 16)
             .padding(.top, 8)
             .safeAreaPadding(.top)
@@ -124,6 +123,20 @@ struct FeedbackOverlay: View {
         }
         .transition(.move(edge: .top).combined(with: .opacity))
         .zIndex(9999)
+    }
+}
+
+private extension View {
+    /// La sombra del aviso, solo donde `glassCard` pinta material (iOS 17–18).
+    /// El vidrio de iOS 26 trae la suya, y una `shadow` encima se transparenta a
+    /// través de él y lo ensucia.
+    @ViewBuilder
+    func sombraDeAviso(color: Color, radius: CGFloat, y: CGFloat) -> some View {
+        if #available(iOS 26, *) {
+            self
+        } else {
+            shadow(color: color, radius: radius, x: 0, y: y)
+        }
     }
 }
 

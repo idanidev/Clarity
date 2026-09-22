@@ -32,6 +32,28 @@ final class UserDataManager {
 
     var hasLoaded: Bool { !categories.isEmpty }
 
+    /// Verdadero desde que `categories` viene del almacén del usuario y no de
+    /// los valores de fábrica que el `init` deja en memoria. `hasLoaded` no vale
+    /// para esto —esos valores de fábrica ya lo hacen verdadero— e `isLoading`
+    /// tampoco: es falso tanto antes de empezar a cargar como al acabar.
+    /// Solo lo lee `esperarCategoriasDelUsuario`; no cambia cómo se cargan.
+    @ObservationIgnored private(set) var categoriasDelUsuarioCargadas = false
+
+    /// Espera, con tope, a que las categorías sean las del usuario. Para quien
+    /// llega en frío con una frase que resolver contra ellas (el enlace de
+    /// Siri): con las de fábrica, «gasolina» acababa en una categoría que el
+    /// usuario quizá ni tiene. Devuelve si llegaron; pasado el tope se sigue
+    /// con lo que haya, como antes.
+    @discardableResult
+    func esperarCategoriasDelUsuario(tope: Duration = .milliseconds(2500)) async -> Bool {
+        let limite = ContinuousClock.now + tope
+        while !categoriasDelUsuarioCargadas, ContinuousClock.now < limite {
+            // Cancelada, `sleep` ya no duerme: salir en vez de dar vueltas.
+            do { try await Task.sleep(for: .milliseconds(100)) } catch { break }
+        }
+        return categoriasDelUsuarioCargadas
+    }
+
     // Inyectable para tests (default: Firebase Auth). NO cachear el uid: cambia en sign-out/in.
     @ObservationIgnored private let userIdProvider: () -> String?
     private var userId: String? { userIdProvider() }
@@ -60,17 +82,34 @@ final class UserDataManager {
         // Esperar a Auth con listener (antes polling 5×300ms = hasta 1.5s síncrono en cold launch)
         if userId == nil {
             await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-                var resumed = false
-                let resume = { if !resumed { resumed = true; cont.resume() } }
-                let token = Auth.auth().addStateDidChangeListener { _, user in
-                    if user != nil { resume() }
+                // El listener se retira en cuanto deja de hacer falta, llegue
+                // la sesión o salte el tope. Antes el handle se descartaba y
+                // el listener se quedaba puesto para siempre: uno más por cada
+                // `loadUserData()` sin sesión —se llama desde ocho sitios—, y
+                // todos despertando en cada cambio de Auth.
+                //
+                // Todo esto corre en el main actor (Firebase llama al listener
+                // en el hilo principal, y siempre de forma asíncrona, así que
+                // `escucha` ya está asignado cuando llega la primera llamada):
+                // `resuelto` no necesita cerrojo, y la continuación se reanuda
+                // una sola vez pase lo que pase.
+                var resuelto = false
+                var escucha: AuthStateDidChangeListenerHandle?
+                let resolver = {
+                    guard !resuelto else { return }
+                    resuelto = true
+                    if let escucha { Auth.auth().removeStateDidChangeListener(escucha) }
+                    escucha = nil
+                    cont.resume()
+                }
+                escucha = Auth.auth().addStateDidChangeListener { _, user in
+                    if user != nil { resolver() }
                 }
                 // Safety net 2s para no colgar indefinido si nadie se loguea
                 Task {
                     try? await Task.sleep(for: .seconds(2))
-                    resume()
+                    resolver()
                 }
-                _ = token  // listener queda activo; el wakeup de safety lo libera ya que solo necesitamos primera señal
             }
         }
         guard let userId = userId else {
@@ -85,11 +124,14 @@ final class UserDataManager {
 
         do {
             async let fetchedCategories = service.loadCategories(userId: userId, forceServer: false)
-            async let fetchedMethods = service.loadPaymentMethods(userId: userId)
             await self.loadExpenses() // Load expenses for cache
-            
+            // Después de `loadExpenses`: los métodos de pago salen de esos
+            // gastos, y solo se pregunta a Firestore si no había ninguno.
+            async let fetchedMethods = metodosDePagoHistoricos(userId: userId)
+
             let (catsResult, _) = try await fetchedCategories
             self.categories = catsResult
+            categoriasDelUsuarioCargadas = true
 
             // Multi-device: la primera lectura puede venir de cache. Refresco
             // contra server en background y actualizo solo si difiere.
@@ -165,23 +207,51 @@ final class UserDataManager {
         do {
             let (cats, _) = try await service.loadCategories(userId: userId, forceServer: false)
             self.categories = cats
+            categoriasDelUsuarioCargadas = true
         } catch {
             logger.error("refreshCategories failed: \(error.localizedDescription)")
         }
     }
     
+    // MARK: - Payment Methods
+
+    /// Los métodos de pago vistos en la caché de SwiftData en la última carga.
+    /// `nil` si estaba vacía o no se pudo leer.
+    @ObservationIgnored private var metodosDePagoEnCache: Set<String>?
+
+    /// Los métodos de pago que el usuario ha usado alguna vez.
+    ///
+    /// Salen de los gastos que `loadExpenses` acaba de leer de SwiftData.
+    /// Antes se leían hasta 100 documentos de `expenses` en cada
+    /// `loadUserData()` —que se llama desde ocho sitios— solo para esto. La
+    /// consulta remota queda para cuando la caché local está vacía (primer
+    /// arranque tras iniciar sesión).
+    private func metodosDePagoHistoricos(userId: String) async throws -> Set<String> {
+        if let enCache = metodosDePagoEnCache { return enCache }
+        return try await service.loadPaymentMethods(userId: userId)
+    }
+
+    nonisolated static func metodosDePago(en gastos: [Expense]) -> Set<String> {
+        Set(gastos.map(\.paymentMethod))
+    }
+
     // MARK: - Expenses Cache
-    
+
     func loadExpenses() async {
         do {
             let descriptor = FetchDescriptor<ExpenseModel>(sortBy: [SortDescriptor(\.date, order: .reverse)])
             let models = try SwiftDataService.shared.context.fetch(descriptor)
             let all = models.map { $0.toDomain() }
+            // De todos, antes de sanear: un duplicado descartado también
+            // cuenta como método usado, igual que contaba su documento.
+            metodosDePagoEnCache = all.isEmpty ? nil : Self.metodosDePago(en: all)
             // Fetch recurring rules (cache-first) so ExpenseSanitizer can deduplicate
             // anomalies and misplaced annual expenses in addition to ID dedup.
             let rules = (try? await DependencyContainer.shared.recurringExpenseRepository.fetchAll()) ?? []
             self.expenses = ExpenseSanitizer.sanitize(expenses: all, rules: rules)
         } catch {
+            // Sin lectura no hay de dónde sacarlos: que se pregunte a Firestore.
+            metodosDePagoEnCache = nil
             logger.error("❌ Failed to cache expenses: \(error.localizedDescription)")
         }
     }
@@ -268,6 +338,8 @@ final class UserDataManager {
     }
     
     func clearCache() {
+        // Vuelven los valores de fábrica (cierre de sesión): ya no son del usuario.
+        categoriasDelUsuarioCargadas = false
         Task {
             categories = await service.createDefaultCategories()
             paymentMethods = PaymentMethod.pickerOptions.map { $0.rawValue }
@@ -397,13 +469,12 @@ final class UserDataManager {
         //    `updateData(["settings": ...])`: escribir el mapa entero pisa los
         //    hermanos que no estén en memoria, que es justo cómo se perdieron
         //    las categorías en su día.
+        //    A través de `service` (mismo `setData(merge:)`, ahora dentro de
+        //    `UserDataService`): con `Firestore.firestore()` a pelo aquí, los
+        //    tests de esta función escribían en el Firestore de verdad.
         Task {
             do {
-                let data = try Firestore.Encoder().encode(filter)
-                try await Firestore.firestore()
-                    .collection("users")
-                    .document(userId)
-                    .setData(["settings": ["defaultFilter": data]], merge: true)
+                try await service.saveDefaultFilter(filter, userId: userId)
                 logger.info("✅ Default filter saved")
             } catch {
                 logger.error("❌ Error saving default filter: \(error.localizedDescription)")

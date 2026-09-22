@@ -20,8 +20,15 @@ struct SwiftDataExpenseDataSourceTests {
         return (SwiftDataExpenseDataSource(context: contexto), contexto)
     }
 
-    private func gasto(_ id: String, _ amount: Double, name: String = "x") -> Expense {
-        Expense(id: id, amount: amount, name: name, category: "Ocio", date: "2026-09-10")
+    private func gasto(_ id: String, _ amount: Double, name: String = "x", fecha: String = "2026-09-10") -> Expense {
+        Expense(id: id, amount: amount, name: name, category: "Ocio", date: fecha)
+    }
+
+    /// La ventana de sincronización de un 19 de septiembre de 2026.
+    private let ventana = ExpenseSyncPolicy.Ventana(desde: "2026-07-01", hasta: ExpenseSyncPolicy.finAbierto)
+
+    private func ids(_ fuente: SwiftDataExpenseDataSource) throws -> [String] {
+        try fuente.fetchExpenses().compactMap(\.id).sorted()
     }
 
     @Test("upsertAll inserta lo nuevo, actualiza lo que cambia y deja el resto")
@@ -56,6 +63,251 @@ struct SwiftDataExpenseDataSourceTests {
         try fuente.upsertAll([gasto("a", 10), gasto("b", 20)])
         #expect(!contexto.hasChanges)
         try fuente.upsertAll([gasto("a", 10), gasto("b", 20)])
+        #expect(!contexto.hasChanges)
+    }
+
+    // MARK: - Purga por ventana
+
+    @Test("count(en:) cuenta solo el tramo, extremos y fechas futuras incluidos")
+    func contarEnVentana() throws {
+        let (fuente, _) = try almacen()
+        try fuente.upsertAll([
+            gasto("viejo", 1, fecha: "2026-06-30"),
+            gasto("borde", 1, fecha: "2026-07-01"),
+            gasto("hoy", 1, fecha: "2026-09-19"),
+            gasto("futuro", 1, fecha: "2031-01-01"),
+        ])
+        #expect(try fuente.count() == 4)
+        #expect(try fuente.count(en: ventana) == 3)
+        #expect(try fuente.count(en: .init(desde: "2026-07-01", hasta: "2026-07-31")) == 1)
+    }
+
+    @Test("La purga por ventana borra solo los huérfanos de dentro y respeta los de fuera")
+    func purgaEnVentana() throws {
+        let (fuente, _) = try almacen()
+        try fuente.upsertAll([
+            gasto("antiguo", 1, fecha: "2024-03-05"),
+            gasto("junio", 2, fecha: "2026-06-30"),
+            gasto("julio", 3, fecha: "2026-07-01"),
+            gasto("agosto", 4, fecha: "2026-08-15"),
+            gasto("sept", 5, fecha: "2026-09-10"),
+        ])
+
+        // El remoto, para la ventana, ya no trae "agosto" (borrado en otro
+        // dispositivo). "antiguo" y "junio" no se han pedido: no son huérfanos.
+        try fuente.upsertAll(
+            [gasto("julio", 3, fecha: "2026-07-01"), gasto("sept", 6, fecha: "2026-09-10")],
+            purgandoHuerfanos: true, soloEn: ventana)
+
+        #expect(try ids(fuente) == ["antiguo", "julio", "junio", "sept"])
+        #expect(try fuente.fetchExpenses().first { $0.id == "sept" }?.amount == 6)
+    }
+
+    @Test("Sin ventana la purga sigue siendo global")
+    func purgaGlobalIntacta() throws {
+        let (fuente, _) = try almacen()
+        try fuente.upsertAll([
+            gasto("antiguo", 1, fecha: "2024-03-05"),
+            gasto("agosto", 4, fecha: "2026-08-15"),
+            gasto("sept", 5, fecha: "2026-09-10"),
+        ])
+        try fuente.volcarSincronizacion(
+            [gasto("agosto", 4, fecha: "2026-08-15"), gasto("sept", 5, fecha: "2026-09-10")], ventana: nil)
+        #expect(try ids(fuente) == ["agosto", "sept"])
+    }
+
+    @Test("Una respuesta a medias no purga: la salvaguarda no se cumple")
+    func salvaguardaEnVentana() throws {
+        let (fuente, _) = try almacen()
+        try fuente.upsertAll((1...6).map { gasto("g\($0)", Double($0), fecha: "2026-09-0\($0)") })
+
+        // 2 remotos frente a 6 locales en la ventana: menos de la mitad.
+        try fuente.volcarSincronizacion(
+            [gasto("g1", 1, fecha: "2026-09-01"), gasto("g2", 20, fecha: "2026-09-02")], ventana: ventana)
+
+        #expect(try fuente.count() == 6)
+        // Lo que sí trae se aplica igual.
+        #expect(try fuente.fetchExpenses().first { $0.id == "g2" }?.amount == 20)
+
+        // Y una respuesta vacía tampoco borra nada.
+        try fuente.volcarSincronizacion([], ventana: ventana)
+        #expect(try fuente.count() == 6)
+    }
+
+    @Test("La salvaguarda se mide contra los locales de la ventana, no contra todo el almacén")
+    func salvaguardaMideLaVentana() throws {
+        let (fuente, _) = try almacen()
+        let antiguos = (1...9).map { gasto("v\($0)", 1, fecha: "2023-01-0\($0)") }
+        try fuente.upsertAll(antiguos + [
+            gasto("a", 1, fecha: "2026-09-01"),
+            gasto("b", 2, fecha: "2026-09-02"),
+        ])
+
+        // 1 remoto frente a 2 locales en la ventana basta (contra los 11 del
+        // almacén no bastaría, y los borrados recientes no se purgarían nunca).
+        try fuente.volcarSincronizacion([gasto("a", 1, fecha: "2026-09-01")], ventana: ventana)
+
+        #expect(try fuente.count() == 10)
+        #expect(try !ids(fuente).contains("b"))
+        #expect(try fuente.count(en: .init(desde: "2023-01-01", hasta: "2023-12-31")) == 9)
+    }
+
+    @Test("Un gasto cuya fecha entra en la ventana se actualiza, no se duplica")
+    func fechaMovidaHaciaLaVentana() throws {
+        let (fuente, _) = try almacen()
+        try fuente.upsertAll([
+            gasto("movido", 7, fecha: "2025-02-01"),
+            gasto("sept", 5, fecha: "2026-09-10"),
+        ])
+
+        // Editado desde otro dispositivo: ahora es de agosto de 2026. Su modelo
+        // local está fuera de la ventana, pero viene en el lote.
+        try fuente.volcarSincronizacion(
+            [gasto("movido", 7, fecha: "2026-08-20"), gasto("sept", 5, fecha: "2026-09-10")], ventana: ventana)
+
+        let todos = try fuente.fetchExpenses()
+        #expect(todos.count == 2)
+        #expect(todos.first { $0.id == "movido" }?.date == "2026-08-20")
+    }
+
+    // MARK: - "Todos" desde la caché
+
+    @Test("La caché devuelve el historial entero en el orden del remoto")
+    func todosDesdeCache() throws {
+        let (fuente, _) = try almacen()
+        try fuente.upsertAll([
+            gasto("b", 1, fecha: "2026-09-10"),
+            gasto("z", 2, fecha: "2019-05-01"),
+            gasto("c", 3, fecha: "2026-09-10"),
+            gasto("a", 4, fecha: "2026-09-11"),
+        ])
+
+        // Lo que hace `ExpenseRepository.getExpensesPaginated` sin filtro o con
+        // "Todos": decidir con la política y servir la caché ordenada.
+        let cached = try fuente.fetchExpenses()
+        #expect(ExpenseSyncPolicy.respondeDesdeCache(
+            filter: ExpenseFilter(dateRange: .allTime), cacheVacia: cached.isEmpty, ultimaCompleta: 1_800_000_000))
+        let pagina = PageResult(expenses: ExpenseSyncPolicy.enOrdenRemoto(cached), hasMore: false)
+
+        #expect(pagina.expenses.map(\.id) == ["a", "c", "b", "z"])
+        #expect(!pagina.hasMore)
+        // Las fechas salen de la caché tal y como entraron.
+        #expect(pagina.expenses.map(\.date) == ["2026-09-11", "2026-09-10", "2026-09-10", "2019-05-01"])
+    }
+
+    // MARK: - apply() y updateExpense
+
+    private func modelo(_ id: String, en contexto: ModelContext) throws -> ExpenseModel {
+        try #require(try contexto.fetch(
+            FetchDescriptor<ExpenseModel>(predicate: #Predicate { $0.id == id })).first)
+    }
+
+    @Test("apply() sincroniza deducible y los campos de recurrente")
+    func applyCamposDeRecurrente() throws {
+        let (fuente, contexto) = try almacen()
+        try fuente.upsertAll([gasto("a", 10)])
+        let fila = try modelo("a", en: contexto)
+        #expect(!fila.isDeductible && fila.recurringId == nil && fila.isRecurring == nil)
+
+        // Llega de otro dispositivo marcado como deducible y enlazado a su regla.
+        let remoto = Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1")
+        #expect(fila.apply(remoto))
+
+        #expect(fila.isDeductible)
+        #expect(fila.isRecurring == true)
+        #expect(fila.recurringId == "regla-1")
+        // Y sale igual por el dominio.
+        let leido = fila.toDomain()
+        #expect(leido.isDeductible == true && leido.isRecurring == true && leido.recurringId == "regla-1")
+    }
+
+    @Test("apply() detecta como cambio cada uno de los tres campos, y ninguno si no lo hay")
+    func applyDetectaCambios() throws {
+        let (fuente, contexto) = try almacen()
+        let base = Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1")
+        try fuente.upsertAll([base])
+        let fila = try modelo("a", en: contexto)
+
+        #expect(!fila.apply(base))
+        #expect(fila.apply(Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: false, isRecurring: true, recurringId: "regla-1")))
+        #expect(fila.apply(Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: false, isRecurring: true, recurringId: "regla-2")))
+        #expect(fila.apply(Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: false, isRecurring: false, recurringId: "regla-2")))
+        #expect(fila.isRecurring == false && fila.recurringId == "regla-2" && !fila.isDeductible)
+    }
+
+    @Test("Aplicar sobre una fila deja lo mismo que insertarla de cero")
+    func applyIgualQueInsertar() throws {
+        let (fuente, contexto) = try almacen()
+        let remoto = Expense(
+            id: "a", amount: 12, name: "y", category: "Ocio", date: "2026-09-11",
+            isDeductible: nil, isRecurring: nil, recurringId: nil)
+        // Una fila que tenía los tres campos puestos…
+        try fuente.upsertAll([Expense(
+            id: "a", amount: 10, name: "x", category: "Ocio", date: "2026-09-10",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1")])
+        try fuente.upsertAll([remoto])
+        let aplicada = try modelo("a", en: contexto).toDomain()
+        // …queda como la recién insertada desde el mismo gasto.
+        let insertada = ExpenseModel(from: remoto).toDomain()
+
+        #expect(aplicada.isDeductible == insertada.isDeductible)
+        #expect(aplicada.isRecurring == insertada.isRecurring)
+        #expect(aplicada.recurringId == insertada.recurringId)
+    }
+
+    @Test("updateExpense usa apply(): actualiza también los campos que antes se dejaba")
+    func updateConApply() throws {
+        let (fuente, _) = try almacen()
+        try fuente.addExpense(gasto("a", 10))
+
+        try fuente.updateExpense(Expense(
+            id: "a", amount: 15, name: "editado", category: "Ocio", date: "2026-09-12",
+            isDeductible: true, isRecurring: true, recurringId: "regla-1"))
+
+        let leido = try #require(try fuente.fetchExpenses().first)
+        #expect(leido.amount == 15 && leido.name == "editado" && leido.date == "2026-09-12")
+        #expect(leido.isDeductible == true && leido.isRecurring == true && leido.recurringId == "regla-1")
+    }
+
+    @Test("updateExpense sin cambios ni ensucia el contexto ni toca updatedAt")
+    func updateSinCambios() throws {
+        let (fuente, contexto) = try almacen()
+        try fuente.addExpense(gasto("a", 10))
+        let antes = try modelo("a", en: contexto).updatedAt
+
+        try fuente.updateExpense(gasto("a", 10))
+
+        #expect(!contexto.hasChanges)
+        #expect(try modelo("a", en: contexto).updatedAt == antes)
+    }
+
+    @Test("updateExpense con una fecha ilegible conserva la que había")
+    func updateFechaIlegible() throws {
+        let (fuente, _) = try almacen()
+        try fuente.addExpense(gasto("a", 10, fecha: "2026-09-10"))
+
+        try fuente.updateExpense(gasto("a", 11, fecha: "no-es-fecha"))
+
+        let leido = try #require(try fuente.fetchExpenses().first)
+        #expect(leido.amount == 11)
+        #expect(leido.date == "2026-09-10")
+    }
+
+    @Test("updateExpense de un gasto que no está en la caché no hace nada")
+    func updateInexistente() throws {
+        let (fuente, contexto) = try almacen()
+        try fuente.updateExpense(gasto("fantasma", 10))
+        #expect(try fuente.count() == 0)
         #expect(!contexto.hasChanges)
     }
 }

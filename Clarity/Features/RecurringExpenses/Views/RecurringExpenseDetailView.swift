@@ -452,6 +452,10 @@ struct EditRecurringExpenseSheet: View {
     @State private var fin: FinRecurrente
     @State private var fechaFin: Date
     @State private var numeroPlazos: Int
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
+    /// Foto del formulario al abrir, para saber si el usuario ha cambiado algo.
+    @State private var estadoInicial: EstadoFormularioRecurrente?
     
     private let monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                               "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -583,7 +587,10 @@ struct EditRecurringExpenseSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: hayCambios
+                    ) { dismiss() }
                 }
 
                 ToolbarItem(placement: .confirmationAction) {
@@ -612,7 +619,29 @@ struct EditRecurringExpenseSheet: View {
             .fullScreenCover(isPresented: $showEmojiPicker) {
                 EmojiPickerView(selectedEmoji: $selectedIcon)
             }
+            // Una sola vez: `onAppear` vuelve a saltar al regresar del selector
+            // de categoría, y para entonces la foto ya no sería la del principio.
+            .onAppear { if estadoInicial == nil { estadoInicial = estadoActual } }
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: hayCambios
+            ) { dismiss() }
         }
+    }
+
+    private var estadoActual: EstadoFormularioRecurrente {
+        EstadoFormularioRecurrente(
+            importe: amountString, nombre: name, categoria: selectedCategory,
+            subcategoria: selectedSubcategory, metodoDePago: paymentMethod,
+            frecuencia: frequency, dia: dayOfMonth, mesDeCobro: billingMonth,
+            icono: selectedIcon, fin: fin, fechaFin: fechaFin, plazos: numeroPlazos)
+    }
+
+    /// No basta con que haya texto —al editar siempre lo hay—: se compara con la
+    /// foto de cuando se abrió.
+    private var hayCambios: Bool {
+        guard let estadoInicial else { return false }
+        return estadoInicial != estadoActual
     }
     
     private func saveExpense() {

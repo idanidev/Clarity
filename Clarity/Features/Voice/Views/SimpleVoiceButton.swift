@@ -13,6 +13,9 @@ struct SimpleVoiceButton: View {
     /// Cambia cuando algo de fuera —el control del Botón de Acción— pide
     /// empezar a escuchar sin que nadie toque el botón.
     var disparoGrabar: Int = 0
+    /// Hubo frase pero ningún importe: quien pinta la barra abre el formulario
+    /// manual con lo dictado. Sin esto, la frase se perdía tras un aviso de error.
+    var alFaltarImporte: ((String) -> Void)? = nil
 
     @State private var speechManager = SpeechRecognitionManager.shared
     @State private var isRecording = false
@@ -105,6 +108,12 @@ struct SimpleVoiceButton: View {
                             .font(.callout)
                             .foregroundStyle(.primary)
                             .multilineTextAlignment(.center)
+                            // Dos líneas y se corta por delante: lo que interesa
+                            // es lo último que se ha dicho. Sin tope, cada línea
+                            // nueva hacía crecer la barra, que `MainTabView` mide,
+                            // y recolocaba el margen de las tres pestañas.
+                            .lineLimit(2)
+                            .truncationMode(.head)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .vidrioDeBurbuja()
@@ -126,7 +135,30 @@ struct SimpleVoiceButton: View {
         // funden al acercarse; en iOS 17 el modificador no hace nada.
         .contenedorDeVidrio()
         .onChange(of: disparoGrabar) { _, _ in
+            // Con una hoja propia delante (la confirmación del dictado anterior,
+            // la bienvenida) el micro arrancaría detrás, a ciegas: no se arranca.
+            guard !isShowingExpenseSheet, !showVoiceOnboarding else { return }
             if !isRecording && !isProcessing { handleTap() }
+        }
+        // El motor puede pararse sin que nadie toque el botón: una llamada
+        // entrante, el silencio que detecta el gestor, su tope de búferes. Antes
+        // el botón no se enteraba y seguía «grabando» —rojo, con la onda y el
+        // temporizador de 0,3 s— hasta el tope de 10 s. Ahora cierra el dictado
+        // por el camino normal, con lo que hubiera transcrito.
+        .onChange(of: speechManager.isListening) { _, escuchando in
+            if !escuchando && isRecording { stopRecording() }
+        }
+        // Sin vista no queda quien pare: ni temporizadores sueltos ni micro abierto.
+        .onDisappear {
+            recordingTimer?.invalidate()
+            recordingTimer = nil
+            silenceTimer?.invalidate()
+            silenceTimer = nil
+            if isRecording {
+                isRecording = false
+                speechManager.stopRecording()
+                DictadoActividad.shared.terminar(texto: "", importe: nil)
+            }
         }
         // La isla dinámica sigue al botón: escucha, apunta y se va.
         .onChange(of: isRecording) { _, grabando in
@@ -309,6 +341,13 @@ struct SimpleVoiceButton: View {
                 isProcessing = false
 
                 guard !parsed.isEmpty else {
+                    // Aquí siempre hay frase (la vacía se descartó antes): lo que
+                    // falta es el importe, o el parser agotó su tiempo. Se lleva
+                    // al formulario manual en vez de tirarla con un error.
+                    if let alFaltarImporte {
+                        alFaltarImporte(transcript)
+                        return
+                    }
                     HapticManager.shared.error()
                     FeedbackManager.shared.show(
                         .error, title: "Error",

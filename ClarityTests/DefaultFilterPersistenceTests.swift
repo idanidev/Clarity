@@ -106,6 +106,43 @@ struct DefaultFilterPersistenceTests {
 
         #expect(sut.defaultFilter?.name == "Remoto")
     }
+
+    // Estos tests escribían en el Firestore real: `saveDefaultFilter` llamaba a
+    // `Firestore.firestore()` sin pasar por el almacén inyectado, y cada pasada
+    // dejaba «Write at users/test-uid-filtros failed: Missing or insufficient
+    // permissions». Ahora la escritura remota es un requisito de
+    // `UserDataStore` y aquí se comprueba que llega al doble y a nadie más.
+    @Test("la escritura remota pasa por el almacén inyectado")
+    func remoteWriteGoesThroughStore() async throws {
+        UserDefaults.standard.removeObject(forKey: "filters.default.\(Self.uid)")
+        let store = MockUserDataStore()
+        let sut = UserDataManager(service: store, userIdProvider: { Self.uid })
+
+        sut.saveDefaultFilter(filtro("Por el doble"))
+
+        // Va en un `Task` suelto (el guardado local no espera a la red): se le
+        // da turno con un tope corto en vez de dormir un tiempo fijo.
+        for _ in 0..<100 where store.savedDefaultFilters.isEmpty {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+
+        let escrito = try #require(store.savedDefaultFilters.first)
+        #expect(store.savedDefaultFilters.count == 1)
+        #expect(escrito.userId == Self.uid)
+        #expect(escrito.filter.name == "Por el doble")
+        #expect(escrito.filter.minAmount == 10)
+    }
+
+    @Test("sin usuario no se intenta la escritura remota")
+    func noRemoteWriteWithoutUser() async {
+        let store = MockUserDataStore()
+        let sinSesion = UserDataManager(service: store, userIdProvider: { nil })
+
+        sinSesion.saveDefaultFilter(filtro("Nadie"))
+        await Task.yield()
+
+        #expect(store.recordedCalls.isEmpty)
+    }
 }
 
 // MARK: - Regresión: el documento llega después que la Home

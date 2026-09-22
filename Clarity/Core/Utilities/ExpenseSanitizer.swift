@@ -82,7 +82,7 @@ struct ExpenseSanitizer {
         }
         
         // 3. Dedup final por `stableId` — CLAVE del ForEach de la lista
-        //    (ExpandableExpenseList usa `id: \.stableId`, que es `id ?? "nombre_fecha_importe"`).
+        //    (la lista de `ResumenPage` usa `id: \.stableId`, que es `id ?? "nombre_fecha_importe"`).
         //    Antes deduplicaba por `id` y DEJABA PASAR los de id vacío: dos gastos con el
         //    mismo stableId reventaban la List con "invalid number of items in section"
         //    (NSInternalInconsistencyException) al borrar/actualizar. Deduplicar por la

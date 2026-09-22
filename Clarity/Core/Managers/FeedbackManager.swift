@@ -78,20 +78,55 @@ final class FeedbackManager {
 
         HapticManager.shared.notification(type.haptic)
 
-        // Dismiss timing: 4s con acción, 0.9s success (rápido para seguir metiendo), 2.2s default
-        let duration: UInt64 = if action != nil {
-            4_000_000_000
-        } else if type == .success {
-            900_000_000
-        } else {
-            2_200_000_000
+        // El aviso es solo visual y dura poco: VoiceOver no llegaba a leerlo, así
+        // que ni oía «Gasto añadido» ni sabía que había un «Deshacer». Se le dice.
+        let conVoiceOver = UIAccessibility.isVoiceOverRunning
+        if conVoiceOver {
+            Self.anunciar(Self.textoDelAnuncio(title: title, message: message, actionLabel: action == nil ? nil : actionLabel))
         }
+
+        let duration = Self.duracion(type, conAccion: action != nil, conVoiceOver: conVoiceOver)
         dismissTask = Task {
-            try? await Task.sleep(nanoseconds: duration)
+            try? await Task.sleep(for: duration)
             if !Task.isCancelled {
                 dismiss()
             }
         }
+    }
+
+    /// Cuánto se queda el aviso en pantalla.
+    ///
+    /// Sin VoiceOver: 4 s con acción, 0,9 s el de éxito (rápido, para seguir
+    /// metiendo gastos) y 2,2 s el resto. Con VoiceOver, bastante más: hay que
+    /// oír el anuncio entero y, si hay «Deshacer», llegar hasta el botón
+    /// deslizando, que no es cosa de cuatro segundos.
+    static func duracion(_ type: FeedbackType, conAccion: Bool, conVoiceOver: Bool) -> Duration {
+        if conAccion {
+            return conVoiceOver ? .seconds(12) : .seconds(4)
+        }
+        if type == .success {
+            return conVoiceOver ? .seconds(3) : .milliseconds(900)
+        }
+        return conVoiceOver ? .seconds(6) : .milliseconds(2_200)
+    }
+
+    /// Lo que oye VoiceOver: el título, el detalle y, si la hay, la acción.
+    static func textoDelAnuncio(title: String, message: String?, actionLabel: String?) -> String {
+        var partes = [title]
+        if let message, !message.isEmpty { partes.append(message) }
+        if let actionLabel, !actionLabel.isEmpty { partes.append("Acción disponible: \(actionLabel)") }
+        return partes.joined(separator: ". ")
+    }
+
+    /// Con prioridad alta: el aviso suele salir justo al cerrarse una hoja, y el
+    /// cambio de pantalla se comía un anuncio normal antes de que empezara.
+    @MainActor
+    private static func anunciar(_ texto: String) {
+        let anuncio = NSAttributedString(
+            string: texto,
+            attributes: [.accessibilitySpeechAnnouncementPriority: UIAccessibilityPriority.high]
+        )
+        UIAccessibility.post(notification: .announcement, argument: anuncio)
     }
 
     @MainActor

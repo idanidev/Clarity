@@ -27,6 +27,49 @@ struct AddGoalSheet: View {
     @State private var showNewCategory = false
     @State private var showAddSubcategory = false
     @State private var newSubcategoryName = ""
+    /// «Cancelar» con cambios: pregunta antes de tirarlos (`confirmarDescarte`).
+    @State private var preguntarDescarte = false
+    /// Foto del formulario al abrir (ya con los datos de la meta, si se edita).
+    @State private var estadoInicial: EstadoFormulario?
+    /// El usuario ha elegido a mano la categoría o la subcategoría de la hucha.
+    /// Va aparte de la foto porque esos dos campos también cambian solos —la
+    /// primera categoría se elige sola al abrir y la subcategoría se vacía al
+    /// cambiar de categoría—, y eso no es algo que el usuario pueda perder.
+    @State private var categoriaHuchaTocada = false
+
+    /// Lo que el usuario puede tocar, salvo la categoría de la hucha (ver arriba).
+    private struct EstadoFormulario: Equatable {
+        var nombre: String
+        var importe: String
+        var tipo: GoalType
+        var simbolo: String
+        var fechaLimite: Date?
+        var categoriaEscudo: String
+    }
+
+    private var estadoActual: EstadoFormulario {
+        EstadoFormulario(
+            nombre: name, importe: targetAmount, tipo: selectedType, simbolo: selectedSymbol,
+            fechaLimite: useDeadline ? deadline : nil, categoriaEscudo: selectedCategory)
+    }
+
+    /// No basta con que haya texto —al editar siempre lo hay—: se compara con la
+    /// foto de cuando se abrió.
+    private var hayCambios: Bool {
+        guard let estadoInicial else { return false }
+        return categoriaHuchaTocada || estadoInicial != estadoActual
+    }
+
+    /// El mismo enlace, pero que además apunta que ha sido el usuario.
+    private func tocadoPorElUsuario(_ enlace: Binding<String>) -> Binding<String> {
+        Binding(
+            get: { enlace.wrappedValue },
+            set: {
+                enlace.wrappedValue = $0
+                categoriaHuchaTocada = true
+            }
+        )
+    }
 
     private var canSave: Bool {
         guard !targetAmount.isEmpty else { return false }
@@ -162,7 +205,7 @@ struct AddGoalSheet: View {
                     let categories = UserDataManager.shared.categories
                     Section {
                         if !categories.isEmpty {
-                            Picker("Categoría", selection: $savingsCategory) {
+                            Picker("Categoría", selection: tocadoPorElUsuario($savingsCategory)) {
                                 ForEach(categories, id: \.name) { cat in
                                     Text(cat.name).tag(cat.name)
                                 }
@@ -173,7 +216,7 @@ struct AddGoalSheet: View {
 
                             let subcats = categories.first(where: { $0.name == savingsCategory })?.subcategories ?? []
                             if !subcats.isEmpty {
-                                Picker("Subcategoría", selection: $savingsSubcategory) {
+                                Picker("Subcategoría", selection: tocadoPorElUsuario($savingsSubcategory)) {
                                     ForEach(subcats, id: \.self) { sub in
                                         Text(sub).tag(sub)
                                     }
@@ -194,6 +237,7 @@ struct AddGoalSheet: View {
                                                 .foregroundStyle(Color.success)
                                         }
                                         .disabled(newSubcategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
+                                        .accessibilityLabel("Confirmar subcategoría")
                                         Button {
                                             showAddSubcategory = false
                                             newSubcategoryName = ""
@@ -201,6 +245,7 @@ struct AddGoalSheet: View {
                                             Image(systemName: "xmark.circle.fill")
                                                 .foregroundStyle(Color.textSecondary)
                                         }
+                                        .accessibilityLabel("Cancelar subcategoría")
                                     }
                                 } else {
                                     Button {
@@ -258,10 +303,18 @@ struct AddGoalSheet: View {
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
             .keyboardDoneToolbar()
-            .onAppear { prefill() }
+            .onAppear {
+                prefill()
+                // La foto, una sola vez y después de rellenar: `onAppear` vuelve a
+                // saltar al regresar del selector de categoría del escudo.
+                if estadoInicial == nil { estadoInicial = estadoActual }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancelar") { dismiss() }
+                    BotonCancelarFormulario(
+                        preguntando: $preguntarDescarte,
+                        hayCambios: hayCambios
+                    ) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(editingGoal != nil ? "Actualizar" : "Guardar") {
@@ -271,6 +324,10 @@ struct AddGoalSheet: View {
                     .disabled(!canSave)
                 }
             }
+            .confirmarDescarte(
+                preguntando: $preguntarDescarte,
+                hayCambios: hayCambios
+            ) { dismiss() }
         }
         .presentationDetents([.large])
         .sheet(isPresented: $showSymbolPicker) {
@@ -295,6 +352,7 @@ struct AddGoalSheet: View {
             await UserDataManager.shared.addSubcategory(subToAdd, toCategoryId: categoryId)
             await MainActor.run {
                 savingsSubcategory = subToAdd
+                categoriaHuchaTocada = true
                 newSubcategoryName = ""
                 showAddSubcategory = false
                 HapticManager.shared.notification(.success)

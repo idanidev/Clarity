@@ -7,7 +7,7 @@ paths:
 # Convenciones Swift para Clarity
 
 ## Concurrencia
-- Swift 6 strict concurrency — todos los ViewModels son `@MainActor`
+- El proyecto compila en modo de lenguaje Swift 5 con MainActor por defecto y approachable concurrency (no Swift 6): las carreras son avisos, no errores. Se escribe como si fuera Swift 6 — todos los ViewModels son `@MainActor`, y lo que corra fuera va `nonisolated` explícito
 - Usar `async/await` siempre, nunca callbacks ni Combine
 - `@Observable` macro para estado (NUNCA `ObservableObject` ni `@Published`)
 - Los tests también deben ser `@MainActor`

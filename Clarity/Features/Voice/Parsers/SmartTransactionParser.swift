@@ -623,6 +623,21 @@ final class SmartTransactionParser: TransactionParserProtocol {
     }
 
     private func cleanDescription(from original: String, normalized: String) -> String {
+        let clean = descripcionLimpia(de: original)
+        return clean.isEmpty ? "Gasto General" : clean
+    }
+
+    /// Descripción para el formulario manual cuando al dictado le faltó el
+    /// importe: la misma limpieza que recibe un gasto bien parseado (fecha
+    /// fuera, sin «añade», sin muletillas ni números sueltos), pero vacía si no
+    /// queda nada. Un «Gasto General» escrito en el campo habría que borrarlo a
+    /// mano; vacío, el formulario enseña su texto de ayuda.
+    func descripcionParaFormulario(de texto: String) -> String {
+        let (_, sinFecha) = extractDate(from: texto)
+        return descripcionLimpia(de: sinFecha)
+    }
+
+    private func descripcionLimpia(de original: String) -> String {
         // Work on the ORIGINAL text (preserve user's capitalization and exact words)
         var clean = original
 
@@ -720,7 +735,7 @@ final class SmartTransactionParser: TransactionParserProtocol {
             clean = clean.prefix(1).uppercased() + clean.dropFirst()
         }
 
-        return clean.isEmpty ? "Gasto General" : clean
+        return clean
     }
 
     private func normalize(_ text: String) -> String {

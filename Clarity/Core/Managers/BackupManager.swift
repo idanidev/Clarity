@@ -10,8 +10,12 @@ import SwiftUI
 // MARK: - Backup-Safe Model Types
 // JSONEncoder no puede serializar @DocumentID (lanza encodingIsNotSupported).
 // Usamos estas structs intermedias sin @DocumentID para el backup.
+//
+// `nonisolated` + `Sendable`: la copia se serializa en una tarea aparte (ver
+// `BackupChunking`), no en el hilo principal. Las conversiones desde y hacia
+// los modelos de Firestore sí se quedan en el main actor, que es donde viven.
 
-struct RecurringExpenseBackup: Codable {
+nonisolated struct RecurringExpenseBackup: Codable, Sendable {
     var id: String?
     var amount: Double
     var name: String
@@ -29,6 +33,7 @@ struct RecurringExpenseBackup: Codable {
     var createdAt: String?
     var updatedAt: String?
 
+    @MainActor
     init(_ r: RecurringExpense) {
         id = r.id
         amount = r.amount
@@ -48,6 +53,7 @@ struct RecurringExpenseBackup: Codable {
         updatedAt = r.updatedAt
     }
 
+    @MainActor
     func toRecurringExpense() -> RecurringExpense {
         RecurringExpense(
             id: id, amount: amount, name: name, category: category,
@@ -59,7 +65,7 @@ struct RecurringExpenseBackup: Codable {
     }
 }
 
-struct MonthlyBudgetBackup: Codable {
+nonisolated struct MonthlyBudgetBackup: Codable, Sendable {
     var id: String?   // documentId (sin @DocumentID wrapper)
     var userId: String
     var year: Int
@@ -70,6 +76,7 @@ struct MonthlyBudgetBackup: Codable {
     var createdAt: Date
     var updatedAt: Date
 
+    @MainActor
     init(_ b: MonthlyBudget) {
         id = b.documentId
         userId = b.userId
@@ -82,6 +89,7 @@ struct MonthlyBudgetBackup: Codable {
         updatedAt = b.updatedAt
     }
 
+    @MainActor
     func toMonthlyBudget() -> MonthlyBudget {
         var budget = MonthlyBudget(
             userId: userId, year: year, month: month,
@@ -93,8 +101,71 @@ struct MonthlyBudgetBackup: Codable {
     }
 }
 
+/// Una meta (hucha, escudo o ahorro mensual) con su saldo y sus aportaciones.
+/// Las copias no las guardaban: tras restaurar, las huchas volvían a cero.
+nonisolated struct GoalBackup: Codable, Sendable {
+    var id: String?   // documentId (sin @DocumentID wrapper)
+    var userId: String
+    var name: String
+    var type: GoalType
+    var recurrence: GoalRecurrence
+    var targetAmount: Double
+    var currentAmount: Double
+    var linkedCategoryId: String?
+    var savingsExpenseCategory: String?
+    var savingsExpenseSubcategory: String?
+    var deadline: Date?
+    var icon: String?
+    var systemImage: String?
+    var colorHex: String?
+    var isArchived: Bool
+    var createdAt: Date
+    var updatedAt: Date
+    var savedHistory: [Goal.SavedEntry]
+
+    @MainActor
+    init(_ g: Goal) {
+        id = g.documentId
+        userId = g.userId
+        name = g.name
+        type = g.type
+        recurrence = g.recurrence
+        targetAmount = g.targetAmount
+        currentAmount = g.currentAmount
+        linkedCategoryId = g.linkedCategoryId
+        savingsExpenseCategory = g.savingsExpenseCategory
+        savingsExpenseSubcategory = g.savingsExpenseSubcategory
+        deadline = g.deadline
+        icon = g.icon
+        systemImage = g.systemImage
+        colorHex = g.colorHex
+        isArchived = g.isArchived
+        createdAt = g.createdAt
+        updatedAt = g.updatedAt
+        savedHistory = g.savedHistory
+    }
+
+    @MainActor
+    func toGoal() -> Goal {
+        var goal = Goal(
+            userId: userId, name: name, type: type, recurrence: recurrence,
+            targetAmount: targetAmount, currentAmount: currentAmount,
+            linkedCategoryId: linkedCategoryId,
+            savingsExpenseCategory: savingsExpenseCategory,
+            savingsExpenseSubcategory: savingsExpenseSubcategory,
+            deadline: deadline, icon: icon, colorHex: colorHex
+        )
+        goal.systemImage = systemImage
+        goal.isArchived = isArchived
+        goal.createdAt = createdAt
+        goal.updatedAt = updatedAt
+        goal.savedHistory = savedHistory
+        return goal
+    }
+}
+
 /// Representa un backup completo del usuario
-struct UserBackup: Codable {
+nonisolated struct UserBackup: Codable, Sendable {
     let userId: String
     let timestamp: Date
     let version: String
@@ -105,15 +176,28 @@ struct UserBackup: Codable {
     let categories: [Category]
     let recurringExpenses: [RecurringExpenseBackup]   // sin @DocumentID
     let monthlyBudgets: [MonthlyBudgetBackup]         // sin @DocumentID
+    /// Opcional: las copias anteriores a la 2.3.1 no lo traen.
+    let goals: [GoalBackup]?
     let savedFilters: [ExpenseFilter]
 
     // Metadata
     let deviceInfo: DeviceInfo
 
-    struct DeviceInfo: Codable {
+    struct DeviceInfo: Codable, Sendable {
         let model: String
         let systemVersion: String
         let appVersion: String
+    }
+
+    /// La misma copia con otros gastos: sin ellos para el documento principal
+    /// de una copia por partes, o con todos al recomponerla.
+    func conGastos(_ gastos: [Expense]) -> UserBackup {
+        UserBackup(
+            userId: userId, timestamp: timestamp, version: version,
+            userDocument: userDocument, expenses: gastos, categories: categories,
+            recurringExpenses: recurringExpenses, monthlyBudgets: monthlyBudgets,
+            goals: goals, savedFilters: savedFilters, deviceInfo: deviceInfo
+        )
     }
 }
 
@@ -140,6 +224,13 @@ final class BackupManager {
         let expenseCount: Int
         let categoryCount: Int
         let size: Int // bytes
+        /// Documentos hermanos con los gastos (0 = copia de un solo documento).
+        /// Sus ids se deducen de este número: borrarlos no cuesta una consulta.
+        let partCount: Int
+    }
+
+    private func backupsCollection(_ userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("backups")
     }
 
     // MARK: - Create Backup
@@ -161,6 +252,7 @@ final class BackupManager {
         let categories = UserDataManager.shared.categories
         let recurring = try await fetchRecurringExpenses(userId: userId)
         let budgets = try await fetchMonthlyBudgets(userId: userId)
+        let goals = try await fetchGoals(userId: userId)
         let filters = UserDataManager.shared.savedFilters
 
         // 2. Crear objeto de backup
@@ -177,6 +269,7 @@ final class BackupManager {
             categories: categories,
             recurringExpenses: recurringBackup,
             monthlyBudgets: budgetsBackup,
+            goals: goals.map { GoalBackup($0) },
             savedFilters: filters,
             deviceInfo: .init(
                 model: UIDevice.current.model,
@@ -188,42 +281,73 @@ final class BackupManager {
         // 3. Guardar en Firestore (colección backups)
         // Usamos JSONEncoder en lugar de Firestore.Encoder para evitar
         // FirestoreEncodingError con @DocumentID, Set<String> y tipos complejos anidados
+        //
+        // Fuera del hilo principal: es el historial entero, y la copia
+        // automática salta en el arranque, justo cuando se está pintando la Home.
         let backupId = UUID().uuidString
-        let jsonEncoder = JSONEncoder()
-        jsonEncoder.dateEncodingStrategy = .secondsSince1970
-        let jsonData = try jsonEncoder.encode(backup)
-        guard let jsonString = String(data: jsonData, encoding: .utf8) else {
-            throw NSError(domain: "BackupManager", code: 500, userInfo: [NSLocalizedDescriptionKey: "Error serializando backup a JSON"])
-        }
+        let documentos = try await Task.detached(priority: .utility) {
+            try BackupChunking.trocear(backup)
+        }.value
 
         // 4. Guardar datos + metadata en un único setData (plain [String: Any] para evitar FirestoreEncodingError)
         let firestoreData: [String: Any] = [
-            "jsonData": jsonString,
+            "jsonData": documentos.principal,
             "version": backup.version,
             "userId": backup.userId,
             "timestamp": Timestamp(date: backup.timestamp),  // raíz para poder ordenar por él
+            "partCount": documentos.partes.count,
             "metadata": [
                 "id": backupId,
                 "timestamp": Timestamp(date: backup.timestamp),
                 "expenseCount": expenses.count,
                 "categoryCount": categories.count,
-                "size": jsonData.count
+                "size": documentos.bytes
             ] as [String: Any]
         ]
 
-        try await withRetry {
-            try await self.db.collection("users")
-                .document(userId)
-                .collection("backups")
-                .document(backupId)
-                .setData(firestoreData)
+        // Las partes primero y el documento principal al final: es el que hace
+        // que la copia exista. Si algo falla a medias no queda una copia a la
+        // vista con gastos de menos, solo partes sueltas que se recogen aquí.
+        let coleccion = backupsCollection(userId)
+        do {
+            for (indice, parte) in documentos.partes.enumerated() {
+                let datosDeParte: [String: Any] = [
+                    "isBackupPart": true,
+                    "parentBackupId": backupId,
+                    "partIndex": indice,
+                    "partCount": documentos.partes.count,
+                    "jsonData": parte,
+                    "userId": backup.userId,
+                    // `createdAt`, no `timestamp`: ver `BackupChunking`.
+                    "createdAt": Timestamp(date: backup.timestamp),
+                ]
+                let id = BackupChunking.idDeParte(copia: backupId, indice: indice)
+                try await withRetry {
+                    try await coleccion.document(id).setData(datosDeParte)
+                }
+            }
+            try await withRetry {
+                try await coleccion.document(backupId).setData(firestoreData)
+            }
+        } catch {
+            logger.error("❌ Copia \(backupId) sin terminar (\(documentos.partes.count) partes): \(error.localizedDescription)")
+            // Sin esperarlo: sin red el borrado no vuelve hasta que la haya, y
+            // quien espera aquí es el botón de «Crear copia». Firestore lo deja
+            // en cola; si tampoco llega, lo recoge `borrarPartesHuerfanas`.
+            let partes = documentos.partes.count
+            Task { try? await self.borrarCopia(id: backupId, partes: partes, en: coleccion) }
+            throw error
         }
 
         logger.info("✅ Backup created successfully: \(backupId)")
+        if !documentos.partes.isEmpty {
+            logger.info("   - en \(documentos.partes.count) partes (\(documentos.bytes) bytes)")
+        }
         logger.info("   - \(expenses.count) expenses")
         logger.info("   - \(categories.count) categories")
         logger.info("   - \(recurring.count) recurring expenses")
         logger.info("   - \(budgets.count) monthly budgets")
+        logger.info("   - \(goals.count) goals")
 
         // Actualizar lista + limpiar backups antiguos (máximo 3)
         await loadAvailableBackups()
@@ -234,24 +358,93 @@ final class BackupManager {
 
     /// Elimina backups más antiguos, manteniendo solo los 3 más recientes
     private func pruneOldBackups(userId: String) async {
+        let coleccion = backupsCollection(userId)
         do {
-            let snapshot = try await db.collection("users")
-                .document(userId)
-                .collection("backups")
+            // Del servidor: de esta lista sale también qué partes están
+            // huérfanas, y con una caché a medias se borrarían partes buenas.
+            let snapshot = try await coleccion
                 .order(by: "timestamp", descending: true)
-                .getDocuments()
+                .getDocuments(source: .server)
 
-            let toDelete = snapshot.documents.dropFirst(3)
-            for doc in toDelete {
-                try await db.collection("users")
-                    .document(userId)
-                    .collection("backups")
-                    .document(doc.documentID)
-                    .delete()
+            // Las partes no llevan `timestamp` y no salen aquí; el filtro es
+            // por si alguna vez lo llevaran.
+            let copias = snapshot.documents.filter { !Self.esParte($0.data()) }
+            for doc in copias.dropFirst(3) {
+                try await borrarCopia(id: doc.documentID, partes: Self.partes(en: doc.data()), en: coleccion)
                 logger.debug("🗑️ Backup antiguo eliminado: \(doc.documentID)")
             }
+
+            let vivas = copias.prefix(3)
+            await borrarPartesHuerfanas(
+                copiasVivas: Set(vivas.map(\.documentID)),
+                partesEsperadas: vivas.reduce(0) { $0 + Self.partes(en: $1.data()) },
+                en: coleccion
+            )
         } catch {
             logger.warning("⚠️ No se pudieron limpiar backups antiguos: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Partes
+
+    private static func esParte(_ data: [String: Any]) -> Bool {
+        data["isBackupPart"] as? Bool == true
+    }
+
+    /// Cuántas partes dice tener una copia. Las de un solo documento —todas
+    /// las anteriores a este formato— no traen el campo.
+    private static func partes(en data: [String: Any]) -> Int {
+        max(0, data["partCount"] as? Int ?? 0)
+    }
+
+    /// Borra una copia con sus partes, en un solo lote: o desaparece entera o
+    /// no desaparece. Borrar un documento que no existe no es un error, así
+    /// que sirve igual para una copia que se quedó a medias.
+    private func borrarCopia(id: String, partes: Int, en coleccion: CollectionReference) async throws {
+        let referencias = [coleccion.document(id)] + (0..<partes).map {
+            coleccion.document(BackupChunking.idDeParte(copia: id, indice: $0))
+        }
+        for lote in referencias.chunked(into: BackupChunking.operacionesPorLote) {
+            let batch = db.batch()
+            lote.forEach { batch.deleteDocument($0) }
+            try await batch.commit()
+        }
+    }
+
+    /// Recoge las partes de copias que ya no existen (ver
+    /// `BackupChunking.partesHuerfanas`).
+    ///
+    /// Primero se cuentan, que cuesta una lectura: bajarlas para mirarlas es
+    /// bajar casi 1 MB por parte, y lo normal es que no sobre ninguna.
+    private func borrarPartesHuerfanas(
+        copiasVivas: Set<String>,
+        partesEsperadas: Int,
+        en coleccion: CollectionReference
+    ) async {
+        do {
+            let consulta = coleccion.whereField("isBackupPart", isEqualTo: true)
+            let total = try await consulta.count.getAggregation(source: .server).count.intValue
+            guard total > partesEsperadas else { return }
+
+            let snapshot = try await consulta.getDocuments(source: .server)
+            let guardadas = snapshot.documents.map { doc in
+                BackupChunking.ParteGuardada(
+                    id: doc.documentID,
+                    copia: doc.data()["parentBackupId"] as? String ?? "",
+                    creada: (doc.data()["createdAt"] as? Timestamp)?.dateValue()
+                )
+            }
+            let huerfanas = BackupChunking.partesHuerfanas(guardadas, copiasVivas: copiasVivas)
+            for lote in huerfanas.chunked(into: BackupChunking.operacionesPorLote) {
+                let batch = db.batch()
+                lote.forEach { batch.deleteDocument(coleccion.document($0)) }
+                try await batch.commit()
+            }
+            if !huerfanas.isEmpty {
+                logger.info("🧹 \(huerfanas.count) partes de copias que ya no existen, borradas")
+            }
+        } catch {
+            logger.warning("⚠️ No se pudieron revisar las partes huérfanas: \(error.localizedDescription)")
         }
     }
 
@@ -269,22 +462,37 @@ final class BackupManager {
         logger.info("🔄 Restoring backup \(backupId)...")
 
         // 1. Cargar backup desde Firestore
-        let doc = try await db.collection("users")
-            .document(userId)
-            .collection("backups")
-            .document(backupId)
-            .getDocument()
+        let coleccion = backupsCollection(userId)
+        let doc = try await coleccion.document(backupId).getDocument()
 
-        guard let jsonString = doc.data()?["jsonData"] as? String,
-              let jsonData = jsonString.data(using: .utf8) else {
+        guard let jsonString = doc.data()?["jsonData"] as? String else {
             throw NSError(domain: "BackupManager", code: 404, userInfo: [NSLocalizedDescriptionKey: "Backup no encontrado o formato inválido"])
         }
-        let jsonDecoder = JSONDecoder()
-        jsonDecoder.dateDecodingStrategy = .secondsSince1970
+
+        // Los dos formatos: las copias de un solo documento no traen
+        // `partCount` y todo está en `jsonString`; las que van por partes
+        // tienen los gastos en documentos hermanos de id conocido.
+        let partesEsperadas = Self.partes(en: doc.data() ?? [:])
+        var partes: [Int: String] = [:]
+        for indice in 0..<partesEsperadas {
+            let id = BackupChunking.idDeParte(copia: backupId, indice: indice)
+            let parte = try await coleccion.document(id).getDocument()
+            // Si falta, `recomponer` se niega a restaurar a medias.
+            if let texto = parte.data()?["jsonData"] as? String { partes[indice] = texto }
+        }
+
         // Propagar errores de decode (antes try? los tragaba sin diagnóstico)
         let backup: UserBackup
         do {
-            backup = try jsonDecoder.decode(UserBackup.self, from: jsonData)
+            // Fuera del hilo principal, igual que al crearla.
+            let partesLeidas = partes
+            backup = try await Task.detached(priority: .userInitiated) {
+                try BackupChunking.recomponer(
+                    principal: jsonString, partes: partesLeidas, partesEsperadas: partesEsperadas)
+            }.value
+        } catch let fallo as BackupChunking.Fallo {
+            logger.error("Backup \(backupId) incompleto: \(fallo.localizedDescription)")
+            throw fallo
         } catch {
             logger.error("Decode backup failed: \(error.localizedDescription)")
             throw NSError(domain: "BackupManager", code: 422,
@@ -299,12 +507,11 @@ final class BackupManager {
         do {
             // 2. Restaurar gastos
             logger.info("   Restoring \(backup.expenses.count) expenses...")
-            for expense in backup.expenses {
-                try await restoreExpense(expense, userId: userId)
-            }
+            try await restoreExpenses(backup.expenses, userId: userId)
 
             // 3. Restaurar categorías
             logger.info("   Restoring \(backup.categories.count) categories...")
+            try await garantizarMapaDeCategorias(backup.categories, userId: userId)
             for category in backup.categories {
                 try await restoreCategory(category, userId: userId)
             }
@@ -319,6 +526,11 @@ final class BackupManager {
             logger.info("   Restoring \(backup.monthlyBudgets.count) monthly budgets...")
             for budget in backup.monthlyBudgets {
                 try await restoreMonthlyBudget(budget, userId: userId)
+            }
+
+            // 5b. Restaurar metas (las copias antiguas no las traen)
+            for goal in backup.goals ?? [] {
+                try await restoreGoal(goal, userId: userId)
             }
 
             // 6. Restaurar documento de usuario (settings, filters, etc)
@@ -360,6 +572,7 @@ final class BackupManager {
         let categories = UserDataManager.shared.categories
         let recurring = try await fetchRecurringExpenses(userId: userId)
         let budgets = try await fetchMonthlyBudgets(userId: userId)
+        let goals = try await fetchGoals(userId: userId)
         let filters = UserDataManager.shared.savedFilters
 
         let backup = UserBackup(
@@ -371,6 +584,7 @@ final class BackupManager {
             categories: categories,
             recurringExpenses: recurring.map { RecurringExpenseBackup($0) },
             monthlyBudgets: budgets.map { MonthlyBudgetBackup($0) },
+            goals: goals.map { GoalBackup($0) },
             savedFilters: filters,
             deviceInfo: .init(
                 model: UIDevice.current.model,
@@ -379,13 +593,8 @@ final class BackupManager {
             )
         )
 
-        // Convertir a JSON (backup-safe: sin @DocumentID)
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
-        let jsonData = try encoder.encode(backup)
-
-        // Guardar en archivo temporal
+        // Archivo temporal. Quien lo comparte lo borra al terminar
+        // (`BackupSettingsView`): lleva todos los gastos del usuario en claro.
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
         let filename = "Clarity_Backup_\(formatter.string(from: Date())).json"
@@ -393,7 +602,16 @@ final class BackupManager {
         let tempDir = FileManager.default.temporaryDirectory
         let fileURL = tempDir.appendingPathComponent(filename)
 
-        try jsonData.write(to: fileURL, options: .completeFileProtection)
+        // Convertir a JSON (backup-safe: sin @DocumentID) y escribirlo, fuera
+        // del hilo principal: con el historial entero y `prettyPrinted` son
+        // varios MB.
+        try await Task.detached(priority: .userInitiated) {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            let jsonData = try encoder.encode(backup)
+            try jsonData.write(to: fileURL, options: .completeFileProtection)
+        }.value
 
         logger.info("✅ JSON exported to \(fileURL.path)")
 
@@ -408,23 +626,24 @@ final class BackupManager {
 
         logger.info("📥 Importing data from JSON...")
 
-        // Leer archivo
-        let jsonData = try Data(contentsOf: fileURL)
-
-        // Decodificar
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let backup = try decoder.decode(UserBackup.self, from: jsonData)
+        // Leer y decodificar fuera del hilo principal: es el historial entero.
+        // El permiso de acceso al archivo lo abre y lo cierra quien llama, y
+        // sigue abierto mientras dura esta espera.
+        let backup = try await Task.detached(priority: .userInitiated) {
+            let jsonData = try Data(contentsOf: fileURL)
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(UserBackup.self, from: jsonData)
+        }.value
 
         // Restaurar datos (mismo proceso que restaurar backup)
         isRestoringBackup = true
         defer { isRestoringBackup = false }
 
         // Restaurar todos los datos
-        for expense in backup.expenses {
-            try await restoreExpense(expense, userId: userId)
-        }
+        try await restoreExpenses(backup.expenses, userId: userId)
 
+        try await garantizarMapaDeCategorias(backup.categories, userId: userId)
         for category in backup.categories {
             try await restoreCategory(category, userId: userId)
         }
@@ -435,6 +654,10 @@ final class BackupManager {
 
         for budget in backup.monthlyBudgets {
             try await restoreMonthlyBudget(budget, userId: userId)
+        }
+
+        for goal in backup.goals ?? [] {
+            try await restoreGoal(goal, userId: userId)
         }
 
         if let userDoc = backup.userDocument {
@@ -466,6 +689,9 @@ final class BackupManager {
             var backups: [BackupMetadata] = []
 
             for doc in snapshot.documents {
+                // Las partes de una copia no son copias (y sin `timestamp`
+                // tampoco deberían salir en esta consulta).
+                guard !Self.esParte(doc.data()) else { continue }
                 guard let metadataDict = doc.data()["metadata"] as? [String: Any],
                       let id = metadataDict["id"] as? String,
                       let ts = metadataDict["timestamp"] as? Timestamp,
@@ -479,7 +705,8 @@ final class BackupManager {
                     timestamp: ts.dateValue(),
                     expenseCount: expenseCount,
                     categoryCount: categoryCount,
-                    size: size
+                    size: size,
+                    partCount: Self.partes(en: doc.data())
                 ))
             }
 
@@ -496,11 +723,16 @@ final class BackupManager {
             throw NSError(domain: "BackupManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "Usuario no autenticado"])
         }
 
-        try await db.collection("users")
-            .document(userId)
-            .collection("backups")
-            .document(backupId)
-            .delete()
+        let coleccion = backupsCollection(userId)
+        // Cuántas partes tiene lo sabe la lista; si la copia no está en ella,
+        // se le pregunta a su documento.
+        let partes: Int
+        if let conocida = availableBackups.first(where: { $0.id == backupId }) {
+            partes = conocida.partCount
+        } else {
+            partes = Self.partes(en: try await coleccion.document(backupId).getDocument().data() ?? [:])
+        }
+        try await borrarCopia(id: backupId, partes: partes, en: coleccion)
 
         logger.info("🗑️ Deleted backup \(backupId)")
 
@@ -569,12 +801,16 @@ final class BackupManager {
         throw lastError!
     }
 
+    // Las tres lecturas de la copia van solo contra el servidor. Sin red,
+    // Firestore contesta desde su caché sin dar error —puede que con un mes
+    // suelto— y eso se guardaba como copia completa. Ahora falla, se reintenta
+    // y la copia automática lo vuelve a probar en el siguiente arranque.
     private func fetchAllExpenses(userId: String) async throws -> [Expense] {
         try await withRetry {
             let snapshot = try await self.db.collection("users")
                 .document(userId)
                 .collection("expenses")
-                .getDocuments(source: .default)
+                .getDocuments(source: .server)
             // Con el DTO y el id del documento, como el resto de la app: `Expense`
             // no lleva `@DocumentID` y el documento no guarda el id, así que
             // decodificado a pelo salía con `id == nil` y `restoreExpense` lo
@@ -595,7 +831,7 @@ final class BackupManager {
             let snapshot = try await self.db.collection("users")
                 .document(userId)
                 .collection("recurringExpenses")
-                .getDocuments(source: .default)
+                .getDocuments(source: .server)
             return snapshot.documents.compactMap { try? $0.data(as: RecurringExpense.self) }
         }
     }
@@ -604,21 +840,49 @@ final class BackupManager {
         try await withRetry {
             let snapshot = try await self.db.collection("users")
                 .document(userId)
-                .collection("monthlyBudgets")
-                .getDocuments(source: .default)
+                // `monthly_budgets`, como `FinancialService`. Aquí ponía
+                // `monthlyBudgets`, que no existe: las copias no guardaban
+                // ningún presupuesto.
+                .collection("monthly_budgets")
+                .getDocuments(source: .server)
             return snapshot.documents.compactMap { try? $0.data(as: MonthlyBudget.self) }
         }
     }
 
-    private func restoreExpense(_ expense: Expense, userId: String) async throws {
-        guard let id = expense.id else { return }
+    /// Restaura los gastos en lotes. Antes era un `await setData` por gasto,
+    /// en serie: con 3.000 gastos, 3.000 viajes de ida y vuelta.
+    private func restoreExpenses(_ expenses: [Expense], userId: String) async throws {
+        let lotes = BackupChunking.lotes(de: expenses)
+        guard !lotes.isEmpty else { return }
 
-        let data = try Firestore.Encoder().encode(expense)
-        try await db.collection("users")
-            .document(userId)
-            .collection("expenses")
-            .document(id)
-            .setData(data, merge: true)
+        // Se escriben en Firestore por fuera del repositorio y pueden ser de
+        // cualquier año. La sincronización de fondo solo baja una ventana
+        // reciente: sin esto, los antiguos no entrarían en la caché local
+        // hasta la completa semanal. También si falla a medias: los lotes ya
+        // confirmados están escritos.
+        defer { ExpenseSyncPolicy.olvidarMarcas() }
+
+        let coleccion = db.collection("users").document(userId).collection("expenses")
+        for lote in lotes {
+            let batch = db.batch()
+            for expense in lote {
+                guard let id = expense.id else { continue }
+                let data = try Firestore.Encoder().encode(expense)
+                batch.setData(data, forDocument: coleccion.document(id), merge: true)
+            }
+            try await batch.commit()
+        }
+    }
+
+    /// Regla de `architecture.md`: no se escribe una entrada del mapa sin que el
+    /// mapa entero esté persistido. Si el documento no tiene mapa (cuenta nueva,
+    /// dispositivo nuevo) y la restauración se cortaba a medias, quedaba un mapa
+    /// parcial que además impedía la siembra de después. Con esto, si falta se
+    /// siembra completo con las categorías de la copia; si ya existe, no hace
+    /// nada. De paso crea el documento, que `updateData` exige.
+    private func garantizarMapaDeCategorias(_ categories: [Category], userId: String) async throws {
+        guard !categories.isEmpty else { return }
+        try await UserDataService.shared.persistCategoriesIfMissing(categories, userId: userId)
     }
 
     private func restoreCategory(_ category: Category, userId: String) async throws {
@@ -660,8 +924,40 @@ final class BackupManager {
         let data = try Firestore.Encoder().encode(model)
         try await db.collection("users")
             .document(userId)
-            .collection("monthlyBudgets")
+            .collection("monthly_budgets")
             .document(docId)
+            .setData(data, merge: true)
+    }
+
+    /// Las metas: huchas con su saldo y sus aportaciones, escudos y ahorro
+    /// mensual. `goals`, como `FinancialService`.
+    private func fetchGoals(userId: String) async throws -> [Goal] {
+        try await withRetry {
+            let snapshot = try await self.db.collection("users")
+                .document(userId)
+                .collection("goals")
+                .getDocuments(source: .server)
+            return snapshot.documents.compactMap { doc -> Goal? in
+                do {
+                    return try doc.data(as: Goal.self)
+                } catch {
+                    self.logger.error("Backup: meta \(doc.documentID) no decodificable: \(error.localizedDescription)")
+                    return nil
+                }
+            }
+        }
+    }
+
+    /// Restaurar es volver a como estaba: la meta de la copia pisa a la actual,
+    /// saldo y aportaciones incluidos, igual que el resto de lo restaurado. Una
+    /// meta creada después de la copia no está en ella y se queda como está.
+    private func restoreGoal(_ backup: GoalBackup, userId: String) async throws {
+        guard let id = backup.id, !id.isEmpty else { return }
+        let data = try Firestore.Encoder().encode(backup.toGoal())
+        try await db.collection("users")
+            .document(userId)
+            .collection("goals")
+            .document(id)
             .setData(data, merge: true)
     }
 

@@ -47,5 +47,15 @@ struct VoiceSettings: Codable {
             UserDefaults.standard.set(data, forKey: VoiceSettings.storageKey)
         }
     }
+
+    /// ¿Arranca la hoja de confirmación la cuenta atrás que guarda sola?
+    ///
+    /// Solo cuando el dictado se entendió entero. Si faltó algo —lo habitual,
+    /// la categoría, que entonces es una suposición—, guardar sin que nadie
+    /// mire es apuntar el gasto donde no toca: el usuario revisa y pulsa
+    /// «Guardar». No toca `autoConfirm`, que decide otra cosa (saltarse la hoja).
+    func arrancaCuentaAtras(deteccionCompleta: Bool) -> Bool {
+        deteccionCompleta && autoConfirmDelay > 0
+    }
 }
 

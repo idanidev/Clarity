@@ -76,7 +76,16 @@ struct FinancialDashboardView: View {
                     set: { if !$0 { viewModel.clearError() } }
                 )
             ) {
-                Button("OK") { viewModel.clearError() }
+                // Solo si lo que falló fue la carga: el mismo aviso sirve para un
+                // fallo al guardar una meta, y ahí no hay nada que volver a cargar.
+                // Sin esto, un fallo de red dejaba la pantalla en «no tienes metas»
+                // hasta cerrar la app.
+                if !viewModel.hasLoaded {
+                    Button("Reintentar") {
+                        Task { await viewModel.load() }
+                    }
+                }
+                Button("OK", role: .cancel) { viewModel.clearError() }
             } message: {
                 Text(viewModel.error ?? "")
             }
@@ -111,6 +120,12 @@ struct FinancialDashboardView: View {
             .padding(.horizontal, Spacing.md)
             .padding(.top, Spacing.xxs)
             .padding(.bottom, Spacing.lg)
+        }
+        .refreshable {
+            // En una tarea aparte: `load()` enciende `isLoading`, la vista cambia
+            // este scroll por la pantalla de carga y, al desaparecer el scroll,
+            // SwiftUI cancela la tarea del `refreshable` con la carga a medias.
+            await Task { await viewModel.load() }.value
         }
     }
 

@@ -3,7 +3,12 @@ import Foundation
 import OSLog
 import UIKit
 
-class ExportService: @unchecked Sendable {
+/// `@unchecked Sendable` sin riesgo: no guarda estado mutable —su única
+/// propiedad es un `Logger` constante— y cada método trabaja solo con lo que
+/// recibe. `final` para que una subclase no pueda añadirlo. Por eso mismo
+/// puede ser `nonisolated` entera: el parseo del CSV corre en una tarea
+/// aparte, fuera del hilo principal (`BackupSettingsView`).
+nonisolated final class ExportService: @unchecked Sendable {
     static let shared = ExportService()
     private let logger = Logger(subsystem: "com.idanidev.clarity", category: "ExportService")
 
@@ -12,6 +17,9 @@ class ExportService: @unchecked Sendable {
     // MARK: - CSV Import (parse only, no persistence)
 
     /// Parses a CSV file into an array of Expense without saving anything.
+    ///
+    /// Lee el archivo entero y lo recorre carácter a carácter: llamar desde
+    /// una tarea aparte, no desde el hilo principal.
     func parseCSV(from url: URL) throws -> [Expense] {
         let content = try String(contentsOf: url, encoding: .utf8)
         let rows = content.components(separatedBy: .newlines).filter { !$0.isEmpty }

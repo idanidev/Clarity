@@ -326,17 +326,3 @@ private struct CategoryBreakdownRow: View {
         .accessibilityLabel("\(expense.name), \(Formatters.currency(expense.amount)), \(Formatters.displayDate(expense.date))")
     }
 }
-
-// MARK: - Adaptador desde el stat del ViewModel
-// El VM no importa SwiftUI (no puede construir Color), así que el mapeo vive aquí.
-extension ChartsViewModel.CategoryStat {
-    var asChartData: CategoryChartData {
-        CategoryChartData(
-            name: name,
-            amount: amount,
-            percentage: percentage,
-            color: Color(hex: colorHex),
-            deltaVsPrevious: deltaVsPrevious
-        )
-    }
-}

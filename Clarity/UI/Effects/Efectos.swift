@@ -29,7 +29,7 @@ enum Shaders {
 extension View {
     /// Al tocar, una onda sale del punto exacto del dedo y la vista se
     /// estremece. Shader Metal `onda` en Shaders.metal. En iOS 26 no hace nada:
-    /// ver la regla 3 de arriba.
+    /// ver la regla 3 de arriba. Con «Reducir movimiento», tampoco.
     @ViewBuilder
     func ondaAlTocar() -> some View {
         if #available(iOS 26, *) { self } else { modifier(OndaAlTocar()) }
@@ -39,6 +39,7 @@ extension View {
 private struct OndaAlTocar: ViewModifier {
     @State private var origen: CGPoint = .zero
     @State private var tiempo: Double = 0
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
 
     func body(content: Content) -> some View {
         content
@@ -48,6 +49,9 @@ private struct OndaAlTocar: ViewModifier {
             // se enteraba — las tarjetas de la Home no llevaban a ningún sitio.
             .simultaneousGesture(
                 SpatialTapGesture(coordinateSpace: .local).onEnded { toque in
+                    // Con «Reducir movimiento» la tarjeta no se estremece; el
+                    // toque sigue llegando al botón igual.
+                    guard !reducirMovimiento else { return }
                     origen = toque.location
                     tiempo = 0
                     withAnimation(.linear(duration: 1.4)) { tiempo = 1.4 }
@@ -85,7 +89,8 @@ private struct OndaModifier: ViewModifier, Animatable {
 
 extension View {
     /// Un brillo recorre la vista una vez cada vez que `disparo` cambia.
-    /// Shader Metal `destello`. En iOS 26 no hace nada: regla 3.
+    /// Shader Metal `destello`. En iOS 26 no hace nada: regla 3. Con «Reducir
+    /// movimiento», tampoco.
     @ViewBuilder
     func destello<T: Equatable>(cuando disparo: T) -> some View {
         if #available(iOS 26, *) { self } else { modifier(Destello(disparo: disparo)) }
@@ -95,11 +100,14 @@ extension View {
 private struct Destello<T: Equatable>: ViewModifier {
     let disparo: T
     @State private var progreso: Double = 2  // fuera de la vista = invisible
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
 
     func body(content: Content) -> some View {
         content
             .modifier(DestelloModifier(progreso: progreso))
             .onChange(of: disparo) { _, _ in
+                // Un brillo que cruza la tarjeta también es movimiento.
+                guard !reducirMovimiento else { return }
                 progreso = 0
                 withAnimation(.easeInOut(duration: 0.9)) { progreso = 1 }
             }
@@ -128,13 +136,51 @@ private struct DestelloModifier: ViewModifier, Animatable {
 extension View {
     /// Tiembla una vez cada vez que `disparo` cambia. Para avisar de que un
     /// tope se ha pasado, junto con un toque háptico de aviso.
+    ///
+    /// Con «Reducir movimiento» no tiembla, pero el toque háptico se queda: es
+    /// lo que sigue avisando.
     func temblor<T: Equatable>(cuando disparo: T) -> some View {
-        phaseAnimator([0, -7, 7, -5, 5, -2, 0], trigger: disparo) { content, fase in
-            content.offset(x: fase)
-        } animation: { _ in
-            .spring(duration: 0.07, bounce: 0.2)
-        }
-        .sensoryFeedback(.warning, trigger: disparo)
+        modifier(Temblor(disparo: disparo))
+    }
+}
+
+private struct Temblor<T: Equatable>: ViewModifier {
+    let disparo: T
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
+
+    func body(content: Content) -> some View {
+        // Una sola fase = quieto. Cambiar las fases y no la vista: con un `if`
+        // la tarjeta se reconstruiría entera al activar el ajuste.
+        let fases: [CGFloat] = reducirMovimiento ? [0] : [0, -7, 7, -5, 5, -2, 0]
+        content
+            .phaseAnimator(fases, trigger: disparo) { vista, fase in
+                vista.offset(x: fase)
+            } animation: { _ in
+                .spring(duration: 0.07, bounce: 0.2)
+            }
+            .sensoryFeedback(.warning, trigger: disparo)
+    }
+}
+
+// MARK: - Rebote de símbolo
+
+extension View {
+    /// El rebote de un SF Symbol (`symbolEffect(.bounce)`) cada vez que `disparo`
+    /// cambia, que con «Reducir movimiento» se queda quieto. El sistema no lo
+    /// apaga solo.
+    func reboteDeSimbolo<T: Equatable>(cuando disparo: T) -> some View {
+        modifier(ReboteDeSimbolo(disparo: disparo))
+    }
+}
+
+private struct ReboteDeSimbolo<T: Equatable>: ViewModifier {
+    let disparo: T
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
+
+    func body(content: Content) -> some View {
+        content
+            .symbolEffect(.bounce, value: disparo)
+            .symbolEffectsRemoved(reducirMovimiento)
     }
 }
 

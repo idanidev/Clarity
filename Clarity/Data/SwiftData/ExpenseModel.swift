@@ -2,7 +2,13 @@
 // SwiftData model for Expense entity
 
 import Foundation
+import OSLog
 import SwiftData
+
+// A nivel de archivo y no dentro de la clase: `@Model` reescribe las
+// propiedades almacenadas, y esto no es un dato del gasto.
+private let logger = Logger(
+    subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "ExpenseModel")
 
 @Model
 final class ExpenseModel {
@@ -68,7 +74,13 @@ final class ExpenseModel {
 // MARK: - Mapping Helpers
 extension ExpenseModel {
     convenience init(from domain: Expense) {
-        let dateObj = Formatters.date(from: domain.date) ?? Date.distantPast
+        let fechaLeida = Formatters.date(from: domain.date)
+        if fechaLeida == nil {
+            // Con `distantPast` el gasto se guarda, pero cae fuera de cualquier
+            // mes y de cualquier ventana de sincronización: «ha desaparecido».
+            logger.error("Gasto \(domain.id ?? "sin id", privacy: .public) con fecha ilegible; se guarda con distantPast")
+        }
+        let dateObj = fechaLeida ?? Date.distantPast
 
         self.init(
             id: domain.id ?? UUID().uuidString,
@@ -98,6 +110,11 @@ extension ExpenseModel {
         // JSONEncoder por gasto en cada sincronización.
         let hayDeudores = domain.debtors?.isEmpty == false || debtorsData != nil
         let deudores = hayDeudores ? ExpenseModel.encodeDebtors(domain.debtors) : nil
+        // Igual que en `init(from:)`: un gasto que llega a una fila que ya
+        // existe tiene que quedar como si se insertara de cero. Estos tres no
+        // se copiaban, y un gasto marcado como deducible o enlazado a su regla
+        // recurrente desde otro dispositivo se quedaba con el valor viejo.
+        let deducible = domain.isDeductible ?? false
         guard amount != domain.amount
             || name != domain.name
             || category != domain.category
@@ -108,6 +125,9 @@ extension ExpenseModel {
             || goalId != domain.goalId
             || isShared != domain.isShared
             || debtorsData != deudores
+            || isDeductible != deducible
+            || recurringId != domain.recurringId
+            || isRecurring != domain.isRecurring
         else { return false }
         amount = domain.amount
         name = domain.name
@@ -119,6 +139,9 @@ extension ExpenseModel {
         goalId = domain.goalId
         isShared = domain.isShared
         debtorsData = deudores
+        isDeductible = deducible
+        recurringId = domain.recurringId
+        isRecurring = domain.isRecurring
         updatedAt = Date()
         return true
     }
@@ -142,13 +165,27 @@ extension ExpenseModel {
         )
     }
 
+    // Si alguno de los dos falla, el gasto pierde a sus deudores en la caché
+    // —deja de salir en «Me deben»— y antes no quedaba ni una línea. Sin
+    // nombres ni importes en el mensaje: solo cuántos y cuánto ocupan.
+
     static func encodeDebtors(_ debtors: [Debtor]?) -> Data? {
         guard let debtors, !debtors.isEmpty else { return nil }
-        return try? JSONEncoder().encode(debtors)
+        do {
+            return try JSONEncoder().encode(debtors)
+        } catch {
+            logger.error("No se pudieron guardar \(debtors.count) deudores en la caché: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     static func decodeDebtors(_ data: Data?) -> [Debtor]? {
         guard let data else { return nil }
-        return try? JSONDecoder().decode([Debtor].self, from: data)
+        do {
+            return try JSONDecoder().decode([Debtor].self, from: data)
+        } catch {
+            logger.error("Deudores ilegibles en la caché (\(data.count) bytes): \(error.localizedDescription)")
+            return nil
+        }
     }
 }

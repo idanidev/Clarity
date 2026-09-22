@@ -147,17 +147,16 @@ class FinancialHubViewModel {
     func load() async {
         guard !hasLoaded && !isLoading else { return }
 
-        // Esperar a que Auth restaure sesión (crítico en simulador donde tarda más)
-        if Auth.auth().currentUser == nil {
-            for _ in 0..<5 {
-                try? await Task.sleep(for: .milliseconds(300))
-                if Auth.auth().currentUser != nil { break }
-            }
-            guard Auth.auth().currentUser != nil else {
-                error = "No autenticado"
-                return
-            }
+        // Esperar a que Auth restaure la sesión. Antes se sondeaba 5 × 300 ms y,
+        // si el arranque iba lento, saltaba un «No autenticado» falso. Ahora se
+        // escucha el cambio de sesión, con tope: ver `EsperaDeSesion`.
+        guard await EsperaDeSesion.haySesion() else {
+            error = "No autenticado"
+            return
         }
+        // Mientras se esperaba pudo entrar otra llamada (la tarea de la vista y
+        // un «Reintentar», por ejemplo): que no carguen las dos.
+        guard !hasLoaded && !isLoading else { return }
 
         isLoading = true
         error = nil

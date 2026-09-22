@@ -137,6 +137,8 @@ struct NewCategorySheet: View {
                                     .font(.title3)
                             }
                             .disabled(newSubcategoryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            // Solo icono: sin etiqueta VoiceOver leía el nombre del símbolo.
+                            .accessibilityLabel("Confirmar subcategoría")
                             
                             Button {
                                 withAnimation(.bouncy) {
@@ -148,6 +150,7 @@ struct NewCategorySheet: View {
                                     .foregroundStyle(.secondary)
                                     .font(.title3)
                             }
+                            .accessibilityLabel("Cancelar subcategoría")
                         }
                     } else {
                         Button {

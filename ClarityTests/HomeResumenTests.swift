@@ -74,7 +74,7 @@ struct HomeResumenTests {
         #expect(r.slots[HomeResumen.Slot.b]?.clase == "diaCaro")
         #expect(r.slots[HomeResumen.Slot.c]?.clase == "semana")
         #expect(r.slots[HomeResumen.Slot.e]?.clase == "semanaASemana")
-        if case .diaCaro(let d) = r.slots[HomeResumen.Slot.b]! { #expect(d.importe == 46); #expect(d.concepto == "Cena") }
+        if case .diaCaro(let d)? = r.slots[HomeResumen.Slot.b] { #expect(d.importe == 46); #expect(d.concepto == "Cena") }
     }
 
     @Test("Con todo configurado, cada hueco enseña lo más relevante de lo que le cabe")
@@ -92,8 +92,8 @@ struct HomeResumenTests {
         // Un −19 % frente al mes pasado dice más que una hucha al 4 %.
         #expect(r.slots[HomeResumen.Slot.e]?.clase == "comparativa")
         #expect(abs((r.libres ?? 0) - 1870.46) < 0.01)
-        if case .limites(let l) = r.slots[HomeResumen.Slot.a]! { #expect(l[0].restante > 90 && l[0].restante < 91) }
-        if case .teDeben(_, let total) = r.slots[HomeResumen.Slot.c]! { #expect(total == 40) }
+        if case .limites(let l)? = r.slots[HomeResumen.Slot.a] { #expect(l[0].restante > 90 && l[0].restante < 91) }
+        if case .teDeben(_, let total)? = r.slots[HomeResumen.Slot.c] { #expect(total == 40) }
     }
 
     @Test("Un mismo contenido no sale en dos huecos")
@@ -117,7 +117,7 @@ struct HomeResumenTests {
     func limiteSuperado() {
         let metas = [Goal(name: "Coche-Moto", type: .spendingLimit, targetAmount: 400, linkedCategoryId: "Coche-Moto")]
         let r = resumen([gasto(501, "Coche-Moto", dia: 10)], metas: metas)
-        guard case .limites(let l) = r.slots[HomeResumen.Slot.a]! else { Issue.record("sin límites"); return }
+        guard case .limites(let l)? = r.slots[HomeResumen.Slot.a] else { Issue.record("sin límites"); return }
         #expect(l[0].superado)
         #expect(l[0].progreso == 1)
         #expect(abs(l[0].restante + 101) < 0.001)
@@ -128,7 +128,7 @@ struct HomeResumenTests {
     func cargosSoloFuturos() {
         let r = resumen([gasto(1, "Ocio", dia: 1)],
                         recurrentes: [regla("pasado", dia: 3), regla("hoy", dia: 10), regla("luego", dia: 20)])
-        guard case .cargos(let c, let total) = r.slots[HomeResumen.Slot.b]! else { Issue.record("sin cargos"); return }
+        guard case .cargos(let c, let total)? = r.slots[HomeResumen.Slot.b] else { Issue.record("sin cargos"); return }
         #expect(c.map(\.nombre) == ["hoy", "luego"])
         #expect(total == 20)
         #expect(r.relevancias["cargos"] == 0.7)
@@ -191,7 +191,7 @@ struct HomeResumenTests {
         #expect(r.totalAnalisis == 50)
         #expect(r.numeroAnalisis == 2)
         // El límite de Ocio cuenta lo gastado en Ocio aunque el filtro lo deje fuera.
-        guard case .limites(let limites) = r.slots[HomeResumen.Slot.a]! else { Issue.record("sin límites"); return }
+        guard case .limites(let limites)? = r.slots[HomeResumen.Slot.a] else { Issue.record("sin límites"); return }
         #expect(limites.first?.gastado == 100)
         // El día más caro sale de lo filtrado: los 40 € de Zapatillas, no los 100 de Ocio.
         #expect(r.diaMasCaro?.importe == 40)
@@ -201,20 +201,24 @@ struct HomeResumenTests {
     // MARK: - Lo que sale de tu normal
 
     /// Tres meses con 100 € en Restaurantes y 300 € en Súper cada uno.
+    /// `get throws` + `#require` en vez de `!`: si `build` devolviera `nil`, que
+    /// falle el test que lo usa y no se caiga el proceso de tests.
     private var normalDeTresMeses: HomeNormal {
-        var historico: [Expense] = []
-        for mes in 1...3 {
-            historico.append(gasto(100, "Restaurantes", dia: 6, mes: mes))
-            historico.append(gasto(300, "Súper", dia: 7, mes: mes))
+        get throws {
+            var historico: [Expense] = []
+            for mes in 1...3 {
+                historico.append(gasto(100, "Restaurantes", dia: 6, mes: mes))
+                historico.append(gasto(300, "Súper", dia: 7, mes: mes))
+            }
+            return try #require(HomeNormal.build(historico: historico, mes: hoy, calendar: cal))
         }
-        return HomeNormal.build(historico: historico, mes: hoy, calendar: cal)!
     }
 
     @Test("Fuera de lo normal: la categoría que más se desvía de tu mediana, a estas alturas del mes")
-    func fueraDeNormal() {
+    func fueraDeNormal() throws {
         // A día 10 de 30, lo normal en Restaurantes son 33 €; llevas 90.
         // En Súper lo normal son 100 y llevas 100: no se desvía.
-        let r = resumen([gasto(90, "Restaurantes", dia: 8), gasto(100, "Súper", dia: 9)], normal: normalDeTresMeses)
+        let r = resumen([gasto(90, "Restaurantes", dia: 8), gasto(100, "Súper", dia: 9)], normal: try normalDeTresMeses)
         guard case .fueraDeNormal(let d)? = contenido("fueraDeNormal", en: r) else { Issue.record("sin desvío"); return }
         #expect(d.categoria == "Restaurantes")
         #expect(d.porcentaje == 170)
@@ -223,11 +227,11 @@ struct HomeResumenTests {
     }
 
     @Test("Fuera de lo normal no sale antes del día 5 ni con menos de tres meses")
-    func fueraDeNormalPrudente() {
+    func fueraDeNormalPrudente() throws {
         let dia3 = cal.date(from: DateComponents(year: 2026, month: 4, day: 3))!
         let r = HomeResumen.build(gastos: [gasto(90, "Restaurantes", dia: 2)], gastosMesAnterior: [], metas: [],
                                   recurrentes: [], presupuesto: nil, primerGasto: nil, hoy: dia3, calendar: cal,
-                                  normal: normalDeTresMeses)
+                                  normal: try normalDeTresMeses)
         #expect(r.relevancias["fueraDeNormal"] == nil)
         let dosMeses = HomeNormal.build(historico: [gasto(100, "Restaurantes", dia: 6, mes: 2), gasto(100, "Restaurantes", dia: 6, mes: 3)],
                                         mes: hoy, calendar: cal)
@@ -235,9 +239,9 @@ struct HomeResumenTests {
     }
 
     @Test("Fuera de lo normal: solo por encima y solo en categorías habituales")
-    func fueraDeNormalSoloArriba() {
+    func fueraDeNormalSoloArriba() throws {
         // Por debajo de lo normal no se avisa: gastar menos no pide nada.
-        let bajo = resumen([gasto(10, "Restaurantes", dia: 8)], normal: normalDeTresMeses)
+        let bajo = resumen([gasto(10, "Restaurantes", dia: 8)], normal: try normalDeTresMeses)
         #expect(bajo.relevancias["fueraDeNormal"] == nil)
         // Una categoría que solo apareció un mes (el taller) no tiene "normal".
         var historico: [Expense] = []
@@ -332,9 +336,9 @@ struct HomeResumenTests {
     }
 
     @Test("Límite sugerido: la categoría grande sin tope, con lo que se suele gastar")
-    func limiteSugerido() {
+    func limiteSugerido() throws {
         let metas = [Goal(name: "Súper", type: .spendingLimit, targetAmount: 350, linkedCategoryId: "Súper")]
-        let r = resumen([gasto(40, "Restaurantes", dia: 8)], metas: metas, normal: normalDeTresMeses)
+        let r = resumen([gasto(40, "Restaurantes", dia: 8)], metas: metas, normal: try normalDeTresMeses)
         guard case .limiteSugerido(let s)? = contenido("limiteSugerido", en: r) else { Issue.record("sin sugerencia"); return }
         #expect(s.categoria == "Restaurantes")
         #expect(s.normalMensual == 100)

@@ -11,17 +11,39 @@ final class LocalRecurringExpenseManager {
 
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "RecurringExpenses")
     private let lastCheckKey = "lastRecurringExpensesCheck"
-    private let recurringRepo = DependencyContainer.shared.recurringExpenseRepository
-    private let expenseRepo = DependencyContainer.shared.expenseRepository
+    private let recurringRepo: any RecurringExpenseRepositoryProtocol
+    private let expenseRepo: any ExpenseRepositoryProtocol
+    /// Dónde se apunta «hoy ya se comprobó». Inyectable porque los tests corren
+    /// DENTRO de la app, con la sesión real: escribiendo en `.standard`, un test
+    /// marcaría el día como comprobado y la app de verdad se saltaría sus
+    /// recurrentes de hoy.
+    private let defaults: UserDefaults
+    /// El reloj. Inyectable para fijar «hoy» en los tests (día de cobro, mes de
+    /// facturación, cambio de mes) sin depender del día en que se ejecuten.
+    private let ahora: () -> Date
 
-    private init() {}
+    /// `shared` lo llama sin argumentos y queda exactamente como antes: los
+    /// repos del `DependencyContainer`, `UserDefaults.standard` y `Date()`.
+    /// Los `nil` se resuelven aquí dentro, y no como valor por defecto del
+    /// parámetro, porque el contenedor está aislado al `MainActor`.
+    init(
+        recurringRepo: (any RecurringExpenseRepositoryProtocol)? = nil,
+        expenseRepo: (any ExpenseRepositoryProtocol)? = nil,
+        defaults: UserDefaults = .standard,
+        ahora: @escaping () -> Date = { Date() }
+    ) {
+        self.recurringRepo = recurringRepo ?? DependencyContainer.shared.recurringExpenseRepository
+        self.expenseRepo = expenseRepo ?? DependencyContainer.shared.expenseRepository
+        self.defaults = defaults
+        self.ahora = ahora
+    }
 
     /// Verifica y crea gastos recurrentes pendientes
     /// Se debe llamar al abrir la app
     func checkAndCreatePendingExpenses() async {
         logger.info("🔍 Verificando gastos recurrentes pendientes...")
 
-        let today = Date()
+        let today = ahora()
         // TZ-safe: extraer día del string ISO (currentDate ya es UTC vía Formatters.isoString).
         // Antes mezclaba Calendar.current (local) con date string (UTC) → discrepancia entre
         // "día actual" y "fecha del expense" en zonas horarias != UTC.
@@ -30,7 +52,7 @@ final class LocalRecurringExpenseManager {
         let currentMonth = String(currentDate.prefix(7)) // YYYY-MM
 
         // Evitar múltiples ejecuciones el mismo día
-        if let lastCheck = UserDefaults.standard.string(forKey: lastCheckKey),
+        if let lastCheck = defaults.string(forKey: lastCheckKey),
            lastCheck == currentDate {
             logger.info("⏭️ Ya se verificó hoy (\(currentDate))")
             return
@@ -45,7 +67,7 @@ final class LocalRecurringExpenseManager {
 
             guard !activeExpenses.isEmpty else {
                 logger.info("📋 No hay gastos recurrentes activos")
-                UserDefaults.standard.set(currentDate, forKey: lastCheckKey)
+                defaults.set(currentDate, forKey: lastCheckKey)
                 return
             }
 
@@ -120,7 +142,7 @@ final class LocalRecurringExpenseManager {
             }
 
             // Guardar fecha de última verificación
-            UserDefaults.standard.set(currentDate, forKey: lastCheckKey)
+            defaults.set(currentDate, forKey: lastCheckKey)
 
             logger.info("📊 RESUMEN: ✅ \(created) creados, ⏭️ \(skipped) omitidos, ⚠️ \(expired) expirados")
 
@@ -134,7 +156,7 @@ final class LocalRecurringExpenseManager {
     func recoverMissedExpenses() async {
         logger.info("🔧 Recuperando gastos recurrentes perdidos...")
 
-        let today = Date()
+        let today = ahora()
         // TZ-safe: extraer día del string ISO (currentDate ya es UTC vía Formatters.isoString).
         // Antes mezclaba Calendar.current (local) con date string (UTC) → discrepancia entre
         // "día actual" y "fecha del expense" en zonas horarias != UTC.
@@ -144,7 +166,7 @@ final class LocalRecurringExpenseManager {
 
         // Guard: run recovery at most once per day (same key as checkAndCreatePendingExpenses)
         let recoveryKey = "lastRecurringExpensesRecovery"
-        if let lastRecovery = UserDefaults.standard.string(forKey: recoveryKey),
+        if let lastRecovery = defaults.string(forKey: recoveryKey),
            lastRecovery == currentDate {
             logger.info("⏭️ Recovery ya ejecutada hoy (\(currentDate))")
             return
@@ -219,7 +241,7 @@ final class LocalRecurringExpenseManager {
                 }
             }
 
-            UserDefaults.standard.set(currentDate, forKey: recoveryKey)
+            defaults.set(currentDate, forKey: recoveryKey)
             logger.info("📊 Gastos recuperados: \(recovered)")
 
         } catch {
@@ -235,7 +257,7 @@ final class LocalRecurringExpenseManager {
     func createCurrentPeriodExpenseIfDue(for rule: RecurringExpense) async {
         guard let ruleId = rule.id, !ruleId.isEmpty else { return }
 
-        let today = Date()
+        let today = ahora()
         let currentMonth = String(Formatters.isoString(from: today).prefix(7))
 
         // Pre-condiciones puras (activa, mes toca, día ya llegó, no expirada) — RecurringScheduler.
