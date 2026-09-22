@@ -245,7 +245,12 @@ private struct TarjetaEditable: View {
             .tembleque(activo: !arrastrada, semilla: Self.semilla(tarjeta.id), ancha: tarjeta.tamano == .ancha)
             // Su hueco, mientras la copia va con el dedo.
             .opacity(arrastrada ? 0.18 : 1)
-            .gesture(arrastre)
+            // Simultáneo y no exclusivo: con `.gesture` la tarjeta se quedaba el
+            // toque en cuanto el dedo la pisaba y en iOS 18+ la página ya no se
+            // podía desplazar. Así un gesto rápido desplaza (la pulsación falla
+            // al moverse) y mantener levanta la tarjeta; desde ese momento
+            // `scrollDisabled` para el desplazamiento.
+            .simultaneousGesture(arrastre)
             .onChange(of: sujetando) { _, ahora in
                 if ahora { alEmpezar() } else { alSoltar() }
             }
@@ -271,7 +276,7 @@ private struct TarjetaEditable: View {
     /// Pulsación corta y arrastrar. La pulsación deja desplazar la página con
     /// un gesto rápido; al cumplirse, la tarjeta se levanta y el dedo la lleva.
     private var arrastre: some Gesture {
-        LongPressGesture(minimumDuration: 0.2)
+        LongPressGesture(minimumDuration: 0.3)
             .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(HomeEdicion.espacio)))
             .updating($sujetando) { valor, estado, _ in
                 if case .second(true, _) = valor { estado = true }
@@ -354,7 +359,9 @@ private struct Tembleque: ViewModifier {
     private var moviendo: Bool { activo && !reducirMovimiento }
 
     func body(content: Content) -> some View {
-        let amplitud = ancha ? 0.45 : 1.1
+        // Mucho menos que los iconos de iOS: una tarjeta es varias veces más
+        // grande y con su ángulo (1,1°) se veía vibrar en vez de temblar.
+        let amplitud = ancha ? 0.18 : 0.4
         let sentido: Double = semilla.isMultiple(of: 2) ? 1 : -1
         content
             .rotationEffect(.degrees(moviendo ? (fase ? amplitud : -amplitud) * sentido : 0))
@@ -368,7 +375,7 @@ private struct Tembleque: ViewModifier {
             withAnimation(.easeOut(duration: AnimationDuration.fast)) { fase = false }
             return
         }
-        let compas = 0.13 + Double(semilla % 5) * 0.008
+        let compas = 0.19 + Double(semilla % 5) * 0.012
         withAnimation(.easeInOut(duration: compas).repeatForever(autoreverses: true).delay(Double(semilla % 7) * 0.03)) {
             fase.toggle()
         }
