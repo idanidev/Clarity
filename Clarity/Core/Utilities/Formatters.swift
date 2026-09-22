@@ -23,7 +23,26 @@ nonisolated enum Formatters {
     static func currency(_ value: Double) -> String {
         currencyFormatter.string(from: NSNumber(value: value)) ?? String(format: "%.2f €", value)
     }
-    
+
+    /// Igual que `currencyFormatter`, pero en euros enteros ("23 €").
+    private static let wholeCurrencyFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "EUR"
+        formatter.locale = Locale(identifier: "es_ES")
+        formatter.maximumFractionDigits = 0
+        formatter.minimumFractionDigits = 0
+        return formatter
+    }()
+
+    /// Importe redondeado a euros enteros, para comparaciones en las que los
+    /// céntimos solo estorban ("23 € menos que la semana anterior"). A
+    /// diferencia de `currencyCompact`, no abrevia los miles con "k".
+    static func currencyWithoutDecimals(_ value: Double) -> String {
+        let rounded = value.rounded()
+        return wholeCurrencyFormatter.string(from: NSNumber(value: rounded)) ?? String(format: "%.0f €", rounded)
+    }
+
     static func currencyCompact(_ value: Double) -> String {
         if value >= 1000 {
             return String(format: "%.1fk €", value / 1000)
