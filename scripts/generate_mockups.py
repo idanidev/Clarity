@@ -187,22 +187,6 @@ MOCKUPS = [
         "shadow_tint": ACCENT,
         "chip": {"emoji": "✨", "text": "Oye Siri…", "side": "right"},
     },
-    {
-        # Candidata (2.4.0), fuera de fastlane: la Home en modo edición.
-        "input": "5_editar.png",
-        "output": "mockup_05_editar.png",
-        "headline": "Tu Home,\na tu manera",
-        "accent": "a tu manera",
-        "subtitle": "Mueve, quita y añade tarjetas",
-        "bg_base": (28, 8, 32),
-        "blobs": [
-            (0.80, 0.18, 900, PRIMARY, 150),
-            (0.15, 0.40, 780, SECONDARY, 90),
-            (0.50, 0.78, 1100, BERRY, 120),
-        ],
-        "accent_color": MANGO,
-        "shadow_tint": PRIMARY,
-    },
 ]
 
 
@@ -743,11 +727,6 @@ TRANSLATIONS = {
             "accent": "Without",
             "subtitle": "Just tell Siri",
             "chip_text": "Hey Siri…",
-        },
-        "mockup_05_editar.png": {
-            "headline": "Your Home,\nyour way",
-            "accent": "your way",
-            "subtitle": "Move, remove and add cards",
         },
     }
 }
