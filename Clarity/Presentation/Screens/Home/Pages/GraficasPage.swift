@@ -206,8 +206,7 @@ struct GraficasPage: View {
 
 extension GraficasPage {
     private var calendario: some View {
-        ExpenseCalendarView(expenses: viewModel.allHistoricalExpenses)
-            .padding(.vertical, 8)
+        ExpenseCalendarView(expenses: viewModel.allHistoricalExpenses, mes: viewModel.selectedMonth)
             .glassCard()
     }
 

@@ -205,11 +205,6 @@ private struct TarjetaEditable: View {
     let alMover: (CGSize, CGPoint) -> Void
     let alSoltar: () -> Void
 
-    /// Verdadero desde que la pulsación larga se cumple hasta que se suelta o
-    /// el sistema cancela el gesto; al volver a falso se suelta la tarjeta
-    /// también en el caso cancelado, que no pasa por `onEnded`.
-    @GestureState private var sujetando = false
-
     private var nombre: String {
         let tipo = HomeDisposicion.nombre(de: tarjeta.elemento.tipo)
         guard tarjeta.esPila else { return tipo }
@@ -245,15 +240,18 @@ private struct TarjetaEditable: View {
             .tembleque(activo: !arrastrada, semilla: Self.semilla(tarjeta.id), ancha: tarjeta.tamano == .ancha)
             // Su hueco, mientras la copia va con el dedo.
             .opacity(arrastrada ? 0.18 : 1)
-            // Simultáneo y no exclusivo: con `.gesture` la tarjeta se quedaba el
-            // toque en cuanto el dedo la pisaba y en iOS 18+ la página ya no se
-            // podía desplazar. Así un gesto rápido desplaza (la pulsación falla
-            // al moverse) y mantener levanta la tarjeta; desde ese momento
-            // `scrollDisabled` para el desplazamiento.
-            .simultaneousGesture(arrastre)
-            .onChange(of: sujetando) { _, ahora in
-                if ahora { alEmpezar() } else { alSoltar() }
-            }
+            // Un gesto rápido desplaza la página; mantener levanta la tarjeta y
+            // desde ese momento el dedo la lleva a ella (y `scrollDisabled`
+            // para el desplazamiento).
+            .mantenerYArrastrar(
+                alEmpezar: alEmpezar,
+                alMover: { traslacion, dedo in
+                    // Si no llegó a levantarse (había otra en el aire), nada.
+                    guard edicion.arrastrando == tarjeta.id else { return }
+                    alMover(traslacion, dedo)
+                },
+                alSoltar: alSoltar
+            )
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(HomeEdicion.espacio)) } action: { marco in
                 edicion.marcos[tarjeta.id] = marco
             }
@@ -271,21 +269,6 @@ private struct TarjetaEditable: View {
                     }
                 }
             }
-    }
-
-    /// Pulsación corta y arrastrar. La pulsación deja desplazar la página con
-    /// un gesto rápido; al cumplirse, la tarjeta se levanta y el dedo la lleva.
-    private var arrastre: some Gesture {
-        LongPressGesture(minimumDuration: 0.3)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(HomeEdicion.espacio)))
-            .updating($sujetando) { valor, estado, _ in
-                if case .second(true, _) = valor { estado = true }
-            }
-            .onChanged { valor in
-                guard case .second(true, let arrastre?) = valor, edicion.arrastrando == tarjeta.id else { return }
-                alMover(arrastre.translation, arrastre.location)
-            }
-            .onEnded { _ in alSoltar() }
     }
 
     /// Estable entre arranques (el `hashValue` de un `String` no lo es): que
@@ -333,6 +316,102 @@ private struct EtiquetaPila: View {
             .overlay { Circle().strokeBorder(Color.clarityPrimary.opacity(0.5), lineWidth: 0.5) }
             .offset(x: 6, y: -6)
             .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Mantener y arrastrar
+
+/// Lo que dura la pulsación antes de levantar la tarjeta.
+private let duracionPulsacion: TimeInterval = 0.3
+
+extension View {
+    /// Mantener pulsado levanta y arrastrar mueve, sin quitarle el dedo al
+    /// `ScrollView` de alrededor. La traslación se cuenta desde donde estaba el
+    /// dedo al levantarla y las posiciones van en el espacio de la rejilla.
+    @ViewBuilder
+    fileprivate func mantenerYArrastrar(
+        alEmpezar: @escaping () -> Void,
+        alMover: @escaping (CGSize, CGPoint) -> Void,
+        alSoltar: @escaping () -> Void
+    ) -> some View {
+        if #available(iOS 18, *) {
+            gesture(PulsacionLargaUIKit(alEmpezar: alEmpezar, alMover: alMover, alSoltar: alSoltar))
+        } else {
+            modifier(PulsacionLargaSwiftUI(alEmpezar: alEmpezar, alMover: alMover, alSoltar: alSoltar))
+        }
+    }
+}
+
+/// Desde iOS 18, la de UIKit. La de SwiftUI —una `LongPressGesture` seguida
+/// de un `DragGesture`, exclusiva o simultánea— dentro del `ScrollView` se
+/// quedaba el dedo y la página no se desplazaba en modo edición.
+/// `UILongPressGestureRecognizer` convive con él como en la pantalla de
+/// inicio: si el dedo se mueve antes de cumplirse la pulsación, gana el
+/// desplazamiento; si se queda quieto, gana la tarjeta y la página ya no se
+/// mueve hasta soltar.
+@available(iOS 18, *)
+private struct PulsacionLargaUIKit: UIGestureRecognizerRepresentable {
+    let alEmpezar: () -> Void
+    let alMover: (CGSize, CGPoint) -> Void
+    let alSoltar: () -> Void
+
+    final class Coordinator {
+        var inicio: CGPoint = .zero
+    }
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+        let pulsacion = UILongPressGestureRecognizer()
+        pulsacion.minimumPressDuration = duracionPulsacion
+        return pulsacion
+    }
+
+    func handleUIGestureRecognizerAction(_ pulsacion: UILongPressGestureRecognizer, context: Context) {
+        let dedo = context.converter.location(in: .named(HomeEdicion.espacio))
+        switch pulsacion.state {
+        case .began:
+            context.coordinator.inicio = dedo
+            alEmpezar()
+        case .changed:
+            let inicio = context.coordinator.inicio
+            alMover(CGSize(width: dedo.x - inicio.x, height: dedo.y - inicio.y), dedo)
+        case .ended, .cancelled, .failed:
+            alSoltar()
+        default:
+            break
+        }
+    }
+}
+
+/// En iOS 17, la de SwiftUI: ahí el `ScrollView` sí se desplaza con ella.
+private struct PulsacionLargaSwiftUI: ViewModifier {
+    let alEmpezar: () -> Void
+    let alMover: (CGSize, CGPoint) -> Void
+    let alSoltar: () -> Void
+
+    /// Verdadero desde que la pulsación se cumple hasta que se suelta o el
+    /// sistema cancela el gesto; al volver a falso se suelta la tarjeta también
+    /// en el caso cancelado, que no pasa por `onEnded`.
+    @GestureState private var sujetando = false
+
+    func body(content: Content) -> some View {
+        content
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: duracionPulsacion)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(HomeEdicion.espacio)))
+                    .updating($sujetando) { valor, estado, _ in
+                        if case .second(true, _) = valor { estado = true }
+                    }
+                    .onChanged { valor in
+                        guard case .second(true, let arrastre?) = valor else { return }
+                        alMover(arrastre.translation, arrastre.location)
+                    }
+                    .onEnded { _ in alSoltar() }
+            )
+            .onChange(of: sujetando) { _, ahora in
+                if ahora { alEmpezar() } else { alSoltar() }
+            }
     }
 }
 
