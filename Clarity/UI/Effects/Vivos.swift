@@ -1,9 +1,10 @@
 // Vivos.swift
 // Detalles que dan vida a la app (#65): la carga que respira, el confeti, la
-// tarjeta de enhorabuena y la barra que ondula cerca del límite.
+// tarjeta de enhorabuena. (La barra que ondulaba cerca del límite se quitó en
+// la 2.4.0: no gustaba.)
 //
 // Las ideas vienen de Material 3 Expressive —cargas que cambian de forma,
-// progreso ondulado, movimiento con muelles—, pero pintadas con lo nativo de
+// movimiento con muelles—, pero pintadas con lo nativo de
 // SwiftUI para que la app siga sintiéndose de iOS. Todo respeta "Reducir
 // movimiento": sin animación continua, lo mismo quieto.
 
@@ -167,75 +168,5 @@ struct CelebracionClarity: View {
             try? await Task.sleep(for: .milliseconds(220))
             onCerrar()
         }
-    }
-}
-
-// MARK: - Barra ondulada
-
-/// Barra de progreso que ondula, para cuando te acercas al límite. Ocupa lo
-/// mismo que una barra normal, así que se puede cambiar una por otra sin que
-/// salte nada; la onda asoma un poco por arriba y por abajo.
-struct BarraOndulada: View {
-    let progreso: Double
-    var color: Color
-    var alto: CGFloat = 6
-    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
-
-    private var acotado: Double { progreso.isFinite ? min(max(progreso, 0), 1) : 0 }
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.12))
-
-                Group {
-                    if reducirMovimiento {
-                        onda(fase: 0)
-                    } else {
-                        // A 30 fotogramas basta para una onda lenta y gasta la mitad.
-                        TimelineView(.animation(minimumInterval: 1.0 / 30)) { contexto in
-                            onda(fase: contexto.date.timeIntervalSinceReferenceDate * 5)
-                        }
-                    }
-                }
-                .frame(width: geo.size.width * acotado)
-            }
-        }
-        .frame(height: alto)
-        .accessibilityElement()
-        .accessibilityValue("\(Int((acotado * 100).rounded())) %")
-    }
-
-    private func onda(fase: Double) -> some View {
-        Onda(fase: fase, amplitud: alto * 0.45, longitud: 16, grosor: alto)
-            .stroke(color, style: StrokeStyle(lineWidth: alto, lineCap: .round, lineJoin: .round))
-    }
-}
-
-/// Una línea senoidal de lado a lado, a media altura.
-private struct Onda: Shape {
-    var fase: Double
-    var amplitud: CGFloat
-    var longitud: CGFloat
-    /// El trazo redondo sobresale medio grosor por cada lado: se descuenta.
-    var grosor: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var camino = Path()
-        let desde = rect.minX + grosor / 2
-        let hasta = max(desde, rect.maxX - grosor / 2)
-        var x = desde
-        var primero = true
-        while x <= hasta {
-            let y = rect.midY + sin(Double((x - desde) / longitud) * 2 * .pi + fase) * amplitud
-            if primero {
-                camino.move(to: CGPoint(x: x, y: y))
-                primero = false
-            } else {
-                camino.addLine(to: CGPoint(x: x, y: y))
-            }
-            x += 1.5
-        }
-        return camino
     }
 }

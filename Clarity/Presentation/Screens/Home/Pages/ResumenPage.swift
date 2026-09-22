@@ -372,14 +372,9 @@ struct HeroCard: View {
             }
 
             if let progreso = resumen.progresoPresupuesto, let libres = resumen.libres, let presupuesto = resumen.presupuesto {
-                if progreso >= 0.85 {
-                    // Cerca del tope la barra ondula: se nota sin leer la cifra.
-                    BarraOndulada(progreso: progreso, color: progreso >= 1 ? .error : .warning, alto: 6)
-                        .padding(.top, 14)
-                } else {
-                    Barra(progreso: progreso, color: .clarityMango)
-                        .padding(.top, 14)
-                }
+                // Cerca del tope cambia de color: se nota sin leer la cifra.
+                Barra(progreso: progreso, color: progreso >= 1 ? .error : (progreso >= 0.85 ? .warning : .clarityMango))
+                    .padding(.top, 14)
                 HStack {
                     Text("\(Int((progreso * 100).rounded())) % del presupuesto · \(Formatters.currency(presupuesto))")
                         .foregroundStyle(Color.textSecondary)
@@ -476,8 +471,9 @@ private struct Barra: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(Color.primary.opacity(0.12))
+                // Pasado el tope, llena y no más: sin acotar se salía de la tarjeta.
                 Capsule().fill(color)
-                    .frame(width: geo.size.width * progreso)
+                    .frame(width: geo.size.width * (progreso.isFinite ? min(max(progreso, 0), 1) : 0))
                     .animation(.spring(response: 0.6, dampingFraction: 0.7), value: progreso)
             }
         }
@@ -518,7 +514,10 @@ struct SlotCard: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(compacta ? 14 : 16)
         .ondaAlTocar()
-        .glassCard(tint: tinte)
+        // Sin tinte rojo al pasarse de un límite: en iOS 27 el vidrio lo
+        // pintaba opaco y la cifra, también roja, desaparecía encima. Ya lo
+        // dicen el importe, la barra y «Superado en…».
+        .glassCard()
         .temblor(cuando: superados)
     }
 
@@ -528,10 +527,6 @@ struct SlotCard: View {
         return 0
     }
 
-    private var tinte: Color? {
-        if case .limites(let l) = contenido, l.first?.superado == true { return .error }
-        return nil
-    }
 
     private func titulo(_ t: String) -> some View {
         Text(t.uppercased()).font(.caption2.weight(.medium)).tracking(0.5).foregroundStyle(Color.textSecondary)
@@ -550,11 +545,7 @@ struct SlotCard: View {
                         + Text(" / \(Formatters.currency(l.tope))").foregroundStyle(Color.textSecondary)
                     }
                     .font(.footnote)
-                    if l.progreso >= 0.85 {
-                        BarraOndulada(progreso: l.progreso, color: l.superado ? .error : .warning, alto: 5)
-                    } else {
-                        Barra(progreso: l.progreso, color: l.superado ? .error : (l.progreso > 0.75 ? .warning : .success), alto: 5)
-                    }
+                    Barra(progreso: l.progreso, color: l.superado ? .error : (l.progreso > 0.75 ? .warning : .success), alto: 5)
                     Text(l.superado
                          ? "Superado en \(Formatters.currency(-l.restante))"
                          : "Te quedan \(Formatters.currency(l.restante))")

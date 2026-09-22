@@ -51,13 +51,7 @@ struct GoalCardView: View {
             }
 
             // Progress Bar
-            // Cerca del tope la barra ondula para avisar sin gritar; ocupa lo mismo,
-            // así que cambiar de una a otra no mueve la tarjeta.
-            if goal.type == .spendingLimit && progreso >= 0.85 {
-                BarraOndulada(progreso: progreso, color: progressColor, alto: 8)
-            } else {
-                BarraProgresoClarity(progreso: progreso, color: progressColor, alto: 8)
-            }
+            BarraProgresoClarity(progreso: progreso, color: progressColor, alto: 8)
 
             // Stats & Action
             HStack(alignment: .bottom) {

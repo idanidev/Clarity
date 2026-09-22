@@ -24,7 +24,7 @@ Lista verificada con grep (sep 2026): todo lo de aquí existe y tiene usos reale
 **Piezas de pantalla** (`UI/Theme/ComponentesClarity.swift`)
 - `CirculoIconoClarity` — emoji o SF Symbol en un círculo de color (categorías, metas).
 - `CabeceraSeccionClarity` — cabecera de sección en mayúsculas pequeñas, con dato opcional a la derecha.
-- `BarraProgresoClarity` — barra de progreso de cápsula (0…1). `BarraOndulada` (`UI/Effects/Vivos.swift`) es su variante para cuando se acerca el límite.
+- `BarraProgresoClarity` — barra de progreso de cápsula (0…1). Cerca del tope o pasado, se cambia su color (naranja / rojo), sin efectos.
 - `BotonSecundarioClarity` — `ButtonStyle` de cápsula tintada para acciones dentro de una tarjeta.
 - `EstadoVacioClarity` — estado vacío en tarjeta de vidrio: icono, título, texto y acción.
 - `.estiloEtiquetaClarity()` / `.estiloCifraClarity(tamano:)` — etiqueta pequeña en mayúsculas y cifra protagonista de una tarjeta.
