@@ -131,37 +131,6 @@ private struct DestelloModifier: ViewModifier, Animatable {
     }
 }
 
-// MARK: - Temblor
-
-extension View {
-    /// Tiembla una vez cada vez que `disparo` cambia. Para avisar de que un
-    /// tope se ha pasado, junto con un toque háptico de aviso.
-    ///
-    /// Con «Reducir movimiento» no tiembla, pero el toque háptico se queda: es
-    /// lo que sigue avisando.
-    func temblor<T: Equatable>(cuando disparo: T) -> some View {
-        modifier(Temblor(disparo: disparo))
-    }
-}
-
-private struct Temblor<T: Equatable>: ViewModifier {
-    let disparo: T
-    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
-
-    func body(content: Content) -> some View {
-        // Una sola fase = quieto. Cambiar las fases y no la vista: con un `if`
-        // la tarjeta se reconstruiría entera al activar el ajuste.
-        let fases: [CGFloat] = reducirMovimiento ? [0] : [0, -7, 7, -5, 5, -2, 0]
-        content
-            .phaseAnimator(fases, trigger: disparo) { vista, fase in
-                vista.offset(x: fase)
-            } animation: { _ in
-                .spring(duration: 0.07, bounce: 0.2)
-            }
-            .sensoryFeedback(.warning, trigger: disparo)
-    }
-}
-
 // MARK: - Rebote de símbolo
 
 extension View {

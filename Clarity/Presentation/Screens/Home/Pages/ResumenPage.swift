@@ -518,13 +518,6 @@ struct SlotCard: View {
         // pintaba opaco y la cifra, también roja, desaparecía encima. Ya lo
         // dicen el importe, la barra y «Superado en…».
         .glassCard()
-        .temblor(cuando: superados)
-    }
-
-    /// Cambia cuando un límite pasa a estar superado: dispara el temblor.
-    private var superados: Int {
-        if case .limites(let l) = contenido { return l.filter(\.superado).count }
-        return 0
     }
 
 
