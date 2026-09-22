@@ -22,8 +22,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import generate_mockups as g  # load_font y render_emoji
 
 W, H = 1290, 2796
-ACENTO = (190, 140, 255)
-EXITO = (52, 211, 153)
+# Paleta Deep Berry de la app (UI/Theme/Colors.swift): la onda y el importe
+# en claritySecondary, que sobre el panel oscuro se lee mejor que el orquídea.
+ACENTO = (218, 141, 226)   # claritySecondary #DA8DE2
+EXITO = (52, 211, 153)     # el verde de «guardado»: semántico, no de marca
+VELO = (14, 4, 16, 170)    # sobre la Home desenfocada, hacia clarityBerry
+PANEL = (34, 12, 38, 240)  # clarityBerry #58215E muy oscurecido
 
 TEXTOS = {
     "4_voice.png": {
@@ -31,14 +35,14 @@ TEXTOS = {
         "frase": "«20 euros en gasolina»",
         "nombre": "Gasolina",
         "importe": "20,00 €",
-        "guardado": "Guardado en Coche-Moto",
+        "guardado": "Guardado en Transporte",
     },
     "4_voice_en.png": {
         "estado": "LISTENING",
         "frase": "“20 euros on gas”",
         "nombre": "Gas",
         "importe": "20,00 €",
-        "guardado": "Saved to Car",
+        "guardado": "Saved to Transport",
     },
 }
 
@@ -47,7 +51,7 @@ def componer(home: Image.Image, t: dict) -> Image.Image:
     lienzo = home.convert("RGBA").resize((W, H), Image.LANCZOS)
     # La Home, detrás y fuera de foco: que se note que es otro momento.
     lienzo = lienzo.filter(ImageFilter.GaussianBlur(radius=22))
-    lienzo.alpha_composite(Image.new("RGBA", (W, H), (8, 4, 18, 170)))
+    lienzo.alpha_composite(Image.new("RGBA", (W, H), VELO))
 
     margen = 60
     panel_w, panel_h = W - margen * 2, 1240
@@ -56,7 +60,7 @@ def componer(home: Image.Image, t: dict) -> Image.Image:
     panel = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ImageDraw.Draw(panel).rounded_rectangle(
         [(px, py), (px + panel_w, py + panel_h)], radius=84,
-        fill=(24, 14, 46, 240), outline=(255, 255, 255, 50), width=3,
+        fill=PANEL, outline=(255, 255, 255, 50), width=3,
     )
     lienzo.alpha_composite(panel)
     d = ImageDraw.Draw(lienzo)

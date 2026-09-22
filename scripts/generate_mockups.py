@@ -88,32 +88,38 @@ def load_font(size: int, weight: str = "Bold", rounded: bool = False) -> ImageFo
     return font
 
 
+# ─── Paleta Deep Berry (Clarity/UI/Theme/Colors.swift, desde la 2.3.1) ─
+# Fondo y brillos en la familia berry; la palabra destacada del titular en
+# clarityMango, el único acento cálido de la app (el de la cifra del héroe y
+# el botón principal).
+PRIMARY = (191, 77, 203)     # clarityPrimary   #BF4DCB (orquídea)
+SECONDARY = (218, 141, 226)  # claritySecondary #DA8DE2
+ACCENT = (141, 59, 150)      # clarityAccent    #8D3B96
+BERRY = (88, 33, 94)         # clarityBerry     #58215E
+MANGO = (255, 206, 107)      # clarityMango     #FFCE6B
+
 # ─── Mockup configurations ────────────────────────────────────────────
 # `accent`: word(s) inside `headline` that get colored (case-insensitive match)
 # `blobs`: list of (x_frac, y_frac, radius, rgb, alpha) for mesh gradient
 # `chip`: optional floating feature pill (text, emoji, position anchor)
 MOCKUPS = [
     {
-        "input": "1_home.png",
+        # Compuesta por componer_captura_voz.py: la Home desenfocada con el
+        # panel de escucha. Con 1_home.png salía igual que la 04 (#71).
+        "input": "4_voice.png",
         "output": "mockup_01_voice.png",
         # La prueba visual del diferenciador: la app escuchando y parseando.
         "headline": "\"20 euros\nen gasolina\"",
         "accent": "gasolina",
         "subtitle": "Por voz o con Siri, sin escribir nada",
-        "bg_base": (30, 10, 60),
+        "bg_base": (30, 9, 34),
         "blobs": [
-            (0.20, 0.18, 900, (190, 100, 255), 160),
-            (0.85, 0.35, 780, (130, 50, 230), 140),
-            (0.50, 0.78, 1100, (55, 15, 110), 110),
+            (0.20, 0.18, 900, PRIMARY, 150),
+            (0.85, 0.35, 780, ACCENT, 140),
+            (0.50, 0.78, 1100, BERRY, 120),
         ],
-        "accent_color": (220, 175, 255),
-        "shadow_tint": (150, 70, 240),
-        "voice_overlay": {
-            "phrase": "\"20 euros en gasolina\"",
-            "result_name": "Gasolina",
-            "result_amount": "20,00 €",
-            "result_emoji": "⛽",
-        },
+        "accent_color": MANGO,
+        "shadow_tint": PRIMARY,
     },
     {
         "input": "1_home.png",
@@ -123,14 +129,14 @@ MOCKUPS = [
         "headline": "Controla tus gastos\nal instante",
         "accent": "gastos",
         "subtitle": "Una Home que sabe lo que te importa",
-        "bg_base": (28, 12, 52),
+        "bg_base": (28, 8, 32),
         "blobs": [
-            (0.18, 0.18, 900, (155, 80, 255), 160),
-            (0.85, 0.35, 750, (95, 40, 200), 130),
-            (0.50, 0.75, 1100, (60, 20, 140), 110),
+            (0.18, 0.18, 900, PRIMARY, 150),
+            (0.85, 0.35, 750, SECONDARY, 90),
+            (0.50, 0.75, 1100, BERRY, 120),
         ],
-        "accent_color": (210, 170, 255),
-        "shadow_tint": (120, 60, 230),
+        "accent_color": MANGO,
+        "shadow_tint": PRIMARY,
         "chip": {"emoji": "🎙️", "text": "\"20 € en gasolina\"", "side": "left"},
     },
     {
@@ -139,14 +145,14 @@ MOCKUPS = [
         "headline": "Mira en qué\nse te va el mes",
         "accent": "mes",
         "subtitle": "Toca una barra y ve el dato exacto",
-        "bg_base": (8, 18, 55),
+        "bg_base": (24, 8, 32),
         "blobs": [
-            (0.22, 0.20, 900, (60, 140, 255), 160),
-            (0.82, 0.30, 780, (20, 80, 210), 140),
-            (0.50, 0.78, 1100, (10, 40, 120), 110),
+            (0.22, 0.20, 900, ACCENT, 160),
+            (0.82, 0.30, 780, PRIMARY, 120),
+            (0.50, 0.78, 1100, BERRY, 120),
         ],
-        "accent_color": (140, 200, 255),
-        "shadow_tint": (40, 120, 240),
+        "accent_color": MANGO,
+        "shadow_tint": ACCENT,
         "chip": {"emoji": "📊", "text": "Categorías", "side": "right"},
     },
     {
@@ -154,15 +160,15 @@ MOCKUPS = [
         "output": "mockup_03_goals.png",
         "headline": "Ahorra con\nobjetivos claros",
         "accent": "objetivos",
-        "subtitle": "Metas, huchas y presupuestos",
-        "bg_base": (5, 45, 35),
+        "subtitle": "Metas, huchas y límites por categoría",
+        "bg_base": (30, 9, 30),
         "blobs": [
-            (0.20, 0.20, 900, (60, 220, 160), 160),
-            (0.82, 0.32, 780, (20, 170, 120), 140),
-            (0.50, 0.78, 1100, (5, 70, 55), 110),
+            (0.20, 0.20, 900, SECONDARY, 110),
+            (0.82, 0.32, 780, PRIMARY, 140),
+            (0.50, 0.78, 1100, BERRY, 120),
         ],
-        "accent_color": (150, 245, 200),
-        "shadow_tint": (50, 200, 140),
+        "accent_color": MANGO,
+        "shadow_tint": PRIMARY,
         "chip": {"emoji": "🐖", "text": "+200 €", "side": "right"},
     },
     {
@@ -171,15 +177,31 @@ MOCKUPS = [
         "headline": "Sin abrir\nla app",
         "accent": "Sin abrir",
         "subtitle": "Díselo a Siri y listo",
-        "bg_base": (10, 20, 48),
+        "bg_base": (24, 8, 32),
         "blobs": [
-            (0.22, 0.20, 900, (80, 150, 255), 160),
-            (0.82, 0.30, 780, (40, 90, 220), 140),
-            (0.50, 0.78, 1100, (15, 45, 110), 110),
+            (0.22, 0.20, 900, ACCENT, 160),
+            (0.82, 0.30, 780, PRIMARY, 120),
+            (0.50, 0.78, 1100, BERRY, 120),
         ],
-        "accent_color": (150, 200, 255),
-        "shadow_tint": (60, 130, 240),
+        "accent_color": MANGO,
+        "shadow_tint": ACCENT,
         "chip": {"emoji": "✨", "text": "Oye Siri…", "side": "right"},
+    },
+    {
+        # Candidata (2.4.0), fuera de fastlane: la Home en modo edición.
+        "input": "5_editar.png",
+        "output": "mockup_05_editar.png",
+        "headline": "Tu Home,\na tu manera",
+        "accent": "a tu manera",
+        "subtitle": "Mueve, quita y añade tarjetas",
+        "bg_base": (28, 8, 32),
+        "blobs": [
+            (0.80, 0.18, 900, PRIMARY, 150),
+            (0.15, 0.40, 780, SECONDARY, 90),
+            (0.50, 0.78, 1100, BERRY, 120),
+        ],
+        "accent_color": MANGO,
+        "shadow_tint": PRIMARY,
     },
 ]
 
@@ -706,25 +728,26 @@ TRANSLATIONS = {
         "mockup_03_goals.png": {
             "headline": "Save with\nclear goals",
             "accent": "goals",
-            "subtitle": "Goals, pots and budgets",
+            "subtitle": "Goals, pots and limits per category",
             "chip_text": "+200 €",
         },
         "mockup_01_voice.png": {
+            # La compuesta en inglés (componer_captura_voz.py).
+            "input": "4_voice_en.png",
             "headline": '"20 euros\non gas"',
             "accent": "gas",
             "subtitle": "By voice or with Siri, nothing to type",
-            "voice_overlay": {
-                "phrase": '"20 euros on gas"',
-                "result_name": "Gas",
-                "result_amount": "20,00 €",
-                "result_emoji": "⛽",
-            },
         },
         "mockup_05_siri.png": {
             "headline": "Without\nopening the app",
             "accent": "Without",
             "subtitle": "Just tell Siri",
             "chip_text": "Hey Siri…",
+        },
+        "mockup_05_editar.png": {
+            "headline": "Your Home,\nyour way",
+            "accent": "your way",
+            "subtitle": "Move, remove and add cards",
         },
     }
 }
@@ -737,6 +760,8 @@ def localized(config: dict, locale: str) -> dict:
         return config
 
     localized_config = dict(config)
+    if "input" in strings:
+        localized_config["input"] = strings["input"]
     localized_config["headline"] = strings["headline"]
     localized_config["accent"] = strings["accent"]
     localized_config["subtitle"] = strings["subtitle"]
