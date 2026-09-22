@@ -30,6 +30,13 @@ final class CacheConCaducidad<Valor> {
     /// Quién espera el resultado de cada carga, además de quien la lanzó.
     private var esperando: [Int: [CheckedContinuation<Valor, Error>]] = [:]
 
+    /// Explícito y vacío a propósito: sin él, el compilador de Xcode 26.5
+    /// (Swift 6.3.2) se cae en Release al optimizar el `deinit` sintetizado de
+    /// esta clase genérica («EarlyPerfInliner» sobre `CacheConCaducidadCfD`), y
+    /// la tienda aún exige compilar con el 26.5. El de Xcode 27 no tiene el
+    /// fallo. Se comporta igual que el sintetizado.
+    nonisolated deinit {}
+
     /// `ahora` es inyectable para probar la caducidad sin esperar.
     init(ttl: TimeInterval, ahora: @escaping () -> Date = Date.init) {
         self.ttl = ttl
