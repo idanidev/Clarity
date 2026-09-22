@@ -60,6 +60,20 @@ final class UserDataManager {
 
     // MARK: - Initialization
     private init() {
+        #if DEBUG
+        // Modo demo: el documento y las categorías de `DatosDemo`, y un almacén
+        // que no escribe en ningún sitio. Ni Auth ni Firestore.
+        if ModoDemo.activo {
+            let datos = ModoDemo.datos
+            self.service = UserDataStoreDemo(categorias: datos.categorias)
+            self.userIdProvider = { DatosDemo.uid }
+            self.userDocument = datos.documento
+            self.categories = datos.categorias
+            self.categoriasDelUsuarioCargadas = true
+            self.paymentMethods = PaymentMethod.pickerOptions.map { $0.rawValue }
+            return
+        }
+        #endif
         self.service = UserDataService.shared
         self.userIdProvider = { Auth.auth().currentUser?.uid }
         // Cargar defaults inmediatos para que la UI no esté vacía

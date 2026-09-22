@@ -16,7 +16,8 @@ import OSLog
 class FinancialService {
     static let shared = FinancialService()
 
-    private let db = Firestore.firestore()
+    // `lazy`: el modo demo (DEBUG) hereda de esta clase sin tocar Firestore.
+    private lazy var db = Firestore.firestore()
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "FinancialService")
 

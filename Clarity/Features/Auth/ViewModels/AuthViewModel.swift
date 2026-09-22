@@ -37,6 +37,15 @@ final class AuthViewModel {
     // Listener uses weak self and will auto-cleanup/ignore updates if self is gone.
     
     func startListening() {
+        #if DEBUG
+        // Modo demo: dentro sin sesión de Firebase. `UserDataManager` ya trae
+        // el documento demo con el onboarding hecho.
+        if ModoDemo.activo {
+            isAuthenticated = true
+            isLoading = false
+            return
+        }
+        #endif
         if authStateListener == nil {
             setupAuthStateListener()
         }

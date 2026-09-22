@@ -26,19 +26,30 @@ final class DependencyContainer {
     // MARK: - Repositories
     // Public so Intents or other specialized non-VM classes can reuse if strictly needed
     lazy var expenseRepository: ExpenseRepositoryProtocol = {
-        ExpenseRepository(
+        #if DEBUG
+        if ModoDemo.activo { return ExpenseRepositoryDemo(gastos: ModoDemo.datos.gastos) }
+        #endif
+        return ExpenseRepository(
             remote: firebaseDataSource,
             swiftData: swiftDataSource
         )
     }()
     
     lazy var recurringExpenseRepository: RecurringExpenseRepository = {
-        RecurringExpenseRepository()
+        #if DEBUG
+        if ModoDemo.activo { return RecurringExpenseRepositoryDemo(reglas: ModoDemo.datos.recurrentes) }
+        #endif
+        return RecurringExpenseRepository()
     }()
 
     // MARK: - Services
     lazy var financialService: FinancialService = {
-        FinancialService.shared
+        #if DEBUG
+        if ModoDemo.activo {
+            return FinancialServiceDemo(presupuestos: ModoDemo.datos.presupuestos, metas: ModoDemo.datos.metas)
+        }
+        #endif
+        return FinancialService.shared
     }()
 
     // MARK: - Use Cases Factories

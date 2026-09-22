@@ -21,6 +21,10 @@ enum EsperaDeSesion {
 
     /// `true` si hay sesión, ya o antes de que pase `tope`.
     static func haySesion(tope: Duration = .seconds(3)) async -> Bool {
+        #if DEBUG
+        // Modo demo: hay «sesión» sin Firebase Auth.
+        if ModoDemo.activo { return true }
+        #endif
         if Auth.auth().currentUser != nil { return true }
         return await esperar(tope: tope) { alCambiar in
             let escucha = Auth.auth().addStateDidChangeListener { _, user in
