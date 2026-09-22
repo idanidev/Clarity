@@ -22,7 +22,8 @@ struct HomeView: View {
     /// hoja con teclado se presenta sin zoom).
     @Namespace private var zoom
     @State private var showFilterSheet = false
-    @State private var showPersonalizar = false
+    /// El modo edición de las tarjetas, como el de la pantalla de inicio.
+    @State private var edicion = HomeEdicion()
     @State private var showAddExpense = false
     /// El buscador se abre desde la barra y ocupa su fila encima del carrusel:
     /// el `.searchable` nativo se abría encima de la primera tarjeta porque el
@@ -63,6 +64,9 @@ struct HomeView: View {
             .navigationTitle("")
             .refreshable { await viewModel.refresh() }
             .task {
+                // Si el documento ya había llegado antes de montarse la Home,
+                // su aviso no se vuelve a oír: se mira aquí.
+                viewModel.sincronizarDisposicion()
                 await viewModel.loadIfNeeded()
             }
             // Cambios desde otras pantallas (ingreso extra en Ajustes, nómina, huchas…)
@@ -75,6 +79,9 @@ struct HomeView: View {
             // El documento puede llegar después de que la Home ya esté montada.
             .onReceive(NotificationCenter.default.publisher(for: .userDocumentDidLoad)) { _ in
                 viewModel.applyDefaultFilterIfNeeded()
+                // La disposición de la cuenta: si es más reciente que la del
+                // iPhone (se editó en otro dispositivo), manda esa.
+                viewModel.sincronizarDisposicion()
             }
             .sheet(item: $expenseToEdit) { expense in
                 EditExpenseSheet(expense: expense) {
@@ -102,8 +109,10 @@ struct HomeView: View {
                 // chips a lo ancho crecían con el hueco heredado.
                 .sinHuecoBarraInferior()
             }
-            .sheet(isPresented: $showPersonalizar) {
-                PersonalizarHomeSheet(viewModel: viewModel)
+            // La galería del «+» del modo edición: todas las tarjetas, con su
+            // vista previa, y la pila inteligente.
+            .sheet(isPresented: $edicion.mostrandoGaleria) {
+                GaleriaTarjetasSheet(viewModel: viewModel)
                     .presentationDetents([.large])
             }
             // VoiceRecordingSheet removed - migrated to inline VoiceExpenseButton
@@ -140,7 +149,9 @@ struct HomeView: View {
             // buscador sale de la barra como una gota en vez de aparecer sin más.
             // Espaciado pequeño para que las cápsulas no se fundan entre sí.
             VStack(spacing: 0) {
-                barraSuperior
+                Group {
+                    if edicion.activa { barraEdicion } else { barraSuperior }
+                }
                     .padding(.horizontal, Spacing.sm)
                     .padding(.top, Spacing.xxs)
                     .padding(.bottom, Spacing.xs)
@@ -166,9 +177,22 @@ struct HomeView: View {
                     // barra: con el carrusel ignorando el área segura, un relleno
                     // sobre el área segura los dejaba tapados por ella.
                     ZStack(alignment: .bottom) {
+                        // En edición, el carrusel sigue montado debajo —al salir
+                        // se vuelve a la misma posición de la lista— pero ni se
+                        // ve ni se toca: pasar de página a medio arrastre movería
+                        // la Home entera en vez de la tarjeta.
                         carrusel
-                        HomePuntos(actual: pagina)
-                            .padding(.bottom, barra.total + 6)
+                            .opacity(edicion.activa ? 0 : 1)
+                            .allowsHitTesting(!edicion.activa)
+                            .accessibilityHidden(edicion.activa)
+                        if edicion.activa {
+                            EdicionHomeView(viewModel: viewModel, edicion: edicion,
+                                            margenSuperior: Spacing.xxs, zoom: zoom)
+                                .transition(.opacity)
+                        } else {
+                            HomePuntos(actual: pagina)
+                                .padding(.bottom, barra.total + 6)
+                        }
                     }
                     // El teclado solo cuenta si es el del buscador. El de una
                     // hoja (añadir o editar gasto) encogía el carrusel que
@@ -178,6 +202,37 @@ struct HomeView: View {
             }
         }
         .animation(.snappy(duration: 0.3), value: buscando)
+        .animation(.snappy(duration: AnimationDuration.normal), value: edicion.activa)
+    }
+
+    /// La barra en edición, como en la pantalla de inicio: «+» a la izquierda
+    /// para la galería y «Hecho» a la derecha.
+    private var barraEdicion: some View {
+        HStack(alignment: .center, spacing: Spacing.xs) {
+            botonBarra("plus", "Añadir tarjeta") {
+                Migas.deja("home: abre galería")
+                edicion.mostrandoGaleria = true
+            }
+            .glassCard(cornerRadius: 21, interactivo: true)
+            Spacer(minLength: 4)
+            Button {
+                edicion.salir()
+                HapticManager.shared.selection()
+            } label: {
+                // Mango con texto Deep Berry: el botón principal de la pantalla.
+                Text("Hecho")
+                    .font(.headline)
+                    .foregroundStyle(Color.clarityBerry)
+                    .padding(.horizontal, 18)
+                    .frame(height: 42)
+                    .background(Color.clarityMango, in: Capsule())
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(TarjetaButtonStyle())
+        }
+        // El mismo alto que la barra normal, para que la Home no salte al entrar.
+        .frame(minHeight: 50)
+        .transition(.opacity)
     }
 
     /// La barra, a la manera de iOS: el mes como título grande a la izquierda
@@ -320,7 +375,7 @@ struct HomeView: View {
                     expenseToEdit = gasto
                 },
                 onDestino: irA,
-                onPersonalizar: { showPersonalizar = true }
+                edicion: edicion
             )
         case .graficas:
             GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior, activa: pagina == .graficas)

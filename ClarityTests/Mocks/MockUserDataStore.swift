@@ -67,4 +67,14 @@ final class MockUserDataStore: UserDataStore, @unchecked Sendable {
         recordedCalls.append("saveDefaultFilter(\(filter.name ?? "-"))")
         savedDefaultFilters.append((filter, userId))
     }
+
+    /// Disposiciones de la Home que habrían ido a `users/{uid}.homeDisposicion`.
+    var savedHomeDisposiciones: [(disposicion: HomeDisposicion, userId: String)] = []
+    var shouldFailSaveHomeDisposicion = false
+
+    func saveHomeDisposicion(_ disposicion: HomeDisposicion, userId: String) async throws {
+        if shouldFailSaveHomeDisposicion { throw URLError(.notConnectedToInternet) }
+        recordedCalls.append("saveHomeDisposicion(\(disposicion.elementos.count))")
+        savedHomeDisposiciones.append((disposicion, userId))
+    }
 }

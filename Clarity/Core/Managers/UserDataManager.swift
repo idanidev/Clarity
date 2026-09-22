@@ -493,6 +493,35 @@ final class UserDataManager {
         return try? JSONDecoder().decode(ExpenseFilter.self, from: data)
     }
     
+    // MARK: - Disposición de la Home
+
+    /// La disposición de la Home guardada en la cuenta, si el documento la trae.
+    var homeDisposicion: HomeDisposicion? { userDocument?.homeDisposicion }
+
+    /// Sube la disposición de la Home a `users/{uid}.homeDisposicion`.
+    ///
+    /// Primero la copia en memoria del documento, para que una recarga que
+    /// llegue antes que la escritura no la dé por vieja; después la escritura,
+    /// a través de `service` (y así los tests no tocan Firestore). Sin
+    /// documento cargado no se inventa uno: la próxima vez que llegue, la Home
+    /// compara marcas y vuelve a subir la suya si es más reciente.
+    /// Devuelve si llegó a escribirse.
+    @discardableResult
+    func saveHomeDisposicion(_ disposicion: HomeDisposicion) async -> Bool {
+        guard let userId else { return false }
+        if var document = userDocument {
+            document.homeDisposicion = disposicion
+            userDocument = document
+        }
+        do {
+            try await service.saveHomeDisposicion(disposicion, userId: userId)
+            return true
+        } catch {
+            logger.error("❌ Error guardando la disposición de la Home: \(error.localizedDescription)")
+            return false
+        }
+    }
+
     // MARK: - Onboarding Sincronization
 
     /// Espejo local del flag remoto. Sin cobertura el documento de usuario puede

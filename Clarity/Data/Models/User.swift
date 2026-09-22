@@ -23,6 +23,9 @@ nonisolated struct UserDocument: Codable, Sendable {
     var subscription: Subscription?
     var goals: Goals?
     var savedFilters: [ExpenseFilter]?
+    /// Cómo tiene el usuario la Home (2.4.0), para verla igual en otro
+    /// dispositivo. Falta en los documentos de antes, y no pasa nada.
+    var homeDisposicion: HomeDisposicion?
 
     // Computed
     var isAdmin: Bool { role == "admin" }
@@ -56,6 +59,7 @@ nonisolated struct UserDocument: Codable, Sendable {
         case theme, language, income
         case settings, aiQuotas, subscription, goals
         case savedFilters
+        case homeDisposicion
     }
 
     // MARK: - Custom Decoding
@@ -88,6 +92,11 @@ nonisolated struct UserDocument: Codable, Sendable {
             savedFilters = nil
         }
 
+        // Tolerante: una disposición que no se entiende (otra versión, un dato
+        // roto) es como no tenerla. Nunca tira el documento entero, que lleva
+        // el onboarding y las categorías.
+        homeDisposicion = try? container.decodeIfPresent(HomeDisposicion.self, forKey: .homeDisposicion)
+
         // Robust Date Decoding
         if let date = try? container.decodeIfPresent(Date.self, forKey: .createdAt) {
             createdAt = date
@@ -118,6 +127,7 @@ nonisolated struct UserDocument: Codable, Sendable {
         try container.encodeIfPresent(subscription, forKey: .subscription)
         try container.encodeIfPresent(goals, forKey: .goals)
         try container.encodeIfPresent(savedFilters, forKey: .savedFilters)
+        try container.encodeIfPresent(homeDisposicion, forKey: .homeDisposicion)
     }
 }
 

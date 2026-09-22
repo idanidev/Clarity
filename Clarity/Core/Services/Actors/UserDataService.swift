@@ -392,6 +392,26 @@ actor UserDataService {
             .setData(["settings": ["defaultFilter": data]], merge: true)
     }
 
+    // MARK: - Disposición de la Home
+
+    /// Lo que se manda a Firestore: un único campo, `homeDisposicion`. Aparte y
+    /// sin Firestore de por medio para poder comprobarlo en los tests.
+    nonisolated static func camposHomeDisposicion(_ disposicion: HomeDisposicion) throws -> [String: Any] {
+        ["homeDisposicion": try Firestore.Encoder().encode(disposicion)]
+    }
+
+    /// Como el filtro predeterminado: `setData(merge:)` con la clave propia.
+    /// Ni `updateData` del documento ni nada que pase por `categories`, que es
+    /// donde hubo la pérdida de datos (ver `architecture.md`). La disposición
+    /// se escribe siempre entera —elementos, ocultas, prioridad y marca—, así
+    /// que la mezcla de Firestore no deja restos de una versión anterior.
+    func saveHomeDisposicion(_ disposicion: HomeDisposicion, userId: String) async throws {
+        try await db
+            .collection("users")
+            .document(userId)
+            .setData(Self.camposHomeDisposicion(disposicion), merge: true)
+    }
+
     // MARK: - Helpers
 
     func createDefaultCategories() -> [Category] {

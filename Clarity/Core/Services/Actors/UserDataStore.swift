@@ -29,6 +29,10 @@ protocol UserDataStore: Sendable {
     /// el manager llamaba a `Firestore.firestore()` a pelo y cada pasada de
     /// tests dejaba un «Permission denied» contra `users/test-uid-…`.
     func saveDefaultFilter(_ filter: ExpenseFilter, userId: String) async throws
+    /// Escribe SOLO el campo `homeDisposicion` del documento del usuario
+    /// (`setData(merge:)`), nunca `categories` ni el documento entero. En el
+    /// protocolo por lo mismo que el filtro: que los tests no lleguen a Firestore.
+    func saveHomeDisposicion(_ disposicion: HomeDisposicion, userId: String) async throws
 }
 
 extension UserDataService: UserDataStore {}

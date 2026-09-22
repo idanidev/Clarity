@@ -33,6 +33,10 @@ struct HomeDerivados {
     let gastosPorDia: [(dia: Int, importe: Double)]
     let comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)]
     let semanasDelMes: [(etiqueta: String, importe: Double)]
+    /// Todas las tarjetas de la disposición, con lo que enseña cada una.
+    let tarjetas: [HomeDisposicion.Tarjeta]
+    /// Las que tienen algo que enseñar, ya en filas: lo que se pinta fuera de edición.
+    let filas: [[HomeDisposicion.Tarjeta]]
 }
 
 @MainActor
@@ -392,17 +396,76 @@ final class HomeViewModel {
     /// Cuántos meses hacia atrás forman la costumbre del usuario.
     static let mesesNormal = 6
 
-    /// Qué tarjetas quiere ver el usuario y en qué orden (#69). Se guarda en el iPhone.
-    var preferencias: HomePreferencias = HomePreferencias.cargar() {
-        didSet {
-            preferencias.guardar()
-            invalidarDerivados()
+    // MARK: Disposición de la Home (2.4.0)
+
+    /// Qué tarjetas lleva la Home, en qué orden y de qué tamaño. Solo cambia
+    /// por los métodos de abajo, que la sellan y la guardan.
+    private(set) var disposicion: HomeDisposicion = .porDefecto {
+        didSet { if disposicion != oldValue { invalidarDerivados() } }
+    }
+    private let almacenDisposicion: HomeDisposicionAlmacen
+    /// La hora con la que se sellan los cambios. Los tests la fijan.
+    @ObservationIgnored var reloj: () -> Date = { Date() }
+    /// Cuánto se espera antes de subir a la cuenta: varios cambios seguidos
+    /// (quitar dos tarjetas, cambiar un tamaño) son una sola escritura.
+    @ObservationIgnored var esperaSubida: Duration = .seconds(1)
+    /// La subida pendiente, para que los tests puedan esperarla.
+    @ObservationIgnored private(set) var subidaPendiente: Task<Void, Never>?
+
+    func ordenarTarjetas(_ ids: [String]) { cambiarDisposicion { $0.ordenar(ids) } }
+    func quitarTarjeta(_ id: String) { cambiarDisposicion { $0.quitar(id) } }
+    func cambiarTamano(_ id: String, a tamano: HomeDisposicion.Tamano) {
+        cambiarDisposicion { $0.cambiarTamano(id, a: tamano) }
+    }
+    /// Un puesto antes o después, para VoiceOver.
+    func moverTarjeta(_ id: String, puestos: Int) { cambiarDisposicion { $0.mover(id, puestos: puestos) } }
+    func anadirTarjeta(_ tipo: HomeDisposicion.Tipo, tamano: HomeDisposicion.Tamano) {
+        cambiarDisposicion { $0.anadir(tipo, tamano: tamano) != nil }
+    }
+    func noEnsenarEnPila(_ clase: String) { cambiarDisposicion { $0.noEnsenarEnPila(clase) } }
+    func devolverAPila(_ clase: String) { cambiarDisposicion { $0.devolverAPila(clase) } }
+    func restablecerDisposicion() { cambiarDisposicion { $0.restablecer() } }
+
+    /// Un cambio del usuario: con su hora, a la copia del iPhone al momento y
+    /// a la cuenta al poco. `cambio` dice si cambió algo; si no, ni se sella.
+    private func cambiarDisposicion(_ cambio: (inout HomeDisposicion) -> Bool) {
+        var nueva = disposicion
+        guard cambio(&nueva) else { return }
+        nueva.actualizada = reloj()
+        disposicion = nueva
+        almacenDisposicion.guardarLocal(nueva)
+        programarSubida()
+    }
+
+    /// Con el documento de la cuenta ya leído, gana la más reciente. Si es la
+    /// del iPhone (se editó sin cobertura, o la subida no llegó), se sube.
+    /// Se llama al montar la Home y cada vez que llega el documento.
+    func sincronizarDisposicion() {
+        guard almacenDisposicion.documentoCargado() else { return }
+        let (ganadora, subirLocal) = HomeDisposicion.masReciente(local: disposicion, remota: almacenDisposicion.remota())
+        if ganadora != disposicion {
+            disposicion = ganadora
+            almacenDisposicion.guardarLocal(ganadora)
+        }
+        if subirLocal { programarSubida() }
+    }
+
+    private func programarSubida() {
+        subidaPendiente?.cancel()
+        let espera = esperaSubida
+        subidaPendiente = Task { [weak self] in
+            if espera > .zero { try? await Task.sleep(for: espera) }
+            guard let self, !Task.isCancelled else { return }
+            await self.almacenDisposicion.subir(self.disposicion)
         }
     }
 
-    func ocultarTarjeta(_ clase: String) {
-        preferencias.ocultas.insert(clase)
-    }
+    /// Todas las tarjetas de la disposición con lo que enseña cada una este
+    /// mes: la rejilla de edición las pinta todas.
+    var tarjetasHome: [HomeDisposicion.Tarjeta] { derivados.tarjetas }
+
+    /// Las que se pintan fuera de edición, en filas.
+    var filasHome: [[HomeDisposicion.Tarjeta]] { derivados.filas }
 
     /// Los meses anteriores al que se enseña, traídos de red una vez por mes
     /// visitado, para medir el mes contra la costumbre del usuario y no contra
@@ -694,7 +757,6 @@ final class HomeViewModel {
             hoy: hoy,
             calendar: cal,
             normal: normal,
-            preferencias: preferencias,
             filtro: criterio
         )
 
@@ -733,6 +795,10 @@ final class HomeViewModel {
         let semanasDelMes = semanas.keys.sorted().compactMap { semanas[$0] }
             .map { (etiqueta: "\($0.desde)–\($0.hasta)", importe: $0.importe) }
 
+        // Qué enseña cada tarjeta de la Home, y en qué filas van las que salen.
+        let tarjetas = disposicion.tarjetas(relevancias: resumen.relevancias, hayUltimos: !ultimos.isEmpty)
+        let filas = HomeDisposicion.filas(tarjetas.filter(\.conDatos), tamano: \.tamano)
+
         return HomeDerivados(
             gastosDelMes: gastos,
             gastosMesAnterior: anteriores,
@@ -741,7 +807,9 @@ final class HomeViewModel {
             ultimosGastos: ultimos,
             gastosPorDia: porDia,
             comparativaPorCategoria: Array(comparativa),
-            semanasDelMes: semanasDelMes
+            semanasDelMes: semanasDelMes,
+            tarjetas: tarjetas,
+            filas: filas
         )
     }
 
@@ -757,11 +825,18 @@ final class HomeViewModel {
     init(
         getExpensesUseCase: GetExpensesUseCase,
         deleteExpenseUseCase: DeleteExpenseUseCase,
-        addExpenseUseCase: AddExpenseUseCase
+        addExpenseUseCase: AddExpenseUseCase,
+        /// `nil` = el de la app. Los tests pasan uno en memoria.
+        almacenDisposicion: HomeDisposicionAlmacen? = nil
     ) {
         self.getExpensesUseCase = getExpensesUseCase
         self.deleteExpenseUseCase = deleteExpenseUseCase
         self.addExpenseUseCase = addExpenseUseCase
+        let almacenDisposicion = almacenDisposicion ?? .app
+        self.almacenDisposicion = almacenDisposicion
+        // La del iPhone, para arrancar ya con la Home del usuario; la de la
+        // cuenta se mira al llegar el documento (`sincronizarDisposicion`).
+        self.disposicion = almacenDisposicion.cargarLocal()
 
         // Load income
         self.income = UserDataManager.shared.userDocument?.income ?? 0

@@ -18,14 +18,22 @@ extension View {
     }
 }
 
+extension EnvironmentValues {
+    /// Pinta el vidrio de antes de iOS 26 también en iOS 26. Solo para las
+    /// capturas de los tests: `ImageRenderer` no sabe pintar Liquid Glass, y el
+    /// texto encima, que es vibrante, sale transparente. La app no lo toca.
+    @Entry var vidrioSinLiquidGlass = false
+}
+
 private struct GlassCardModifier: ViewModifier {
     let cornerRadius: CGFloat
     let tint: Color?
     let interactivo: Bool
+    @Environment(\.vidrioSinLiquidGlass) private var sinLiquidGlass
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        if #available(iOS 26, *) {
+        if #available(iOS 26, *), !sinLiquidGlass {
             let vidrio = tint.map { Glass.regular.tint($0) } ?? .regular
             content
                 .glassEffect(vidrio.interactive(interactivo), in: shape)

@@ -1,5 +1,7 @@
 // ResumenPage.swift
 // Primera página de la Home: cuánto llevas, y ningún cuadro vacío (#65).
+// Las tarjetas salen de la disposición del usuario (2.4.0); editarlas se hace
+// en `EdicionHomeView`, que la sustituye mientras dura.
 
 import SwiftUI
 
@@ -14,8 +16,9 @@ struct ResumenPage: View {
     /// El gasto y desde dónde se tocó, para que la hoja crezca desde ahí.
     let onEditar: (Expense, String) -> Void
     let onDestino: (HomeDestino) -> Void
-    /// Abre la hoja de tarjetas: cuáles salen y en qué orden.
-    let onPersonalizar: () -> Void
+    /// El modo edición de la Home: entrar desde el menú de una tarjeta o desde
+    /// «Personalizar tarjetas».
+    let edicion: HomeEdicion
 
     /// Categorías plegadas. Persiste entre sesiones igual que en la lista vieja.
     @State private var plegadas: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "expenses.collapsedCategories") ?? [])
@@ -43,37 +46,27 @@ struct ResumenPage: View {
             List {
                 let r = viewModel.resumen
 
-                Group {
-                    // El total lleva a Gráficas: es donde se desmenuza.
-                    Button { onDestino(.graficas) } label: {
-                        HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior, filtrado: filtrado)
-                    }
-                    .buttonStyle(TarjetaButtonStyle())
-
-                    if let a = r.slots[.a] { slot(a) }
-
-                    if r.slots[.b] != nil || r.slots[.c] != nil {
-                        HStack(alignment: .top, spacing: Spacing.xs) {
-                            if let b = r.slots[.b] { slot(b, compacta: true) }
-                            if let c = r.slots[.c] { slot(c, compacta: true) }
-                        }
-                    }
-
-                    UltimosCard(gastos: viewModel.ultimosGastos, zoom: zoom, onEditar: onEditar)
-
-                    if let e = r.slots[.e] { slot(e) }
-
-                    // La puerta a ocultar y ordenar tarjetas, donde acaban ellas.
-                    Button { onPersonalizar() } label: {
-                        Label("Personalizar tarjetas", systemImage: "slider.horizontal.3")
-                            .font(.caption.weight(.medium))
-                            .foregroundStyle(Color.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                            .padding(.horizontal, 6)
-                            .padding(.top, 2)
-                    }
-                    .buttonStyle(.plain)
+                // El total lleva a Gráficas: es donde se desmenuza.
+                Button { onDestino(.graficas) } label: {
+                    HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior, filtrado: filtrado)
                 }
+                .buttonStyle(TarjetaButtonStyle())
+                .filaDeTarjeta()
+
+                // Una fila de la lista por fila de tarjetas, como antes el hueco
+                // A, el B y C juntos, los últimos y el E.
+                TarjetasDeLaHome(viewModel: viewModel, zoom: zoom, acciones: acciones)
+
+                // La puerta al modo edición, donde acaban las tarjetas.
+                Button { edicion.entrar() } label: {
+                    Label("Personalizar tarjetas", systemImage: "slider.horizontal.3")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.horizontal, 6)
+                        .padding(.top, 2)
+                }
+                .buttonStyle(.plain)
                 .filaDeTarjeta()
 
                 listaDeGastos(total: r.total)
@@ -92,6 +85,28 @@ struct ResumenPage: View {
             }
         }
         .trackScreen("home")
+    }
+
+    /// Lo que hacen las tarjetas: abrir su pantalla y lo de su menú contextual.
+    private var acciones: AccionesDeTarjeta {
+        AccionesDeTarjeta(
+            abrir: onDestino,
+            editarGasto: onEditar,
+            // Tras el menú: que se recoja antes de cambiar la pantalla de debajo.
+            editarHome: { edicion.entrar(trasMenu: true) },
+            quitar: { id in
+                withAnimation(.snappy) { viewModel.quitarTarjeta(id) }
+                HapticManager.shared.selection()
+            },
+            cambiarTamano: { id, tamano in
+                withAnimation(.snappy) { viewModel.cambiarTamano(id, a: tamano) }
+                HapticManager.shared.selection()
+            },
+            noEnsenarEnPila: { clase in
+                withAnimation(.snappy) { viewModel.noEnsenarEnPila(clase) }
+                HapticManager.shared.selection()
+            }
+        )
     }
 
     // MARK: - Gastos del mes, por categoría
@@ -191,39 +206,71 @@ struct ResumenPage: View {
     }
 }
 
-// MARK: - Cada hueco lleva a donde se gestiona lo que enseña
+// MARK: - Las tarjetas, fuera de edición
 
-private extension ResumenPage {
-    func slot(_ contenido: HomeResumen.Contenido, compacta: Bool = false) -> some View {
-        let destino = destino(de: contenido)
-        return Button { onDestino(destino) } label: {
-            SlotCard(contenido: contenido, compacta: compacta)
-                // Recurrentes y Te deben se abren creciendo desde la tarjeta.
-                .origenZoom(id: "destino-\(destino)", en: zoom)
+/// Las filas de tarjetas de la disposición: solo las que tienen algo que
+/// enseñar este mes, ya repartidas por el dominio. Una struct aparte para que
+/// sus cambios no repinten la cabecera ni la lista de gastos.
+private struct TarjetasDeLaHome: View {
+    @Bindable var viewModel: HomeViewModel
+    let zoom: Namespace.ID
+    let acciones: AccionesDeTarjeta
+
+    var body: some View {
+        let contenidos = viewModel.resumen.disponibles
+        let ultimos = viewModel.ultimosGastos
+        ForEach(viewModel.filasHome, id: \.first?.id) { fila in
+            FilaDeTarjetas(fila: fila, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones)
+                .filaDeTarjeta()
         }
-        .buttonStyle(TarjetaButtonStyle())
-        // Mantener pulsada una tarjeta: quitarla o ir a ordenarlas.
-        .contextMenu {
-            Button {
-                viewModel.ocultarTarjeta(contenido.clase)
-                HapticManager.shared.selection()
-            } label: {
-                Label("Ocultar esta tarjeta", systemImage: "eye.slash")
-            }
-            Button { onPersonalizar() } label: {
-                Label("Personalizar tarjetas…", systemImage: "slider.horizontal.3")
+    }
+}
+
+/// Una fila: una ancha, o dos pequeñas (o una sola, con su media fila vacía).
+/// Fuera de la `List` para poder pintarla en las capturas de los tests.
+struct FilaDeTarjetas: View {
+    let fila: [HomeDisposicion.Tarjeta]
+    let contenidos: [String: HomeResumen.Contenido]
+    let ultimos: [Expense]
+    let zoom: Namespace.ID
+    let acciones: AccionesDeTarjeta
+
+    var body: some View {
+        RejillaHome {
+            ForEach(fila) { tarjeta in
+                TarjetaNormal(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones)
+                    .layoutValue(key: TamanoEnRejilla.self, value: tarjeta.tamano)
             }
         }
     }
+}
 
-    func destino(de contenido: HomeResumen.Contenido) -> HomeDestino {
-        switch contenido {
-        case .limites, .hucha, .limiteSugerido: .metas
-        case .cargos: .recurrentes
-        case .teDeben: .deudas
-        case .reparto, .subeFuerte, .sitios, .hormiga, .racha: .gastos
-        case .diaCaro, .semana, .comparativa, .semanaASemana, .fueraDeNormal, .diaSemana, .ahorro, .ranking: .graficas
+/// Cada tarjeta lleva a donde se gestiona lo que enseña, y al mantenerla
+/// pulsada, su menú: editar la Home, el tamaño, la pila y quitarla.
+private struct TarjetaNormal: View {
+    let tarjeta: HomeDisposicion.Tarjeta
+    let contenidos: [String: HomeResumen.Contenido]
+    let ultimos: [Expense]
+    let zoom: Namespace.ID
+    let acciones: AccionesDeTarjeta
+
+    var body: some View {
+        Group {
+            if let clase = tarjeta.clase, let contenido = contenidos[clase] {
+                let destino = HomeDestino(para: contenido)
+                Button { acciones.abrir(destino) } label: {
+                    SlotCard(contenido: contenido, compacta: tarjeta.tamano == .pequena)
+                        // Recurrentes y Te deben se abren creciendo desde la tarjeta.
+                        .origenZoom(id: "destino-\(destino)", en: zoom)
+                }
+                .buttonStyle(TarjetaButtonStyle())
+            } else {
+                // Los últimos gastos: cada fila abre su gasto.
+                CuerpoTarjeta(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom,
+                              onEditar: acciones.editarGasto)
+            }
         }
+        .contextMenu { MenuDeTarjeta(tarjeta: tarjeta, acciones: acciones) }
     }
 }
 
@@ -243,7 +290,7 @@ private extension View {
 
 // MARK: - Cabecera: total, presupuesto y ritmo
 
-private struct HeroCard: View {
+struct HeroCard: View {
     /// Lo que suman los gastos con los filtros puestos.
     struct Filtrado: Equatable {
         let total: Double
@@ -257,8 +304,12 @@ private struct HeroCard: View {
     /// Con filtros, su total va debajo del total del mes. El grande sigue siendo
     /// el del mes entero: es contra el que se miden el presupuesto y la previsión.
     let filtrado: Filtrado?
+    /// Si la cifra sube desde cero al aparecer. No en la Home en edición: al
+    /// entrar volvería a rodar un total que ya se estaba viendo.
+    var animarCifra = true
     /// La cifra sube desde cero al aparecer: los dígitos ruedan hasta el total.
     @State private var mostrado = false
+    private var cifra: Double { mostrado || !animarCifra ? resumen.total : 0 }
 
     /// Con presupuesto y por debajo del 85 %: el mismo umbral en el que la barra
     /// empieza a ondular.
@@ -278,7 +329,7 @@ private struct HeroCard: View {
                 chip
             }
 
-            Text(Formatters.currency(mostrado ? resumen.total : 0))
+            Text(Formatters.currency(cifra))
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .tracking(-1.2)
                 .lineLimit(1)
@@ -288,7 +339,7 @@ private struct HeroCard: View {
                 // la barra.
                 .foregroundStyle(vaBien ? Color.clarityMango : Color.primary)
                 // Los dígitos ruedan al nuevo valor en vez de parpadear.
-                .contentTransition(.numericText(value: mostrado ? resumen.total : 0))
+                .contentTransition(.numericText(value: cifra))
                 .animation(.snappy(duration: 0.9), value: mostrado)
                 .animation(.snappy(duration: 0.5), value: resumen.total)
                 .padding(.top, 4)
@@ -436,7 +487,7 @@ private struct Barra: View {
 
 // MARK: - Los huecos
 
-private struct SlotCard: View {
+struct SlotCard: View {
     let contenido: HomeResumen.Contenido
     var compacta = false
 
@@ -463,7 +514,8 @@ private struct SlotCard: View {
             case .limiteSugerido(let l): limiteSugeridoView(l)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // Todo el alto que le dé la fila: dos pequeñas juntas miden lo mismo.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(compacta ? 14 : 16)
         .ondaAlTocar()
         .glassCard(tint: tinte)
@@ -763,7 +815,7 @@ private struct SlotCard: View {
 
 // MARK: - Categorías y últimos
 
-private struct UltimosCard: View {
+struct UltimosCard: View {
     let gastos: [Expense]
     let zoom: Namespace.ID
     let onEditar: (Expense, String) -> Void

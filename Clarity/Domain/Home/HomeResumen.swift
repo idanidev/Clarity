@@ -209,7 +209,12 @@ nonisolated struct HomeResumen: Sendable {
         }
     }
 
-    enum Slot: CaseIterable, Sendable {
+    /// Los cuatro huecos de la Home de siempre. Desde la 2.4 no se pintan tal
+    /// cual: la disposición por defecto (`HomeDisposicion.porDefecto`) los
+    /// reproduce con cuatro pilas que eligen igual que ellos, y sus colas
+    /// dicen qué clases caben en cada tamaño (`HomeDisposicion.catalogo`).
+    /// El valor en crudo es lo que se guarda en la cuenta.
+    enum Slot: String, CaseIterable, Sendable {
         case a, b, c, e
 
         /// Lo que le cabe a cada hueco. A y E son anchos; B y C, medias
@@ -236,8 +241,12 @@ nonisolated struct HomeResumen: Sendable {
     let slots: [Slot: Contenido]
     /// Aparte de los huecos: Gráficas lo señala aunque el hueco B lo ocupe otra cosa.
     let diaMasCaro: DiaCaro?
-    /// Todo lo que había disponible y cuánto importaba, por clase. Para
-    /// entender por qué salió lo que salió.
+    /// Todo lo que tiene datos este mes, por clase, se vaya a pintar o no. La
+    /// Home editable elige de aquí lo de cada tarjeta y cada pila.
+    let disponibles: [String: Contenido]
+    /// Cuánto importa cada cosa de `disponibles`, por clase. Incluye lo que el
+    /// usuario ocultó: ocultar quita una clase de las pilas y de los huecos,
+    /// pero colocada a mano sale igual.
     let relevancias: [String: Double]
 
     // Lo que pasa el filtro. Sin filtro coincide con el mes entero.
@@ -268,7 +277,8 @@ nonisolated struct HomeResumen: Sendable {
     ///   - primerGasto: fecha del primer gasto que apuntó el usuario, para "N días apuntando".
     ///   - normal: la costumbre del usuario, si hay meses detrás. Sin ella, lo
     ///     que se mide contra "tu normal" no sale.
-    ///   - preferencias: lo que el usuario ocultó no sale; lo que ordenó gana el hueco.
+    ///   - preferencias: lo que el usuario ocultó no sale en los huecos; lo que
+    ///     ordenó gana el hueco. `disponibles` y `relevancias` no dependen de esto.
     ///   - filtro: los filtros puestos en la Home, si hay. Lo que habla de en qué
     ///     se gasta —reparto, día más caro, semanas, subidas, sitios, hormigas y
     ///     comparativa de las tarjetas— mira solo lo que lo pasa. Total, ritmo,
@@ -526,22 +536,15 @@ nonisolated struct HomeResumen: Sendable {
         // relevante de lo que le cabe y no se ha usado ya en otro hueco.
         let contexto = Contexto(totalAnalisis: totalAnalisis, subidaRelativa: subidaRelativa,
                                 diaActual: diaActual, diasConGasto: porDia.count)
-        // Lo que el usuario ocultó no sale, puntúe lo que puntúe.
-        for clase in preferencias.ocultas { disponibles[clase] = nil }
         let relevancias = disponibles.mapValues { Self.relevancia($0, contexto) }
-        var usados = Set<String>()
+        // Lo que el usuario ocultó no sale en los huecos, puntúe lo que puntúe.
+        var usados = preferencias.ocultas
         var slots: [Slot: Contenido] = [:]
         for slot in Slot.allCases {
-            let opciones = slot.candidatos.enumerated().compactMap { orden, clase -> (orden: Int, clase: String, valor: Double)? in
-                guard !usados.contains(clase), let valor = relevancias[clase] else { return nil }
-                // Lo que el usuario ordenó va por delante de la relevancia automática.
-                return (orden, clase, valor + preferencias.bonus(clase))
-            }
-            guard let mejor = opciones.max(by: { a, b in
-                a.valor < b.valor || (a.valor == b.valor && a.orden > b.orden)
-            }) else { continue }
-            slots[slot] = disponibles[mejor.clase]
-            usados.insert(mejor.clase)
+            guard let mejor = Self.elegir(entre: slot.candidatos, relevancias: relevancias,
+                                          excluidas: usados, bonus: preferencias.bonus) else { continue }
+            slots[slot] = disponibles[mejor]
+            usados.insert(mejor)
         }
 
         return HomeResumen(
@@ -553,12 +556,30 @@ nonisolated struct HomeResumen: Sendable {
             diasApuntando: diasApuntando,
             slots: slots,
             diaMasCaro: diaMasCaro,
+            disponibles: disponibles,
             relevancias: relevancias,
             totalAnalisis: totalAnalisis,
             numeroAnalisis: analisis.count,
             mediaDiariaAnalisis: diaActual > 0 ? totalAnalisis / Double(diaActual) : 0,
             comparativaAnalisis: comparativaAnalisis
         )
+    }
+
+    /// Lo más relevante de `candidatos` que tenga datos y no esté en
+    /// `excluidas`. Lo que el usuario ordenó (`bonus`) va por delante de la
+    /// relevancia automática; a igualdad, gana el que va antes en la lista. Lo
+    /// usan los huecos y las pilas de la Home editable: es la misma decisión.
+    static func elegir(entre candidatos: [String], relevancias: [String: Double],
+                       excluidas: Set<String>, bonus: (String) -> Double) -> String? {
+        var mejor: (clase: String, valor: Double)?
+        for clase in candidatos where !excluidas.contains(clase) {
+            guard let relevancia = relevancias[clase] else { continue }
+            let valor = relevancia + bonus(clase)
+            // Estrictamente mayor: con empate se queda el que iba antes.
+            if let actual = mejor, valor <= actual.valor { continue }
+            mejor = (clase, valor)
+        }
+        return mejor?.clase
     }
 
     // MARK: - Relevancia
