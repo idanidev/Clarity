@@ -260,15 +260,19 @@ struct MainTabView: View {
                 try? await Task.sleep(for: .milliseconds(300))
                 switch enlace {
                 case .applePay(let merchant, let amount):
+                    AnalyticsService.shared.track(.entradaExterna(.applePay))
                     await prepararConfirmacionDeFuera()
                     voiceCoordinator.populateFromApplePay(merchant: merchant, amount: amount)
                 case .fraseDictada(let phrase):
+                    AnalyticsService.shared.track(.entradaExterna(.siri))
                     await prepararConfirmacionDeFuera()
                     // Solo Siri y los Atajos abren la app con `input`: el micro
                     // de dentro llama al coordinator directamente.
                     voiceCoordinator.marcarOrigenSiri()
                     voiceCoordinator.handleTranscript(phrase, categories: userDataManager.categories)
                 case .abrirFormulario:
+                    // Sin parámetros solo abre la app el widget.
+                    AnalyticsService.shared.track(.entradaExterna(.widget))
                     abrirFormularioSiNoHayNadaAbierto()
                 case .ignorar:
                     break  // ya se salió arriba, antes de lanzar el Task
@@ -345,6 +349,7 @@ private extension MainTabView {
         // Control "Dictar gasto" (Centro de Control, pantalla bloqueada, Botón de Acción).
         if defaults.bool(forKey: "widget_start_voice") {
             defaults.removeObject(forKey: "widget_start_voice")
+            AnalyticsService.shared.track(.entradaExterna(.controlDictar))
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(500))
                 // Con una hoja delante el micro arrancaba detrás, grabando a
@@ -358,6 +363,7 @@ private extension MainTabView {
         }
         guard defaults.bool(forKey: "widget_open_add_expense") else { return }
         defaults.removeObject(forKey: "widget_open_add_expense")
+        AnalyticsService.shared.track(.entradaExterna(.widget))
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(300))
             abrirFormularioSiNoHayNadaAbierto()

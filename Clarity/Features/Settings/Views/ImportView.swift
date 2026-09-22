@@ -214,6 +214,9 @@ struct ImportReviewView: View {
             for expense in expenses {
                 _ = try? await expenseRepository.addExpense(expense)
             }
+            if !expenses.isEmpty {
+                AnalyticsService.shared.track(.csvImported)
+            }
 
             HapticManager.shared.notification(.success)
             isSaving = false

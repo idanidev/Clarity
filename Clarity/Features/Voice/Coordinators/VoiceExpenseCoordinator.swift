@@ -179,6 +179,7 @@ class VoiceExpenseCoordinator {
         guard !transcript.isEmpty else {
             state = .error("No se detectó ningún gasto. Intenta de nuevo.")
             stats.recordFailure()
+            AnalyticsService.shared.track(.voiceExpenseFailed(reason: .sinAudio))
             return
         }
 
@@ -236,6 +237,7 @@ class VoiceExpenseCoordinator {
 
             case .failure(let error):
                 stats.recordFailure()
+                AnalyticsService.shared.track(.voiceExpenseFailed(reason: FalloVoz(error)))
 
                 // Falta el importe, pero la frase se entendió: al formulario
                 // manual con ella, no a un alert que la tira (ai-service.md:
@@ -319,6 +321,7 @@ class VoiceExpenseCoordinator {
 
         } catch {
             stats.recordFailure()
+            AnalyticsService.shared.track(.voiceExpenseFailed(reason: .errorAlGuardar))
             state = .error("Error al guardar: \(error.safeUserMessage)")
 
             if settings.vibration {
@@ -347,6 +350,8 @@ class VoiceExpenseCoordinator {
 
         wasFullyDetected = resolved != nil
         categoryIsGuess = resolved == nil && !categoryName.isEmpty
+        // Se guarda por la misma confirmación que la voz, pero no es voz.
+        origen = .applePay
         state = .confirming
     }
 
@@ -428,6 +433,9 @@ class VoiceExpenseCoordinator {
         pendingExpense = nil
         wasFullyDetected = false
         categoryIsGuess = false
+        // Una confirmación de Siri o de Apple Pay descartada no debe dejar su
+        // origen puesto para el siguiente dictado.
+        origen = .voice
     }
 
     func clearError() {

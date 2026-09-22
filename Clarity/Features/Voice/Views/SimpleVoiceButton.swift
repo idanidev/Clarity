@@ -249,6 +249,7 @@ struct SimpleVoiceButton: View {
             } catch {
                 await MainActor.run {
                     HapticManager.shared.error()
+                    AnalyticsService.shared.track(.voiceExpenseFailed(reason: .noArranca))
                 }
             }
         }
@@ -300,6 +301,7 @@ struct SimpleVoiceButton: View {
                 guard !finalTranscript.isEmpty else {
                     isProcessing = false
                     HapticManager.shared.error()
+                    AnalyticsService.shared.track(.voiceExpenseFailed(reason: .sinAudio))
                     FeedbackManager.shared.show(
                         .error,
                         title: "Sin audio",
@@ -345,9 +347,11 @@ struct SimpleVoiceButton: View {
                     // falta es el importe, o el parser agotó su tiempo. Se lleva
                     // al formulario manual en vez de tirarla con un error.
                     if let alFaltarImporte {
+                        AnalyticsService.shared.track(.voiceExpenseFailed(reason: .sinImporte))
                         alFaltarImporte(transcript)
                         return
                     }
+                    AnalyticsService.shared.track(.voiceExpenseFailed(reason: .noProcesado))
                     HapticManager.shared.error()
                     FeedbackManager.shared.show(
                         .error, title: "Error",
@@ -365,6 +369,7 @@ struct SimpleVoiceButton: View {
 
                     // Safety: reject implausible amounts
                     guard amountDouble > 0, amountDouble <= Self.maxVoiceAmount else {
+                        AnalyticsService.shared.track(.voiceExpenseFailed(reason: .importeNoValido))
                         HapticManager.shared.error()
                         FeedbackManager.shared.show(
                             .error, title: "Importe no válido",
@@ -514,6 +519,7 @@ struct SimpleVoiceButton: View {
                 )
             }
         } catch {
+            AnalyticsService.shared.track(.voiceExpenseFailed(reason: .errorAlGuardar))
             if showFeedback {
                 HapticManager.shared.error()
                 FeedbackManager.shared.show(

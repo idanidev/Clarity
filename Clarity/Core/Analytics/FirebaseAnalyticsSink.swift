@@ -12,19 +12,11 @@ import Foundation
 
 struct FirebaseAnalyticsSink: AnalyticsSink {
     func send(name: String, parameters: [String: String]) {
-        // El informe de Pantallas de Firebase solo se llena con su evento
-        // canónico. Un `screen_viewed` propio queda como un evento suelto y ese
-        // informe sale vacío —o peor, con los controladores del sistema que
-        // registraba el reporte automático—, así que aquí se traduce. Este es el
-        // sitio: el resto del código no sabe ni tiene que saber de Firebase.
-        if name == AnalyticsEvent.screenViewedName,
-           let screen = parameters[AnalyticsEvent.screenParameter] {
-            Analytics.logEvent(AnalyticsEventScreenView, parameters: [
-                AnalyticsParameterScreenName: screen
-            ])
-            return
-        }
-        Analytics.logEvent(name, parameters: parameters)
+        // Las pantallas pasan a `screen_view` y los números viajan como número:
+        // lo decide `AnalyticsEvent.paraFirebase`, que se puede probar sin el
+        // SDK. El resto del código no sabe ni tiene que saber de Firebase.
+        let evento = AnalyticsEvent.paraFirebase(nombre: name, parametros: parameters)
+        Analytics.logEvent(evento.nombre, parameters: evento.parametros)
     }
 
     func setUserProperty(_ value: String?, for name: String) {
@@ -51,5 +43,8 @@ enum AnalyticsBootstrap {
 
         AnalyticsService.shared.startSession()
         AnalyticsService.shared.syncUserProperties()
+        // App Store, TestFlight/App Review o Xcode. Pide a StoreKit la
+        // transacción de la app, que puede tardar: sin esperar al arranque.
+        Task { await AnalyticsService.shared.registrarEntorno() }
     }
 }

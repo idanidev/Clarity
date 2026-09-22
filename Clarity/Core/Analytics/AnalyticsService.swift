@@ -15,7 +15,9 @@ enum AnalyticsEvent: Sendable {
     case onboardingStarted
     case onboardingCompleted
     case expenseAdded(method: ExpenseInputMethod, category: String)
-    case voiceExpenseFailed(reason: String)
+    /// Un dictado que no acabó en gasto. El motivo es un vocabulario cerrado:
+    /// nunca lleva lo dictado.
+    case voiceExpenseFailed(reason: FalloVoz)
     case paywallShown(reason: String)
     case purchaseCompleted(productId: String)
     case reviewPrompted
@@ -42,6 +44,17 @@ enum AnalyticsEvent: Sendable {
     /// nombre que no cambia aunque cambie el orden. El 33 % abandonaba entre
     /// empezar y terminar, y sin esto no se sabe en qué página (#57).
     case onboardingStep(index: Int, name: String)
+    /// La app se ha abierto desde fuera para apuntar algo: widget, control de
+    /// «Dictar gasto», Siri o el Atajo de Apple Pay. El gasto que salga de ahí
+    /// se cuenta con el método de dentro (el formulario es `manual`), así que
+    /// sin esto el widget y los controles no aparecían nunca.
+    case entradaExterna(EntradaExterna)
+    /// Un cargo que la app ha creado sola a partir de una regla recurrente. Va
+    /// aparte de `expense_added`: ese es un evento clave y cuenta lo que apunta
+    /// el usuario, y además marcaría como activo un día en que no hizo nada.
+    case recurringExpenseCreated
+    /// Una importación de CSV terminada, una vez por importación y no por fila.
+    case csvImported
 
     /// El sink de Firebase traduce este evento a su evento canónico de pantalla;
     /// los demás destinos lo mandan tal cual. Los nombres viven aquí para que el
@@ -72,6 +85,9 @@ enum AnalyticsEvent: Sendable {
         case .microphonePermission: return "permiso_microfono"
         case .onboardingFirstExpense: return "onboarding_primer_gasto"
         case .onboardingStep: return "onboarding_step"
+        case .entradaExterna: return "entrada_externa"
+        case .recurringExpenseCreated: return "gasto_recurrente_creado"
+        case .csvImported: return "importacion_csv"
         }
     }
 
@@ -80,7 +96,7 @@ enum AnalyticsEvent: Sendable {
         case .expenseAdded(let method, let category):
             return ["method": method.rawValue, "category": category]
         case .voiceExpenseFailed(let reason):
-            return ["reason": reason]
+            return ["reason": reason.rawValue]
         case .paywallShown(let reason):
             return ["reason": reason]
         case .purchaseCompleted(let productId):
@@ -109,6 +125,10 @@ enum AnalyticsEvent: Sendable {
         case .onboardingStep(let index, let name):
             // Solo la página: nada del usuario.
             return ["index": String(index), "step": name]
+        case .entradaExterna(let via):
+            // `method` y no un nombre propio: es una dimensión que GA ya trae
+            // y se puede consultar sin darla de alta.
+            return ["method": via.rawValue]
         default:
             return [:]
         }
@@ -125,6 +145,85 @@ enum ExpenseInputMethod: String, Sendable {
     case recurring
     case widget
     case importCSV = "import"
+    /// El Atajo de Apple Pay: comercio e importe llegan hechos. Antes se
+    /// contaba como voz porque pasa por la misma confirmación.
+    case applePay = "apple_pay"
+}
+
+/// Por qué un dictado no acabó en gasto.
+enum FalloVoz: String, Sendable {
+    /// El reconocimiento de voz no llegó a arrancar.
+    case noArranca = "no_arranca"
+    /// Se paró sin haber oído nada.
+    case sinAudio = "sin_audio"
+    /// Se entendió la frase pero no el importe: se lleva al formulario.
+    case sinImporte = "sin_importe"
+    /// El parser no sacó nada, o se le acabó el tiempo.
+    case noProcesado = "no_procesado"
+    /// Salió un importe, pero cero o por encima del tope de la voz.
+    case importeNoValido = "importe_no_valido"
+    case formato
+    case categoriaAmbigua = "categoria_ambigua"
+    /// El gasto estaba listo y falló al guardarse.
+    case errorAlGuardar = "error_guardar"
+
+    init(_ error: ParserError) {
+        switch error {
+        case .noAmountFound: self = .sinImporte
+        case .emptyInput: self = .sinAudio
+        case .ambiguousCategory: self = .categoriaAmbigua
+        case .invalidFormat: self = .formato
+        }
+    }
+}
+
+/// Desde dónde se abrió la app para apuntar algo.
+enum EntradaExterna: String, Sendable {
+    /// El widget, o su botón de añadir.
+    case widget
+    /// El control «Dictar gasto»: Centro de Control, pantalla bloqueada o
+    /// Botón de Acción.
+    case controlDictar = "control_dictar"
+    /// Una frase dictada a Siri o escrita en un Atajo.
+    case siri
+    case applePay = "apple_pay"
+}
+
+// MARK: - Traducción a Firebase
+
+extension AnalyticsEvent {
+    /// Parámetros que Firebase tiene que recibir como número. Todo lo demás
+    /// viaja como texto; un número en texto no sirve para una métrica de GA,
+    /// que suma y promedia (la duración de sesión llegaba así y no se podía
+    /// usar).
+    static let parametrosNumericos: Set<String> = ["duration_seconds"]
+
+    /// Lo que se entrega a `Analytics.logEvent` para un evento con este nombre
+    /// y estos parámetros. Función pura para poder probarla sin Firebase.
+    ///
+    /// Las pantallas se traducen al evento canónico `screen_view`: el informe
+    /// de Pantallas solo se llena con él. Llevan además la clase y el nombre
+    /// repetido en `pantalla`, un parámetro propio. En iOS 27 el SDK pierde
+    /// el nombre de pantalla del `screen_view` manual —llega `(not set)` con
+    /// el mismo binario que en iOS 26 llega bien— y `pantalla` no lo toca.
+    static func paraFirebase(nombre: String, parametros: [String: String]) -> (nombre: String, parametros: [String: Any]) {
+        if nombre == screenViewedName, let pantalla = parametros[screenParameter] {
+            return ("screen_view", [
+                "screen_name": pantalla,
+                "screen_class": pantalla,
+                "pantalla": pantalla,
+            ])
+        }
+        var salida: [String: Any] = [:]
+        for (clave, valor) in parametros {
+            if parametrosNumericos.contains(clave), let numero = Int(valor) {
+                salida[clave] = numero
+            } else {
+                salida[clave] = valor
+            }
+        }
+        return (nombre, salida)
+    }
 }
 
 /// Destino de los eventos. Permite enchufar Firebase Analytics (o cualquier otro)
@@ -173,6 +272,7 @@ final class AnalyticsService {
         static let sessionDays = "analytics.sessionDays"     // ["yyyy-MM-dd"] → DAU/MAU
         static let sessionCount = "analytics.sessionCount"
         static let excludeDevice = "analytics.excludeDevice"
+        static let installVersion = "analytics.installVersion"
     }
 
     /// Inicio de la sesión en curso, para poder medir su duración.
@@ -335,10 +435,34 @@ final class AnalyticsService {
 
     // MARK: - Retención (calculada en local)
 
-    /// Marca el primer arranque. Idempotente.
+    /// Marca el primer arranque y la versión con la que fue. Idempotente.
     func registerFirstOpenIfNeeded() {
+        if defaults.string(forKey: Key.installVersion) == nil {
+            let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+            defaults.set(
+                Self.versionDeInstalacion(yaHabiaArrancado: defaults.object(forKey: Key.firstOpen) != nil, actual: version),
+                forKey: Key.installVersion
+            )
+        }
         guard defaults.object(forKey: Key.firstOpen) == nil else { return }
         defaults.set(Date().timeIntervalSince1970, forKey: Key.firstOpen)
+    }
+
+    /// La versión con la que este dispositivo empezó a usar la app, para medir
+    /// la retención según con cuál se estrenó cada uno. Quien ya la usaba antes
+    /// de que existiera este dato no tiene forma de saber con cuál empezó.
+    static func versionDeInstalacion(yaHabiaArrancado: Bool, actual: String) -> String {
+        yaHabiaArrancado ? "anterior_a_2.4.0" : actual
+    }
+
+    /// De dónde viene la instalación (App Store, TestFlight y App Review, o
+    /// Xcode), para poder quitar de las cifras a App Review, que cuenta como
+    /// usuario: el 8 % de las altas.
+    func registrarEntorno() async {
+        let entorno = await EntornoApp.actual()
+        for sink in sinks {
+            sink.setUserProperty(entorno, for: "entorno")
+        }
     }
 
     var daysSinceFirstOpen: Int? {
@@ -388,6 +512,7 @@ final class AnalyticsService {
             sink.setUserProperty(isHabitualUser ? "habitual" : "casual", for: "usage_tier")
             sink.setUserProperty(String(totalExpensesLogged), for: "expenses_logged")
             sink.setUserProperty(String(monthlyActiveDays), for: "active_days_30")
+            sink.setUserProperty(defaults.string(forKey: Key.installVersion), for: "version_instalacion")
         }
     }
 
