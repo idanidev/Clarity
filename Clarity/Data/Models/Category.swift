@@ -36,7 +36,10 @@ struct Category: Codable, Identifiable, Hashable {
 
 // MARK: - Default Categories
 enum DefaultCategory: String, CaseIterable, Sendable {
-    case alimentacion = "Alimentacion🫄"
+    /// Hasta la 2.3 era «Alimentacion🫄»: sin tilde y con una persona
+    /// embarazada. Las cuentas de entonces la conservan (el nombre es también
+    /// su id y el de sus gastos); ver `CategorySeeding.alimentacionAnterior`.
+    case alimentacion = "Alimentación 🍴"
     case ocio = "Ocio 🍻"
     case vivienda = "Vivienda🏡"
     case transporte = "Transporte🚎"

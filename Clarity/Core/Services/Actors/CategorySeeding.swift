@@ -18,6 +18,30 @@ import Foundation
 // (aislamiento no-main); con @MainActor por defecto daría warnings de Swift 6.
 nonisolated enum CategorySeeding {
 
+    /// La categoría de comida de fábrica hasta la 2.3.x. Las cuentas de antes
+    /// la conservan: su nombre es el id y lo que llevan escrito sus gastos.
+    static let alimentacionAnterior = "Alimentacion🫄"
+
+    /// Las categorías de fábrica: id = nombre = rawValue.
+    ///
+    /// `alimentacionAnterior`: la de comida con el nombre de antes. Para una
+    /// cuenta vieja que se quedó sin mapa de categorías pero tiene gastos con
+    /// ese nombre; con el nuevo, esos gastos quedarían fuera de toda categoría.
+    static func categoriasDeFabrica(alimentacionAnterior usarAnterior: Bool = false) -> [Category] {
+        DefaultCategory.allCases.enumerated().map { index, cat in
+            let nombre = cat == .alimentacion && usarAnterior ? alimentacionAnterior : cat.rawValue
+            return Category(
+                id: nombre,  // ← never nil: ForEach Identifiable necesita id único estable
+                name: nombre,
+                color: cat.defaultColor,
+                subcategories: cat.defaultSubcategories,
+                order: index,
+                createdAt: nil,
+                updatedAt: nil
+            )
+        }
+    }
+
     /// Caracteres prohibidos por Firestore en un id usado como segmento de field-path.
     static let forbiddenCharacters: Set<Character> = ["/", "~", "*", "[", "]"]
 

@@ -399,10 +399,18 @@ struct SimpleVoiceButton: View {
                         }
                     }
 
-                    // Fallback: use parser's detected category when no user-category matched
+                    // Si ninguna subcategoría casó: la categoría del parser, pero la
+                    // del usuario que le corresponde (la de comida de antes de la 2.4
+                    // se llama distinto). Si no hay ninguna, la del parser tal cual.
                     if category.isEmpty {
-                        category = tx.category ?? ""
-                        subcategory = tx.subcategory
+                        if let sugerida = tx.category,
+                           let propia = AddExpenseViewModel.resolverSugerencia((sugerida, tx.subcategory), en: categories) {
+                            category = propia.category
+                            subcategory = propia.subcategory
+                        } else {
+                            category = tx.category ?? ""
+                            subcategory = tx.subcategory
+                        }
                     }
 
                     let expense = Expense(

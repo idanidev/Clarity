@@ -15,6 +15,18 @@ extension String {
             .trimmingCharacters(in: .whitespaces)
     }
 
+    /// El nombre de una categoría para compararlo con otro: sin emoji, tildes,
+    /// mayúsculas ni nada que no sea letra o cifra. «Alimentacion🫄» y
+    /// «Alimentación 🍴» dan lo mismo.
+    var claveDeCategoria: String {
+        nombreSinEmoji
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: nil)
+            .unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map(String.init)
+            .joined()
+    }
+
     /// Solo los emojis del texto. Para el círculo cuando el emoji viene dentro
     /// del nombre y no en su campo.
     var soloEmoji: String {

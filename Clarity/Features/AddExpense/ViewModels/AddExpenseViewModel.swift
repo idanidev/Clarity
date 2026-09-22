@@ -231,6 +231,20 @@ class AddExpenseViewModel {
         _ suggestion: (category: String, subcategory: String?),
         en userCats: [Category]
     ) -> (category: String, subcategory: String?)? {
+        // Primero, el mismo nombre sin emoji ni tildes: el parser sugiere
+        // «Alimentación 🍴» y las cuentas de antes de la 2.4 la tienen como
+        // «Alimentacion🫄» (con el emoji dentro, el «contiene» de abajo no casa).
+        let clave = suggestion.category.claveDeCategoria
+        if !clave.isEmpty, let cat = userCats.first(where: { $0.name.claveDeCategoria == clave }) {
+            let sub = suggestion.subcategory.flatMap { sugSub in
+                cat.subcategories.first {
+                    $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                        == sugSub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+                }
+            }
+            return (cat.name, sub)
+        }
+
         let target = suggestion.category
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
 

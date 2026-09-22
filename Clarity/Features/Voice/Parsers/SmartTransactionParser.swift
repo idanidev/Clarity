@@ -66,10 +66,15 @@ private struct KeywordDefinition {
 }
 
 // Enhanced keyword database with temporal context
+//
+// Los nombres son los de `DefaultCategory`. Una cuenta que los tenga distintos
+// —renombrados, o «Alimentacion🫄», la de comida hasta la 2.3— los recibe
+// igual: `AddExpenseViewModel.resolverSugerencia` casa por nombre sin emoji ni
+// tildes.
 private let GlobalKeywords: [KeywordDefinition] = [
     // Alimentación - Context Aware
     .init(
-        category: "Alimentacion🫄", subcategory: "Supermercado",
+        category: "Alimentación 🍴", subcategory: "Supermercado",
         keywords: [
             "supermercado", "mercado", "mercadona", "carrefour", "lidl", "aldi", "dia", "alcampo",
             "eroski", "consum", "ahorramas",
@@ -77,16 +82,16 @@ private let GlobalKeywords: [KeywordDefinition] = [
 
     // Restaurantes - Almuerzo (12-16h)
     .init(
-        category: "Alimentacion🫄", subcategory: "Restaurantes",
+        category: "Alimentación 🍴", subcategory: "Restaurantes",
         keywords: ["restaurante", "cena", "almuerzo", "comida", "menu", "plato"],
         timeContext: 12...16),
     // Restaurantes - Cena (19-23h)
     .init(
-        category: "Alimentacion🫄", subcategory: "Restaurantes", keywords: ["cena", "cenar"],
+        category: "Alimentación 🍴", subcategory: "Restaurantes", keywords: ["cena", "cenar"],
         timeContext: 19...23),
     // Fast Food - Any time
     .init(
-        category: "Alimentacion🫄", subcategory: "Restaurantes",
+        category: "Alimentación 🍴", subcategory: "Restaurantes",
         keywords: [
             "pizza", "burguer", "hamburguesa", "sushi", "mcdonalds", "burger king", "telepizza",
             "just eat", "glovo", "uber eats",
@@ -94,14 +99,14 @@ private let GlobalKeywords: [KeywordDefinition] = [
 
     // Cafeterías - Desayuno (7-11h) / Merienda (16-19h)
     .init(
-        category: "Alimentacion🫄", subcategory: "Cafeterías",
+        category: "Alimentación 🍴", subcategory: "Cafeterías",
         keywords: ["desayuno", "cafe", "tostada"],
         timeContext: 7...11),
     .init(
-        category: "Alimentacion🫄", subcategory: "Cafeterías", keywords: ["merienda", "cafe"],
+        category: "Alimentación 🍴", subcategory: "Cafeterías", keywords: ["merienda", "cafe"],
         timeContext: 16...19),
     .init(
-        category: "Alimentacion🫄", subcategory: "Cafeterías", keywords: ["cafeteria", "starbucks"],
+        category: "Alimentación 🍴", subcategory: "Cafeterías", keywords: ["cafeteria", "starbucks"],
         timeContext: nil),
 
     // Transporte

@@ -393,39 +393,13 @@ class VoiceExpenseCoordinator {
         return nil
     }
 
-    /// Mapea sugerencia hardcoded a categorías reales del usuario.
+    /// Mapea sugerencia hardcoded a categorías reales del usuario. La misma
+    /// resolución que los formularios: antes era una copia de ella, y la de
+    /// comida de antes de la 2.4 («Alimentacion🫄») se habría quedado sin casar.
     private static func resolveSuggestion(
         _ s: (category: String, subcategory: String?)
     ) -> (category: String, subcategory: String?)? {
-        let userCats = UserDataManager.shared.categories
-        let target = s.category
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-        if let cat = userCats.first(where: {
-            $0.name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                .contains(target)
-        }) {
-            let sub = s.subcategory.flatMap { sugSub in
-                cat.subcategories.first {
-                    $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                        == sugSub.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                }
-            }
-            return (cat.name, sub)
-        }
-        if let sugSub = s.subcategory?
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current),
-           let cat = userCats.first(where: {
-               $0.subcategories.contains {
-                   $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
-               }
-           }),
-           let realSub = cat.subcategories.first(where: {
-               $0.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current) == sugSub
-           })
-        {
-            return (cat.name, realSub)
-        }
-        return nil
+        AddExpenseViewModel.resolverSugerencia(s, en: UserDataManager.shared.categories)
     }
 
     func reset() {

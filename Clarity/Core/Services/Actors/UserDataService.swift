@@ -71,7 +71,13 @@ actor UserDataService {
         // También auto-recupera a usuarios que se quedaron con el map vacío.
         if categoriesMap.isEmpty {
             logger.info("No categories persisted. Seeding defaults to Firestore.")
-            let defaults = createDefaultCategories()
+            // Una cuenta de antes de la 2.4 sin mapa puede tener gastos en la
+            // categoría de comida con el nombre de entonces: se siembra con ese
+            // nombre para no dejarlos sueltos. Si no se puede comprobar, también:
+            // mejor el nombre viejo en una cuenta nueva que gastos huérfanos.
+            let conNombreAnterior = (try? await tieneGastos(
+                enCategoria: CategorySeeding.alimentacionAnterior, userId: userId)) ?? true
+            let defaults = CategorySeeding.categoriasDeFabrica(alimentacionAnterior: conNombreAnterior)
             try? await persistCategoriesIfMissing(defaults, userId: userId)
             return (defaults, nil)
         }
@@ -415,17 +421,19 @@ actor UserDataService {
     // MARK: - Helpers
 
     func createDefaultCategories() -> [Category] {
-        DefaultCategory.allCases.enumerated().map { index, cat in
-            Category(
-                id: cat.rawValue,  // ← never nil: ForEach Identifiable necesita id único estable
-                name: cat.rawValue,
-                color: cat.defaultColor,
-                subcategories: cat.defaultSubcategories,
-                order: index,
-                createdAt: nil,
-                updatedAt: nil
-            )
+        CategorySeeding.categoriasDeFabrica()
+    }
+
+    /// ¿Hay al menos un gasto con esta categoría? Una lectura de un documento,
+    /// con el mismo tope de espera que el resto de lecturas remotas.
+    private func tieneGastos(enCategoria nombre: String, userId: String) async throws -> Bool {
+        let consulta = db.collection("users").document(userId).collection("expenses")
+            .whereField("category", isEqualTo: nombre)
+            .limit(to: 1)
+        let resultado = try await withTimeout(Self.remoteReadTimeout) {
+            try await consulta.getDocuments()
         }
+        return !resultado.documents.isEmpty
     }
 
     // MARK: - Migration
