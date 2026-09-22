@@ -102,11 +102,11 @@ struct ResumenSemanalTests {
     @Test("con datos: total, número de gastos y cuánto menos que la anterior")
     func textoMenos() {
         let cifras = ResumenSemanal.Cifras(total: 142.30, gastos: 18, totalAnterior: 165.30, gastosAnterior: 20)
-        let contenido = ResumenSemanal.contenido(cifras)
+        let contenido = ResumenSemanal.contenido(cifras, ocultarImportes: false)
         #expect(contenido.titulo == "Resumen semanal")
         #expect(contenido.cuerpo == "Esta semana llevas \(Formatters.currency(142.30)) en 18 gastos · "
                 + "\(Formatters.currencyWithoutDecimals(23)) menos que la anterior")
-        #expect(contenido.conDatos)
+        #expect(contenido.semanaConGastos)
     }
 
     @Test("la diferencia se redondea a euros enteros")
@@ -124,33 +124,60 @@ struct ResumenSemanalTests {
     @Test("un solo gasto va en singular")
     func singular() {
         let cifras = ResumenSemanal.Cifras(total: 3, gastos: 1)
-        #expect(ResumenSemanal.contenido(cifras).cuerpo == "Esta semana llevas \(Formatters.currency(3)) en 1 gasto")
+        #expect(ResumenSemanal.contenido(cifras, ocultarImportes: false).cuerpo == "Esta semana llevas \(Formatters.currency(3)) en 1 gasto")
     }
 
     @Test("sin gastos la semana anterior no se compara")
     func sinSemanaAnterior() {
         let cifras = ResumenSemanal.Cifras(total: 50, gastos: 2)
         #expect(ResumenSemanal.comparacion(cifras) == nil)
-        #expect(!ResumenSemanal.contenido(cifras).cuerpo.contains("·"))
+        #expect(!ResumenSemanal.contenido(cifras, ocultarImportes: false).cuerpo.contains("·"))
     }
 
     @Test("una semana sin gastos manda el recordatorio de siempre")
     func sinGastos() {
         let cifras = ResumenSemanal.Cifras(total: 0, gastos: 0, totalAnterior: 80, gastosAnterior: 6)
-        let contenido = ResumenSemanal.contenido(cifras)
+        let contenido = ResumenSemanal.contenido(cifras, ocultarImportes: false)
         #expect(contenido == ResumenSemanal.recordatorio)
         #expect(contenido.titulo == "Recordatorio semanal")
         #expect(contenido.cuerpo == "Recuerda apuntar tus gastos de esta semana")
-        #expect(!contenido.conDatos)
+        #expect(!contenido.semanaConGastos)
     }
 
     @Test("de los gastos al texto, de punta a punta")
     func deGastosATexto() {
         let gastos = [gasto(12.5, "2026-09-23"), gasto(7.5, "2026-09-24"), gasto(30, "2026-09-16")]
         let cifras = ResumenSemanal.cifras(de: gastos, aviso: fecha(27, 20), calendar: madrid)
-        #expect(ResumenSemanal.contenido(cifras).cuerpo
+        #expect(ResumenSemanal.contenido(cifras, ocultarImportes: false).cuerpo
                 == "Esta semana llevas \(Formatters.currency(20)) en 2 gastos · "
                 + "\(Formatters.currencyWithoutDecimals(10)) menos que la anterior")
+    }
+
+    // MARK: - Con el bloqueo de la app
+
+    @Test("con el bloqueo activado, el resumen sale sin importes ni número de gastos")
+    func conBloqueoSinCifras() {
+        let cifras = ResumenSemanal.Cifras(total: 142.30, gastos: 18, totalAnterior: 165.30, gastosAnterior: 20)
+        let contenido = ResumenSemanal.contenido(cifras, ocultarImportes: true)
+        #expect(contenido == ResumenSemanal.resumenSinCifras)
+        #expect(contenido.titulo == "Resumen semanal")
+        #expect(contenido.cuerpo == "Tu resumen de la semana está listo: entra para ver cuánto llevas.")
+        #expect(!contenido.cuerpo.contains("€"))
+        #expect(!contenido.cuerpo.contains("18"))
+        #expect(!contenido.cuerpo.contains("142"))
+    }
+
+    @Test("con el bloqueo sigue contando como semana con gastos (para la reseña)")
+    func conBloqueoSemanaConGastos() {
+        let cifras = ResumenSemanal.Cifras(total: 3, gastos: 1)
+        #expect(ResumenSemanal.contenido(cifras, ocultarImportes: true).semanaConGastos)
+    }
+
+    @Test("con el bloqueo y sin gastos, el recordatorio de siempre")
+    func conBloqueoSinGastos() {
+        let contenido = ResumenSemanal.contenido(ResumenSemanal.Cifras(), ocultarImportes: true)
+        #expect(contenido == ResumenSemanal.recordatorio)
+        #expect(!contenido.semanaConGastos)
     }
 
     @Test("los euros enteros no llevan céntimos ni abrevian los miles")

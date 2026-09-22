@@ -6,7 +6,7 @@
 // programar con los datos al día, y todo lo que decide el texto y las fechas
 // vive aquí, en funciones puras, para poder probarlo sin el centro de
 // notificaciones. Aquí no se registra nada: ni en logs ni en analítica viaja
-// un importe.
+// un importe. Y con el bloqueo de la app activado, tampoco en el aviso.
 
 import Foundation
 
@@ -15,7 +15,7 @@ import Foundation
 /// no corre en el main actor.
 nonisolated enum MarcaAviso {
     static let tipo = "clarity.tipo"
-    static let conDatos = "clarity.conDatos"
+    static let semanaConGastos = "clarity.semanaConGastos"
     static let resumenSemanal = "resumen_semanal"
 }
 
@@ -23,10 +23,11 @@ nonisolated enum MarcaAviso {
 nonisolated struct ContenidoRecordatorio: Equatable, Sendable {
     let titulo: String
     let cuerpo: String
-    /// Lleva cifras del usuario (y no el texto de recordatorio de siempre). Al
-    /// abrir la app desde uno así se puede pedir la reseña: quien lo toca lleva
-    /// una semana apuntando.
-    let conDatos: Bool
+    /// Es el resumen de una semana con gastos (y no el recordatorio de siempre),
+    /// enseñe o no las cifras. Al abrir la app desde uno así se puede pedir la
+    /// reseña: quien lo toca lleva una semana apuntando, y eso no cambia porque
+    /// el bloqueo tape los importes.
+    let semanaConGastos: Bool
 }
 
 // MARK: - Resumen semanal
@@ -113,12 +114,20 @@ nonisolated enum ResumenSemanal {
 
     /// El texto del aviso. Sin gastos esa semana, el recordatorio de siempre:
     /// un «llevas 0,00 €» no invita a nada.
+    ///
+    /// Con `ocultarImportes` (el bloqueo de la app activado) no lleva cifras:
+    /// el aviso sale en la pantalla de bloqueo del iPhone, a la vista de quien
+    /// lo tenga en la mano, y quien protege la app con Face ID no quiere sus
+    /// importes ahí. Sin valor por defecto a propósito: quien programe el aviso
+    /// tiene que decidirlo.
     static func contenido(
         _ cifras: Cifras,
+        ocultarImportes: Bool,
         moneda: (Double) -> String = Formatters.currency,
         monedaSinDecimales: (Double) -> String = Formatters.currencyWithoutDecimals
     ) -> ContenidoRecordatorio {
         guard cifras.gastos > 0 else { return recordatorio }
+        guard !ocultarImportes else { return resumenSinCifras }
 
         let total = moneda(cifras.total)
         let numero = cifras.gastos == 1
@@ -134,7 +143,7 @@ nonisolated enum ResumenSemanal {
         return ContenidoRecordatorio(
             titulo: String(localized: "notifications.summary.title", defaultValue: "Resumen semanal"),
             cuerpo: cuerpo,
-            conDatos: true
+            semanaConGastos: true
         )
     }
 
@@ -157,6 +166,17 @@ nonisolated enum ResumenSemanal {
             : String(localized: "notifications.summary.more", defaultValue: "\(cantidad) más que la anterior")
     }
 
+    /// El resumen con el bloqueo activado: dice que está listo, sin importes ni
+    /// número de gastos. Las cifras se ven al entrar, ya desbloqueada.
+    static var resumenSinCifras: ContenidoRecordatorio {
+        ContenidoRecordatorio(
+            titulo: String(localized: "notifications.summary.title", defaultValue: "Resumen semanal"),
+            cuerpo: String(localized: "notifications.summary.hiddenBody",
+                           defaultValue: "Tu resumen de la semana está listo: entra para ver cuánto llevas."),
+            semanaConGastos: true
+        )
+    }
+
     /// El de siempre, invitando a apuntar. Es el que sale las semanas sin gastos
     /// y en los avisos de las semanas siguientes, de las que aún no hay datos.
     static var recordatorio: ContenidoRecordatorio {
@@ -164,7 +184,7 @@ nonisolated enum ResumenSemanal {
             titulo: String(localized: "notifications.weekly.reminderTitle", defaultValue: "Recordatorio semanal"),
             cuerpo: String(localized: "notifications.weekly.reminderBody",
                            defaultValue: "Recuerda apuntar tus gastos de esta semana"),
-            conDatos: false
+            semanaConGastos: false
         )
     }
 
@@ -229,7 +249,7 @@ nonisolated enum RecordatorioDiario {
             titulo: String(localized: "notifications.daily.title", defaultValue: "¿Algún gasto hoy?"),
             cuerpo: String(localized: "notifications.daily.body",
                            defaultValue: "Apúntalo en 5 segundos: pulsa el micro y dilo en voz alta."),
-            conDatos: false
+            semanaConGastos: false
         )
     }
 }

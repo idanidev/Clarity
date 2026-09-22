@@ -69,9 +69,12 @@ final class RecordatoriosService {
 
     private var observador: (any NSObjectProtocol)?
     private var reprogramacionPendiente: Task<Void, Never>?
-    /// Cuándo se abrió la app desde un resumen con cifras, si aún no se ha
-    /// podido pedir la reseña.
+    /// Cuándo se abrió la app desde un resumen de una semana con gastos, si aún
+    /// no se ha podido pedir la reseña.
     private var resenaPendienteDesde: Date?
+    /// El último estado del bloqueo que se pudo leer del llavero. Ver
+    /// `ocultarImportes()`.
+    private var bloqueoConocido: Bool?
 
     /// La pone `ClarityApp`: con la pantalla de bloqueo delante no se pide la
     /// reseña (saldría encima de Face ID).
@@ -141,6 +144,7 @@ final class RecordatoriosService {
         var peticiones: [UNNotificationRequest] = []
 
         if semanalActivo {
+            let ocultar = ocultarImportes()
             let avisos = ResumenSemanal.proximosAvisos(
                 despuesDe: ahora,
                 diaSemana: ajustes.diaSemanal,
@@ -152,7 +156,8 @@ final class RecordatoriosService {
                 // Solo el próximo lleva cifras: de las semanas siguientes aún
                 // no hay datos, y si se abre la app antes, se rehacen.
                 let contenido = indice == 0
-                    ? ResumenSemanal.contenido(ResumenSemanal.cifras(de: gastos, aviso: fecha, calendar: calendario))
+                    ? ResumenSemanal.contenido(ResumenSemanal.cifras(de: gastos, aviso: fecha, calendar: calendario),
+                                               ocultarImportes: ocultar)
                     : ResumenSemanal.recordatorio
                 peticiones.append(peticion(id: id, contenido: contenido, fecha: fecha,
                                            calendario: calendario, esResumen: true))
@@ -214,13 +219,26 @@ final class RecordatoriosService {
         content.body = contenido.cuerpo
         content.sound = .default
         if esResumen {
-            content.userInfo = [MarcaAviso.tipo: MarcaAviso.resumenSemanal, MarcaAviso.conDatos: contenido.conDatos]
+            content.userInfo = [MarcaAviso.tipo: MarcaAviso.resumenSemanal, MarcaAviso.semanaConGastos: contenido.semanaConGastos]
         }
         // Suelta y con fecha completa: una repetitiva conservaría el texto de
         // la semana en que se programó.
         let componentes = calendario.dateComponents([.year, .month, .day, .hour, .minute], from: fecha)
         let trigger = UNCalendarNotificationTrigger(dateMatching: componentes, repeats: false)
         return UNNotificationRequest(identifier: id, content: content, trigger: trigger)
+    }
+
+    /// Con el bloqueo de la app activado, el resumen sale sin importes.
+    ///
+    /// El ajuste vive en el llavero, que no se deja leer con el iPhone
+    /// bloqueado y entonces contesta «no hay bloqueo»: fiarse de eso destaparía
+    /// los importes justo cuando más se ven. Así que sin acceso se usa el
+    /// último valor leído, y si nunca se ha podido leer, se ocultan.
+    private func ocultarImportes() -> Bool {
+        guard UIApplication.shared.isProtectedDataAvailable else { return bloqueoConocido ?? true }
+        let activado = AppLockManager.bloqueoActivadoEnLlavero
+        bloqueoConocido = activado
+        return activado
     }
 
     /// Solo la caché local (SwiftData): esto corre al pasar a segundo plano y
@@ -237,16 +255,17 @@ final class RecordatoriosService {
     // MARK: - Apertura desde el resumen
 
     /// Lo llama el delegado de notificaciones al tocar un aviso. Solo el
-    /// resumen con cifras deja pendiente la reseña: quien lo abre lleva una
-    /// semana apuntando, que es el momento de éxito que busca
-    /// `ReviewRequestManager`. El recordatorio sin gastos no cuenta.
-    func avisoAbierto(tipo: String?, conDatos: Bool) {
-        guard tipo == MarcaAviso.resumenSemanal, conDatos else { return }
+    /// resumen de una semana con gastos deja pendiente la reseña, enseñe las
+    /// cifras o las tape el bloqueo: quien lo abre lleva una semana apuntando,
+    /// que es el momento de éxito que busca `ReviewRequestManager`. El
+    /// recordatorio sin gastos no cuenta.
+    func avisoAbierto(tipo: String?, semanaConGastos: Bool) {
+        guard tipo == MarcaAviso.resumenSemanal, semanaConGastos else { return }
         resenaPendienteDesde = Date()
         pedirResenaSiToca()
     }
 
-    /// Pide la reseña si la app se abrió desde un resumen con cifras. Con la
+    /// Pide la reseña si la app se abrió desde un resumen con gastos. Con la
     /// app aún sin estar delante o con la pantalla de bloqueo, la deja
     /// pendiente: `ClarityApp` vuelve a llamar al pasar a primer plano y al
     /// desbloquear. Pasados un par de minutos se olvida, para no salir en una

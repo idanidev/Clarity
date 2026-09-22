@@ -206,7 +206,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {
-    /// Se ha tocado un aviso. Solo interesa el resumen semanal con cifras, que
+    /// Se ha tocado un aviso. Solo interesa el resumen de una semana con gastos, que
     /// deja pendiente pedir la reseña (ver `RecordatoriosService.avisoAbierto`).
     /// Del aviso se saca solo lo que se necesita antes de pasar al main actor.
     nonisolated func userNotificationCenter(
@@ -215,9 +215,9 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
     ) async {
         let info = response.notification.request.content.userInfo
         let tipo = info[MarcaAviso.tipo] as? String
-        let conDatos = info[MarcaAviso.conDatos] as? Bool ?? false
+        let semanaConGastos = info[MarcaAviso.semanaConGastos] as? Bool ?? false
         await MainActor.run {
-            RecordatoriosService.shared.avisoAbierto(tipo: tipo, conDatos: conDatos)
+            RecordatoriosService.shared.avisoAbierto(tipo: tipo, semanaConGastos: semanaConGastos)
         }
     }
 }

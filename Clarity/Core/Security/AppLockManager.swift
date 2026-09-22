@@ -10,8 +10,22 @@ final class AppLockManager {
     var isLocked = false
 
     var isBiometricEnabled: Bool {
-        get { APIKeychain.get("security.biometricLockEnabled") == "1" }
-        set { APIKeychain.set(newValue ? "1" : "0", forKey: "security.biometricLockEnabled") }
+        get { Self.bloqueoActivadoEnLlavero }
+        set {
+            APIKeychain.set(newValue ? "1" : "0", forKey: Self.claveBloqueo)
+            // El resumen semanal oculta los importes con el bloqueo puesto:
+            // se rehace al cambiarlo para que el próximo ya salga como toca.
+            RecordatoriosService.shared.reprogramarAhora()
+        }
+    }
+
+    private static let claveBloqueo = "security.biometricLockEnabled"
+
+    /// Lo mismo que `isBiometricEnabled`, sin instancia: lo lee también
+    /// `RecordatoriosService`. Ojo, el llavero no se deja leer con el iPhone
+    /// bloqueado y entonces esto contesta `false`.
+    static var bloqueoActivadoEnLlavero: Bool {
+        APIKeychain.get(claveBloqueo) == "1"
     }
 
     private var backgroundDate: Date?
