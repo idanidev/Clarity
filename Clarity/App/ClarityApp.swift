@@ -85,6 +85,9 @@ struct ClarityApp: App {
                 // Retención: cuenta la sesión, para pedir la reseña más adelante.
                 ReviewRequestManager.shared.registerSession()
                 AnalyticsBootstrap.configure()
+                // La reseña que deja pendiente abrir el resumen semanal no se
+                // pide con la pantalla de bloqueo delante.
+                RecordatoriosService.shared.estaBloqueada = { [lockManager] in lockManager.isLocked }
 
                 // Integridad del dispositivo (solo en Release)
                 #if !DEBUG
@@ -113,6 +116,9 @@ struct ClarityApp: App {
                     if oldPhase == .active { veloPuesto = lockManager.isBiometricEnabled }
                     lockManager.sceneDidEnterBackground()
                     AnalyticsService.shared.endSession()
+                    // Último momento seguro para dejar el resumen semanal y el
+                    // diario con los datos al día antes de que salgan.
+                    RecordatoriosService.shared.reprogramarAhora()
                 case .inactive:
                     // Solo al SALIR de la app. Volviendo de segundo plano también
                     // se pasa por aquí, y el velo tiene que seguir como estaba.
@@ -124,9 +130,15 @@ struct ClarityApp: App {
                     UNUserNotificationCenter.current().removeAllDeliveredNotifications()
                     Task { try? await UNUserNotificationCenter.current().setBadgeCount(0) }
                     removeStaleNotifications()
+                    // Si se ha entrado tocando el resumen semanal (después de
+                    // `sceneWillEnterForeground`, que es quien bloquea).
+                    RecordatoriosService.shared.pedirResenaSiToca()
                 @unknown default:
                     break
                 }
+            }
+            .onChange(of: lockManager.isLocked) { _, bloqueada in
+                if !bloqueada { RecordatoriosService.shared.pedirResenaSiToca() }
             }
         }
     }
@@ -134,15 +146,10 @@ struct ClarityApp: App {
     /// Elimina notificaciones locales con IDs antiguos (daily reminders, etc.)
     private func removeStaleNotifications() {
         let center = UNUserNotificationCenter.current()
-        // Ojo: cualquier ID que la app programe debe estar aquí, o se borra en el
-        // siguiente foreground (los de inactividad y el diario se perdían así).
-        let validIDs: Set<String> = [
-            "clarity.weekly.reminder",
-            "clarity.endofmonth.reminder",
-            "clarity.daily.reminder",
-            "clarity.inactivity.reminder",
-            "clarity.inactivity.recurring",
-        ]
+        // Ojo: cualquier ID que la app programe debe estar en esa lista, o se
+        // borra en el siguiente foreground (los de inactividad y el diario se
+        // perdían así). Vive junto a quien programa el semanal y el diario.
+        let validIDs = RecordatoriosService.Identificador.todos
         center.getPendingNotificationRequests { requests in
             let stale = requests.map(\.identifier).filter { !validIDs.contains($0) }
             if !stale.isEmpty {
@@ -180,6 +187,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         )
         Firestore.firestore().settings = firestoreSettings
 
+        // Para saber qué aviso se ha tocado. Tiene que estar puesto antes de
+        // acabar el arranque: si no, el toque que abre la app en frío se pierde.
+        // Sin `willPresent`, los avisos con la app delante siguen sin mostrarse,
+        // igual que sin delegado.
+        UNUserNotificationCenter.current().delegate = self
+
         return true
     }
 
@@ -189,5 +202,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
         GIDSignIn.sharedInstance.handle(url)
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// Se ha tocado un aviso. Solo interesa el resumen de una semana con gastos, que
+    /// deja pendiente pedir la reseña (ver `RecordatoriosService.avisoAbierto`).
+    /// Del aviso se saca solo lo que se necesita antes de pasar al main actor.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let info = response.notification.request.content.userInfo
+        let tipo = info[MarcaAviso.tipo] as? String
+        let semanaConGastos = info[MarcaAviso.semanaConGastos] as? Bool ?? false
+        await MainActor.run {
+            RecordatoriosService.shared.avisoAbierto(tipo: tipo, semanaConGastos: semanaConGastos)
+        }
     }
 }

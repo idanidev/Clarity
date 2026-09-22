@@ -10,7 +10,6 @@ struct NotificationsView: View {
     @AppStorage("notifications.budgetAlerts") private var budgetAlerts = true
     @AppStorage("notifications.recurringReminders") private var recurringReminders = true
     @AppStorage("notifications.endOfMonthReminder") private var endOfMonthReminder = false
-    // Recordatorio diario: el hábito es lo que sostiene una app de gastos (#40).
 
     // Keys kept as "daily*" for backward-compat; now shared with weekly reminder
     @AppStorage("notifications.dailyHour") private var dailyHour = 20
@@ -18,16 +17,28 @@ struct NotificationsView: View {
     // weekday: 1=domingo, 2=lunes, ..., 7=sábado (Calendar convention)
     @AppStorage("notifications.weeklyDay") private var weeklyDay = 1
 
+    // Recordatorio diario (#57): el hábito es lo que sostiene una app de gastos.
+    // Apagado por defecto y con claves nuevas (ver `RecordatoriosService.Clave`).
+    @AppStorage(RecordatoriosService.Clave.diario) private var dailyCheckIn = false
+    @AppStorage(RecordatoriosService.Clave.horaDiario) private var dailyCheckInHour = RecordatorioDiario.horaPorDefecto
+    @AppStorage(RecordatoriosService.Clave.minutoDiario) private var dailyCheckInMinute = 0
+
     private let weekdayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
 
     private enum NotificationID {
-        static let weekly = "clarity.weekly.reminder"
         static let endOfMonth = "clarity.endofmonth.reminder"
         static let daily = "clarity.daily.reminder"
     }
 
+    /// Qué hora se está cambiando en la hoja del selector: la misma hoja sirve
+    /// para el resumen semanal y para el diario.
+    private enum HoraEditable: String, Identifiable {
+        case semanal, diaria
+        var id: String { rawValue }
+    }
+
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var showTimePicker = false
+    @State private var horaEditando: HoraEditable?
     @State private var selectedTime = Date()
 
     var body: some View {
@@ -61,16 +72,14 @@ struct NotificationsView: View {
                 }
             }
 
-            // Weekly Reminder
+            // Resumen semanal (#57): antes solo recordaba; ahora cuenta lo que
+            // llevas. El texto lo rehace `RecordatoriosService` con los datos al día.
             Section {
-                Toggle(String(localized: "notifications.weekly.toggle", defaultValue: "Recordatorio Semanal"), isOn: $weeklyReminder)
-                    .onChange(of: weeklyReminder) { _, newValue in
+                Toggle(String(localized: "notifications.weekly.toggle", defaultValue: "Resumen semanal"), isOn: $weeklyReminder)
+                    .onChange(of: weeklyReminder) { _, _ in
                         HapticManager.shared.selection()
-                        if newValue && pushEnabled {
-                            scheduleWeeklyReminder()
-                        } else {
-                            cancelWeeklyReminder()
-                        }
+                        // Programa o quita según el interruptor (y las push).
+                        RecordatoriosService.shared.reprogramarAhora()
                     }
 
                 if weeklyReminder {
@@ -80,37 +89,55 @@ struct NotificationsView: View {
                         }
                     }
                     .onChange(of: weeklyDay) { _, _ in
-                        if pushEnabled { scheduleWeeklyReminder() }
+                        RecordatoriosService.shared.reprogramarAhora()
                     }
 
-                    // Time Picker Button
-                    Button {
-                        var components = DateComponents()
-                        components.hour = dailyHour
-                        components.minute = dailyMinute
-                        selectedTime = Calendar.current.date(from: components) ?? Date()
-                        showTimePicker = true
-                    } label: {
-                        HStack {
-                            Text(String(localized: "notifications.weekly.reminderTime", defaultValue: "Hora del recordatorio"))
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Text(String(format: "%02d:%02d", dailyHour, dailyMinute))
-                                .monospacedDigit()
-                                .foregroundStyle(Color.textSecondary)
-                            Image(systemName: "chevron.right")
-                                .font(.caption)
-                                .foregroundStyle(Color.textTertiary)
-                        }
-                    }
+                    filaHora(.semanal, hora: dailyHour, minuto: dailyMinute)
                 }
             } header: {
-                Text(String(localized: "notifications.weekly.header", defaultValue: "Recordatorio Semanal"))
+                Text(String(localized: "notifications.weekly.header", defaultValue: "Resumen semanal"))
             } footer: {
                 if weeklyReminder {
-                    Text(
-                        "Recibirás un recordatorio cada \(weekdayNames[(weeklyDay - 1)]) a las \(String(format: "%02d:%02d", dailyHour, dailyMinute))"
-                    )
+                    Text(String(
+                        localized: "notifications.weekly.footer",
+                        defaultValue: "Cada \(weekdayNames[weeklyDay - 1].lowercased()) a las \(String(format: "%02d:%02d", dailyHour, dailyMinute)) te contamos cuánto llevas gastado en la semana y cómo va frente a la anterior."
+                    ))
+                }
+            }
+
+            // Recordatorio diario (#57)
+            Section {
+                Toggle(String(localized: "notifications.daily.toggle", defaultValue: "Recordatorio diario"), isOn: $dailyCheckIn)
+                    .onChange(of: dailyCheckIn) { _, activo in
+                        HapticManager.shared.selection()
+                        if activo && !pushEnabled {
+                            // Encender las push pide el permiso (ver su
+                            // `onChange`) y, si se concede, se programa todo.
+                            pushEnabled = true
+                        } else if activo {
+                            RecordatoriosService.shared.reprogramarAhora()
+                        } else {
+                            // Quita los diarios y devuelve el de inactividad.
+                            RecordatoriosService.shared.diarioApagado()
+                        }
+                    }
+
+                if dailyCheckIn {
+                    filaHora(.diaria, hora: dailyCheckInHour, minuto: dailyCheckInMinute)
+                }
+            } header: {
+                Text(String(localized: "notifications.daily.header", defaultValue: "Recordatorio diario"))
+            } footer: {
+                if dailyCheckIn {
+                    Text(String(
+                        localized: "notifications.daily.footerOn",
+                        defaultValue: "Cada día a las \(String(format: "%02d:%02d", dailyCheckInHour, dailyCheckInMinute)) te preguntamos si has tenido algún gasto. Si ese día ya has apuntado alguno, no te avisamos."
+                    ))
+                } else {
+                    Text(String(
+                        localized: "notifications.daily.footerOff",
+                        defaultValue: "Un toque al día para que no se te acumulen los gastos sin apuntar."
+                    ))
                 }
             }
 
@@ -160,7 +187,7 @@ struct NotificationsView: View {
         .fondoClarity()
         .navigationTitle(String(localized: "notifications.navigationTitle", defaultValue: "Notificaciones"))
         .navigationBarTitleDisplayMode(.large)
-        .sheet(isPresented: $showTimePicker) {
+        .sheet(item: $horaEditando) { cual in
             NavigationStack {
                 DatePicker(
                     String(localized: "notifications.timePicker.label", defaultValue: "Hora del recordatorio"),
@@ -175,20 +202,24 @@ struct NotificationsView: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button(String(localized: "common.cancel", defaultValue: "Cancelar")) {
-                            showTimePicker = false
+                            horaEditando = nil
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button(String(localized: "common.save", defaultValue: "Guardar")) {
                             let components = Calendar.current.dateComponents(
                                 [.hour, .minute], from: selectedTime)
-                            dailyHour = components.hour ?? 20
-                            dailyMinute = components.minute ?? 0
-                            showTimePicker = false
-
-                            if weeklyReminder && pushEnabled {
-                                scheduleWeeklyReminder()
+                            switch cual {
+                            case .semanal:
+                                dailyHour = components.hour ?? 20
+                                dailyMinute = components.minute ?? 0
+                            case .diaria:
+                                dailyCheckInHour = components.hour ?? RecordatorioDiario.horaPorDefecto
+                                dailyCheckInMinute = components.minute ?? 0
                             }
+                            horaEditando = nil
+
+                            RecordatoriosService.shared.reprogramarAhora()
                             HapticManager.shared.notification(.success)
                         }
                         .fontWeight(.semibold)
@@ -204,35 +235,49 @@ struct NotificationsView: View {
         }
     }
 
+    // MARK: - Hora
+
+    /// Fila con la hora de un recordatorio; al tocarla abre el selector.
+    private func filaHora(_ cual: HoraEditable, hora: Int, minuto: Int) -> some View {
+        Button {
+            var components = DateComponents()
+            components.hour = hora
+            components.minute = minuto
+            selectedTime = Calendar.current.date(from: components) ?? Date()
+            horaEditando = cual
+        } label: {
+            HStack {
+                Text(String(localized: "notifications.weekly.reminderTime", defaultValue: "Hora del recordatorio"))
+                    .foregroundStyle(.primary)
+                Spacer()
+                Text(String(format: "%02d:%02d", hora, minuto))
+                    .monospacedDigit()
+                    .foregroundStyle(Color.textSecondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(Color.textTertiary)
+            }
+        }
+    }
+
     // MARK: - Notification Functions
 
-    /// Migra notificaciones antiguas: elimina IDs obsoletos y corrige el trigger diario→semanal
+    /// Migra notificaciones antiguas: elimina IDs obsoletos.
+    ///
+    /// Antes corregía también un semanal registrado sin día de la semana (el
+    /// antiguo diario). Ya no hace falta, y además los semanales de ahora son
+    /// sueltos, con fecha completa y sin `weekday`: esa comprobación los daría
+    /// por viejos cada vez. `RecordatoriosService` rehace el semanal al
+    /// arrancar y al abrir esta pantalla, así que cualquier formato antiguo
+    /// queda sustituido.
     private func migrateOldNotifications() {
         let center = UNUserNotificationCenter.current()
-        let knownIDs: Set<String> = [
-            NotificationID.weekly, NotificationID.endOfMonth, NotificationID.daily,
-            Self.inactivityID, Self.inactivityRecurringID,
-        ]
+        let knownIDs = RecordatoriosService.Identificador.todos
 
         center.getPendingNotificationRequests { requests in
-            // 1. Eliminar IDs desconocidos (daily reminders antiguos, etc.)
             let staleIDs = requests.map(\.identifier).filter { !knownIDs.contains($0) }
             if !staleIDs.isEmpty {
                 center.removePendingNotificationRequests(withIdentifiers: staleIDs)
-            }
-
-            // 2. Si el reminder semanal existe pero el trigger NO tiene weekday → era diario, reprogramar
-            if let weeklyRequest = requests.first(where: { $0.identifier == NotificationID.weekly }),
-               let calTrigger = weeklyRequest.trigger as? UNCalendarNotificationTrigger,
-               calTrigger.dateComponents.weekday == nil
-            {
-                DispatchQueue.main.async {
-                    if pushEnabled && weeklyReminder {
-                        scheduleWeeklyReminder()
-                    } else {
-                        cancelWeeklyReminder()
-                    }
-                }
             }
         }
     }
@@ -242,7 +287,8 @@ struct NotificationsView: View {
     /// y cambios en el código no actualizan notificaciones ya registradas en el sistema.
     private func refreshActiveNotifications() {
         guard pushEnabled else { return }
-        if weeklyReminder { scheduleWeeklyReminder() }
+        // Resumen semanal y diario, con los datos de ahora.
+        RecordatoriosService.shared.reprogramarAhora()
         if endOfMonthReminder { scheduleEndOfMonthReminder() }
     }
 
@@ -263,43 +309,14 @@ struct NotificationsView: View {
             DispatchQueue.main.async {
                 if granted {
                     notificationStatus = .authorized
-                    if weeklyReminder {
-                        scheduleWeeklyReminder()
-                    }
+                    // El semanal y el diario, si están encendidos.
+                    RecordatoriosService.shared.reprogramarAhora()
                 } else {
                     pushEnabled = false
                     notificationStatus = .denied
                 }
             }
         }
-    }
-
-    private func scheduleWeeklyReminder() {
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: [NotificationID.weekly])
-
-        let content = UNMutableNotificationContent()
-        content.title = "Recordatorio semanal"
-        content.body = "Recuerda revisar tus gastos de esta semana 📊"
-        content.sound = .default
-
-        var dateComponents = DateComponents()
-        dateComponents.weekday = weeklyDay > 0 ? weeklyDay : 1
-        dateComponents.hour = dailyHour
-        dateComponents.minute = dailyMinute
-
-        let trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        let request = UNNotificationRequest(
-            identifier: NotificationID.weekly,
-            content: content,
-            trigger: trigger
-        )
-
-        center.add(request) { _ in }
-    }
-
-    private func cancelWeeklyReminder() {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [NotificationID.weekly])
     }
 
     private func cancelAllNotifications() {
@@ -364,23 +381,8 @@ struct NotificationsView: View {
 
         guard defaults.bool(forKey: "notifications.pushEnabled") else { return }
 
-        if defaults.bool(forKey: "notifications.weeklyReminder") {
-            let weeklyDay = defaults.integer(forKey: "notifications.weeklyDay")
-            let hour = defaults.integer(forKey: "notifications.dailyHour")
-            let minute = defaults.integer(forKey: "notifications.dailyMinute")
-
-            center.removePendingNotificationRequests(withIdentifiers: ["clarity.weekly.reminder"])
-            let content = UNMutableNotificationContent()
-            content.title = "Recordatorio semanal"
-            content.body = "Recuerda revisar tus gastos de esta semana"
-            content.sound = .default
-            var dc = DateComponents()
-            dc.weekday = weeklyDay == 0 ? 1 : weeklyDay
-            dc.hour = hour == 0 ? 20 : hour
-            dc.minute = minute
-            let trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)
-            center.add(UNNotificationRequest(identifier: "clarity.weekly.reminder", content: content, trigger: trigger))
-        }
+        // El resumen semanal (y el diario) ya no se programan aquí: los rehace
+        // `RecordatoriosService.arrancar()` con las cifras de la caché.
 
         if defaults.bool(forKey: "notifications.endOfMonthReminder") {
             center.removePendingNotificationRequests(withIdentifiers: ["clarity.endofmonth.reminder"])
@@ -418,6 +420,11 @@ struct NotificationsView: View {
 
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [inactivityID, inactivityRecurringID])
+
+        // Con el recordatorio diario encendido este sobra: el diario ya pregunta
+        // cada día, y juntos llegarían a sonar los dos el mismo día. Al apagar
+        // el diario, `RecordatoriosService.diarioApagado()` vuelve a llamar aquí.
+        guard !defaults.bool(forKey: RecordatoriosService.Clave.diario) else { return }
 
         let cal = Calendar.current
         let now = Date()

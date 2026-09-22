@@ -50,4 +50,25 @@ struct AnalyticsEventTests {
     func sessionEndedDuration() {
         #expect(AnalyticsEvent.sessionEnded(seconds: 95).parameters["duration_seconds"] == "95")
     }
+
+    @Test("cada página del onboarding manda su posición y su nombre, nada más")
+    @MainActor
+    func onboardingStep() {
+        let event = PasoOnboarding.primerGasto.evento
+        #expect(event.name == "onboarding_step")
+        #expect(event.parameters == ["index": "3", "step": "primer_gasto"])
+    }
+
+    @Test("los pasos del onboarding conservan nombre y orden")
+    @MainActor
+    func onboardingStepNames() {
+        // Si cambian, el embudo de antes y el de después dejan de cuadrar.
+        #expect(PasoOnboarding.allCases.map(\.nombre) == ["bienvenida", "voz", "tutorial", "primer_gasto", "listo"])
+        #expect(PasoOnboarding.allCases.map(\.rawValue) == [0, 1, 2, 3, 4])
+        // Y las pantallas que ya se mandaban siguen llamándose igual.
+        #expect(PasoOnboarding.allCases.map(\.nombrePantalla) == [
+            "onboarding_bienvenida", "onboarding_voz", "onboarding_tutorial",
+            "onboarding_primer_gasto", "onboarding_listo",
+        ])
+    }
 }
