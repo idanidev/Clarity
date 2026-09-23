@@ -55,6 +55,11 @@ Cuatro trampas que ya han costado un intento fallido cada una:
   reintentar o te saltas un build.
 - **No hay Gemfile** — `bundle exec fastlane` falla con "Could not locate
   Gemfile". Se invoca `fastlane` a pelo.
+- **`fastlane shots` duplica capturas.** Sube y luego verifica; si App Store
+  Connect tarda en confirmar alguna, la vuelve a subir (la 2.4.0 salió con 6 en
+  es-ES, con voz y metas repetidas). Apple no deja borrarlas una vez enviada la
+  versión, y retirarla de la cola pierde el turno. Entre `shots` y el envío,
+  siempre: `/Users/dani/.rbenv/versions/3.3.0/bin/ruby scripts/capturas_sin_duplicados.rb`.
 
 La lane `release` lleva `submit_for_review: false`: sube binario + metadata y
 deja la versión lista, pero enviar a revisión es siempre manual (o con
