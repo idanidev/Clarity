@@ -1,1 +1,1 @@
-Clarity: Expenses by voice
+Clarity: Expense Tracker

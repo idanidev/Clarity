@@ -1,0 +1,22 @@
+Novedades de esta versión:
+
+TU HOME, A TU MANERA
+Mantén pulsada una tarjeta y elige «Editar Home»: las tarjetas se mueven como los iconos de la pantalla de inicio. Arrástralas, quita las que no uses, añade otras con «+» y elige si las quieres pequeñas o anchas. Las pilas enseñan en cada momento lo más útil, y tu Home se guarda en tu cuenta.
+
+RESUMEN DE LA SEMANA
+El aviso semanal ahora te cuenta cuánto llevas gastado y cómo vas frente a la semana anterior. Si tienes la app bloqueada con Face ID, no enseña importes.
+
+MENOS COSAS QUE SE PIERDEN
+• Si cierras un formulario con cambios, te pregunta antes de descartarlos.
+• Si dictas un gasto sin decir el importe, se abre el formulario con lo que dijiste.
+• La voz ya no guarda sola un gasto cuando no está segura de la categoría.
+
+Y ADEMÁS
+• Calendario renovado en Gráficas: cada día se colorea según lo que gastaste y, al tocarlo, ves su semana.
+• Barras de presupuesto y de límites más claras cuando te acercas al tope o te pasas.
+• La copia de seguridad guarda también tus metas y presupuestos.
+• La sincronización es más rápida y gasta menos datos.
+• El bloqueo con Face ID tiene la opción «Usar código».
+• Al iniciar sesión, el teclado ya no tapa los botones.
+
+Si algo no funciona, escríbenos desde Ajustes → «Algo no funciona».

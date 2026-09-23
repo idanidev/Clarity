@@ -1,1 +1,1 @@
-monefy,fintonic,hucha,deudas,suscripcion,recurrente,nomina,siri,presupuesto,widget,finanzas,dinero
+presupuesto,finanzas,dinero,cuentas,recurrentes,suscripciones,deudas,nomina,hucha,siri,widget,diario

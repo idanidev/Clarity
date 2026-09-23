@@ -1,1 +1,1 @@
-monefy,wallet,piggy,debts,subscription,recurring,payday,siri,budget,widget,finances,account
+budget,spending,money,voice,siri,subscriptions,debts,savings,widget,finance,payday,receipts
