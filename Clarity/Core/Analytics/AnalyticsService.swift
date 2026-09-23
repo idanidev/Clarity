@@ -55,6 +55,8 @@ enum AnalyticsEvent: Sendable {
     case recurringExpenseCreated
     /// Una importación de CSV terminada, una vez por importación y no por fila.
     case csvImported
+    /// Se ha tocado «Valorar Clarity» en Ajustes.
+    case reviewLinkOpened
 
     /// El sink de Firebase traduce este evento a su evento canónico de pantalla;
     /// los demás destinos lo mandan tal cual. Los nombres viven aquí para que el
@@ -88,6 +90,7 @@ enum AnalyticsEvent: Sendable {
         case .entradaExterna: return "entrada_externa"
         case .recurringExpenseCreated: return "gasto_recurrente_creado"
         case .csvImported: return "importacion_csv"
+        case .reviewLinkOpened: return "valorar_desde_ajustes"
         }
     }
 

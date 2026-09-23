@@ -179,6 +179,14 @@ struct SettingsView: View {
                             Label(reason.label, systemImage: reason.icon)
                         }
                     }
+                    // Siempre a mano: la ventana de valoración del sistema la
+                    // decide la app, y quien quiere valorar no debería esperarla.
+                    Button {
+                        AnalyticsService.shared.track(.reviewLinkOpened)
+                        openURL(ReviewRequestManager.urlEscribirResena)
+                    } label: {
+                        Label("Valorar Clarity en la App Store", systemImage: "star")
+                    }
                 } header: {
                     Text("Escríbeme")
                 } footer: {
