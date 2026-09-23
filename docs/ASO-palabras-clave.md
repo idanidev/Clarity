@@ -75,6 +75,8 @@ palabras clave para esos países, con su vocabulario: «plata», «sueldo»,
   septiembre; esa fue el canal de enlaces compartidos, que pasó de ~40
   instalaciones semanales a 4.
 - **El icono.** Puede subir ese 5-8 %, pero va dentro del binario y exige
-  versión nueva. Queda para la 2.4.1.
+  versión nueva. Aparcado (23/09): dos rondas de propuestas generadas no
+  convencieron; se hará con referencias o con un diseñador, sin prisa, porque
+  no es lo que frena el crecimiento.
 - **La descripción.** No entra en el índice de búsqueda de Apple (a diferencia
   de Google Play). Sirve para convencer a quien ya está en la ficha.
