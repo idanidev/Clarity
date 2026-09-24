@@ -1,22 +1,6 @@
 What's new in this version:
 
-YOUR HOME, YOUR WAY
-Long-press a card and choose "Editar Home": cards move like the icons on your Home Screen. Drag them around, remove the ones you don't use, add others with "+" and choose small or wide. Stacks show what's most useful at each moment, and your Home is saved to your account.
-
-YOUR WEEK IN REVIEW
-The weekly notification now tells you how much you've spent and how you're doing compared with the week before. If the app is locked with Face ID, it doesn't show amounts.
-
-LESS GETS LOST
-• If you close a form with changes, it asks before discarding them.
-• If you dictate an expense without saying the amount, the form opens with what you said.
-• Voice no longer saves an expense on its own when it isn't sure of the category.
-
-AND ALSO
-• A redesigned calendar in Charts: each day is shaded by what you spent, and tapping it shows its week.
-• Clearer budget and limit bars when you're close to the cap or over it.
-• Backups now include your goals and budgets too.
-• Syncing is faster and uses less data.
-• The Face ID lock has a "Usar código" (use passcode) option.
-• When signing in, the keyboard no longer covers the buttons.
+• New in Settings: "Valorar Clarity en la App Store" (rate Clarity). If the app is helping you, a review really helps more people find it.
+• The app now asks for your opinion at a better moment: only once you use it regularly, and never while you're logging an expense.
 
 If something isn't working, write to us from Settings → "Algo no funciona".
