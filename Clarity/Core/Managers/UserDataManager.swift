@@ -251,6 +251,14 @@ final class UserDataManager {
 
     // MARK: - Expenses Cache
 
+    /// Añade un gasto recién guardado a la copia en memoria, delante y sin
+    /// duplicarlo: un cargo recurrente reescribe el mismo documento si se crea
+    /// dos veces en el mes.
+    func anadirGastoAlCache(_ gasto: Expense) {
+        if let id = gasto.id, expenses.contains(where: { $0.id == id }) { return }
+        expenses.insert(gasto, at: 0)
+    }
+
     func loadExpenses() async {
         do {
             let descriptor = FetchDescriptor<ExpenseModel>(sortBy: [SortDescriptor(\.date, order: .reverse)])

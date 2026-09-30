@@ -14,6 +14,22 @@ extension Notification.Name {
     /// Desde que la interfaz no espera a la carga para arrancar (#32), la Home
     /// puede construirse antes de que exista.
     static let userDocumentDidLoad = Notification.Name("userDocumentDidLoad")
+
+    /// Se ha guardado un gasto fuera de la Home (un cargo recurrente, sobre
+    /// todo). `object` es el `Expense` ya con su id. A diferencia de
+    /// `expenseDidChange`, lleva el gasto: la Home lo inserta en su sitio sin
+    /// recargar la lista (ver `HomeViewModel.incorporarGastoDeFuera`).
+    static let gastoAnadido = Notification.Name("gastoAnadido")
+}
+
+@MainActor
+enum AvisoDeGasto {
+    /// Tras guardar un gasto desde fuera de la Home: lo mete en la copia en
+    /// memoria (historial de recurrentes, voz) y avisa a la Home con él.
+    static func anadido(_ gasto: Expense) {
+        UserDataManager.shared.anadirGastoAlCache(gasto)
+        NotificationCenter.default.post(name: .gastoAnadido, object: gasto)
+    }
 }
 
 // MARK: - Error Security Extensions

@@ -1087,7 +1087,7 @@ final class HomeViewModel {
         mesesEnMemoria.removeValue(forKey: String(expense.date.prefix(7)))
 
         // Keep UserDataManager in sync so GoalCardView / FinancialDashboard see the new expense
-        UserDataManager.shared.expenses.insert(expense, at: 0)
+        UserDataManager.shared.anadirGastoAlCache(expense)
 
         applyFilters()
 
@@ -1096,6 +1096,37 @@ final class HomeViewModel {
             currentMonthExpenses,
             monthBudget: currentMonthlyBudget?.totalIncome
         )
+    }
+
+    /// Un gasto guardado fuera de la Home (un cargo recurrente, sobre todo), que
+    /// llega con `.gastoAnadido`. Se mete en su sitio por fecha y sin recargar
+    /// la lista: recargarla al recibir avisos es lo que crasheaba la List en
+    /// el borrado con swipe (ver `reloadBudget`). Si ya estaba, no se duplica.
+    func incorporarGastoDeFuera(_ gasto: Expense) {
+        if let id = gasto.id, allExpenses.contains(where: { $0.id == id }) { return }
+
+        let posicion = allExpenses.firstIndex { $0.date <= gasto.date } ?? allExpenses.endIndex
+        allExpenses.insert(gasto, at: posicion)
+
+        let mes = String(gasto.date.prefix(7))
+        let esDelMesVisto = mes == Self.monthKey(selectedMonth)
+        if esDelMesVisto {
+            let enMes = currentMonthExpenses.firstIndex { $0.date <= gasto.date } ?? currentMonthExpenses.endIndex
+            currentMonthExpenses.insert(gasto, at: enMes)
+        }
+        // Lo guardado de ese mes ya no está completo: que se vuelva a pedir.
+        mesesEnMemoria.removeValue(forKey: mes)
+        UserDataManager.shared.anadirGastoAlCache(gasto)
+
+        applyFilters()
+
+        // El widget enseña el mes en curso: solo si es el que se está viendo.
+        if esDelMesVisto, mes == Self.monthKey(Date()) {
+            WidgetDataManager.shared.updateFromExpenses(
+                currentMonthExpenses,
+                monthBudget: currentMonthlyBudget?.totalIncome
+            )
+        }
     }
 
     /// Removes an expense from in-memory state (used by undo).

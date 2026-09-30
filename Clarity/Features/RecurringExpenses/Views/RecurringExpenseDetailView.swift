@@ -259,8 +259,12 @@ struct RecurringExpenseDetailView: View {
         )
 
         do {
-            _ = try await DependencyContainer.shared.expenseRepository.addExpense(newExpense)
+            var guardado = newExpense
+            guardado.id = try await DependencyContainer.shared.expenseRepository.addExpense(newExpense)
             HapticManager.shared.notification(.success)
+            // Al historial de la regla y a la lista de la Home, sin esperar a
+            // que se recarguen (antes no salía en ninguna de las dos).
+            AvisoDeGasto.anadido(guardado)
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             FeedbackManager.shared.show(
                 .success,

@@ -86,6 +86,11 @@ struct HomeView: View {
             .onReceive(NotificationCenter.default.publisher(for: .expenseDidChange)) { _ in
                 Task { await viewModel.reloadBudget() }
             }
+            // Un gasto guardado fuera (un cargo recurrente): se inserta en su
+            // sitio, sin recargar la lista.
+            .onReceive(NotificationCenter.default.publisher(for: .gastoAnadido)) { aviso in
+                if let gasto = aviso.object as? Expense { viewModel.incorporarGastoDeFuera(gasto) }
+            }
             // El documento puede llegar después de que la Home ya esté montada.
             .onReceive(NotificationCenter.default.publisher(for: .userDocumentDidLoad)) { _ in
                 viewModel.applyDefaultFilterIfNeeded()

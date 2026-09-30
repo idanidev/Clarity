@@ -135,7 +135,9 @@ final class LocalRecurringExpenseManager {
                     recurringId: recurring.id
                 )
 
-                _ = try await expenseRepo.addExpense(newExpense)
+                var guardado = newExpense
+                guardado.id = try await expenseRepo.addExpense(newExpense)
+                AvisoDeGasto.anadido(guardado)
                 AnalyticsService.shared.track(.recurringExpenseCreated)
 
                 logger.info("✅ Creado: \(recurring.name) - €\(recurring.amount)")
@@ -236,7 +238,9 @@ final class LocalRecurringExpenseManager {
                         recurringId: recurring.id
                     )
 
-                    _ = try await expenseRepo.addExpense(newExpense)
+                    var guardado = newExpense
+                    guardado.id = try await expenseRepo.addExpense(newExpense)
+                    AvisoDeGasto.anadido(guardado)
                     AnalyticsService.shared.track(.recurringExpenseCreated)
                     logger.info("🔧 Recuperado: \(recurring.name) (\(expenseDate))")
                     recovered += 1
@@ -273,7 +277,9 @@ final class LocalRecurringExpenseManager {
 
             let newExpense = RecurringScheduler.currentPeriodExpense(for: rule, today: today)
             let effectiveDay = Int(newExpense.date.suffix(2)) ?? rule.dayOfMonth
-            _ = try await expenseRepo.addExpense(newExpense)
+            var guardado = newExpense
+            guardado.id = try await expenseRepo.addExpense(newExpense)
+            AvisoDeGasto.anadido(guardado)
             AnalyticsService.shared.track(.recurringExpenseCreated)
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             // Feedback estándar de la app (toast), como cualquier alta de gasto.
