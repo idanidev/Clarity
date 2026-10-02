@@ -129,7 +129,7 @@ struct ResumenPage: View {
         .id("lista")
         .filaDeTarjeta()
 
-        if viewModel.categoryGroups.isEmpty {
+        if viewModel.categoryGroups.isEmpty && viewModel.aportacionesFiltradas.isEmpty {
             Text("Ningún gasto con este filtro.")
                 .font(.subheadline)
                 .foregroundStyle(Color.textSecondary)
@@ -201,6 +201,43 @@ struct ResumenPage: View {
                             .filaDeTarjeta(arriba: 3, abajo: 3)
                     }
                 }
+            }
+        }
+
+        // Lo apartado en huchas: movimientos, pero no gasto. Aparte y al final,
+        // sin sumar en el total ni en ninguna categoría (ver `Expense.esAhorro`).
+        if !viewModel.aportacionesFiltradas.isEmpty {
+            let apartado = viewModel.aportacionesFiltradas.reduce(0) { $0 + $1.amount }
+            VStack(alignment: .leading, spacing: 2) {
+                CabeceraSeccionClarity(titulo: "Apartado en huchas", detalle: Formatters.currency(apartado))
+                Text("Sigue siendo tuyo: no cuenta como gasto. Bórralo y vuelve a estar libre.")
+                    .font(.caption)
+                    .foregroundStyle(Color.textSecondary)
+                    .padding(.horizontal, 6)
+            }
+            .padding(.top, Spacing.sm)
+            .filaDeTarjeta(arriba: 10)
+
+            ForEach(viewModel.aportacionesFiltradas, id: \.stableId) { gasto in
+                let origen = "lista-\(gasto.stableId)"
+                FilaGasto(gasto: gasto, color: .clarityMango)
+                    .origenZoom(id: origen, en: zoom)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onEditar(gasto, origen) }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        Button(role: .destructive) {
+                            Task { await viewModel.deleteExpense(gasto) }
+                        } label: { Label("Borrar", systemImage: "trash") }
+                        Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
+                            .tint(Color.clarityPrimary)
+                    }
+                    .contextMenu {
+                        Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
+                        Button(role: .destructive) {
+                            Task { await viewModel.deleteExpense(gasto) }
+                        } label: { Label("Borrar y devolverlo a la hucha", systemImage: "trash") }
+                    }
+                    .filaDeTarjeta(arriba: 3, abajo: 3)
             }
         }
     }

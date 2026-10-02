@@ -16,6 +16,8 @@ struct GoalCardView: View {
     /// demás tipos lo ignoran. Puede venir negativo: la tarjeta enseña 0 € y avisa.
     var monthlySavings: Double = 0
     var onFeed: ((Double) -> Void)?  // Only for Piggy Banks
+    /// Sacar dinero de la hucha: vuelve a lo libre del mes. Solo huchas.
+    var onWithdraw: ((Double) -> Void)? = nil
     var onEdit: (() -> Void)?       // Edit action
     var onDelete: (() -> Void)?    // Delete action
 
@@ -76,7 +78,10 @@ struct GoalCardView: View {
                 Spacer()
 
                 if goal.type == .savingsTarget {
-                    feedButton
+                    HStack(spacing: 8) {
+                        if puedeSacar { withdrawButton }
+                        feedButton
+                    }
                 }
             }
         }
@@ -98,6 +103,14 @@ struct GoalCardView: View {
                 onEdit?()
             } label: {
                 Label("Editar", systemImage: "pencil")
+            }
+
+            if puedeSacar {
+                Button {
+                    showWithdrawSheet = true
+                } label: {
+                    Label("Sacar dinero", systemImage: "arrow.uturn.backward.circle")
+                }
             }
 
             Divider()
@@ -174,6 +187,27 @@ struct GoalCardView: View {
     }
 
     @State private var showFeedSheet = false
+    @State private var showWithdrawSheet = false
+
+    private var puedeSacar: Bool {
+        goal.type == .savingsTarget && goal.currentAmount > 0 && onWithdraw != nil
+    }
+
+    private var withdrawButton: some View {
+        Button {
+            showWithdrawSheet = true
+            HapticManager.shared.impact(.light)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.uturn.backward.circle")
+                Text("Sacar")
+            }
+        }
+        .buttonStyle(.secundarioClarity)
+        .sheet(isPresented: $showWithdrawSheet) {
+            SacarDeHuchaSheet(goal: goal) { onWithdraw?($0) }
+        }
+    }
     /// Uno por tarjeta: así el id "aportar" no choca entre huchas.
     @Namespace private var ns
 

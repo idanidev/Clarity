@@ -160,6 +160,10 @@ final class HomeViewModel {
         filteredExpenses.reduce(0) { $0 + $1.amount }
     }
 
+    /// Las aportaciones a huchas que pasan los filtros. Van en su propia
+    /// sección de la lista: no son gasto (ver `Expense.esAhorro`).
+    var aportacionesFiltradas: [Expense] = []
+
     /// Filtros de verdad: categorías, métodos de pago, importes o solo
     /// recurrentes. Ni el rango de fechas ni el orden cuentan: el mes lo mueve
     /// la barra, y contarlo hacía que la Home dijera "filtrado" en cuanto
@@ -198,7 +202,9 @@ final class HomeViewModel {
     }
 
     var calculatedSavings: Double {
-        let periodExpenses = currentMonthExpenses.reduce(0) { $0 + $1.amount }
+        // Sin las aportaciones: ya están en `savingsAllocated`, y contarlas en
+        // los dos sitios las restaba dos veces.
+        let periodExpenses = currentMonthExpenses.filter { !$0.esAhorro }.reduce(0) { $0 + $1.amount }
         let savingsAllocated = currentMonthlyBudget?.savingsAllocated ?? 0
         return monthlyIncome - periodExpenses - savingsAllocated
     }
@@ -341,7 +347,7 @@ final class HomeViewModel {
         if let cached = _monthlyTotalsByKey { return cached }
         var dict: [String: Double] = [:]
         dict.reserveCapacity(64)
-        for e in allHistoricalExpenses {
+        for e in allHistoricalExpenses where !e.esAhorro {
             let key = String(e.date.prefix(7))  // "YYYY-MM"
             dict[key, default: 0] += e.amount
         }
@@ -682,7 +688,7 @@ final class HomeViewModel {
         let valor: [MonthlySpending]
         if let criterio = criterioDeFiltro() {
             var totales: [String: Double] = [:]
-            for gasto in allHistoricalExpenses where criterio(gasto) {
+            for gasto in allHistoricalExpenses where criterio(gasto) && !gasto.esAhorro {
                 totales[String(gasto.date.prefix(7)), default: 0] += gasto.amount
             }
             let cal = Calendar.current
@@ -703,16 +709,18 @@ final class HomeViewModel {
         let cal = Calendar.current
         let clave = Self.monthKey(selectedMonth)
 
-        let cargados = currentMonthExpenses.filter { $0.date.hasPrefix(clave) }
-        let gastos = cargados.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) } : cargados
+        // Las aportaciones a huchas no son gasto: fuera de todo lo que se
+        // analiza. Lo apartado se descuenta de lo libre con `savingsAllocated`.
+        let cargados = currentMonthExpenses.filter { $0.date.hasPrefix(clave) && !$0.esAhorro }
+        let gastos = cargados.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) && !$0.esAhorro } : cargados
 
         let anteriores: [Expense] = {
             guard let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
             let k = Self.monthKey(prev)
-            let delAnterior = gastosMesAnteriorCargados.filter { $0.date.hasPrefix(k) }
+            let delAnterior = gastosMesAnteriorCargados.filter { $0.date.hasPrefix(k) && !$0.esAhorro }
             if !delAnterior.isEmpty { return delAnterior }
-            if let enMemoria = mesesEnMemoria[k], !enMemoria.isEmpty { return enMemoria }
-            return allHistoricalExpenses.filter { $0.date.hasPrefix(k) }
+            if let enMemoria = mesesEnMemoria[k]?.filter({ !$0.esAhorro }), !enMemoria.isEmpty { return enMemoria }
+            return allHistoricalExpenses.filter { $0.date.hasPrefix(k) && !$0.esAhorro }
         }()
 
         // En un mes pasado no quedan días: el "hoy" del cálculo es su último día.
@@ -742,7 +750,7 @@ final class HomeViewModel {
         // Tu normal: del tramo traído de red o, hasta que llegue, del
         // histórico en caché.
         let normal = HomeNormal.build(
-            historico: historicoNormal.isEmpty ? allHistoricalExpenses : historicoNormal,
+            historico: (historicoNormal.isEmpty ? allHistoricalExpenses : historicoNormal).filter { !$0.esAhorro },
             mes: selectedMonth,
             meses: Self.mesesNormal,
             presupuestos: presupuestosNormal,
@@ -759,7 +767,8 @@ final class HomeViewModel {
             hoy: hoy,
             calendar: cal,
             normal: normal,
-            filtro: criterio
+            filtro: criterio,
+            apartado: currentMonthlyBudget?.savingsAllocated ?? 0
         )
 
         let ultimos = Array(analisis.sorted {
@@ -1234,12 +1243,15 @@ final class HomeViewModel {
             }
         }
 
+        // Las aportaciones a huchas, aparte: no son gasto.
+        self.aportacionesFiltradas = result.filter(\.esAhorro)
+        result.removeAll(where: \.esAhorro)
         self.filteredExpenses = result
 
         // 4. Build Groups
         buildCategoryGroups(from: result)
 
-        if result.isEmpty {
+        if result.isEmpty && aportacionesFiltradas.isEmpty {
             state = .empty
         } else {
             state = .loaded(result)

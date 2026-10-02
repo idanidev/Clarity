@@ -203,6 +203,7 @@ class EditExpenseViewModel {
         
         do {
             try await repository.updateExpense(updatedExpense)
+            await ajustarHuchaSiCambia(updatedExpense)
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             HapticManager.shared.expenseEdited()
             FeedbackManager.shared.show(.success, title: "Gasto actualizado", message: "\(name) guardado correctamente")
@@ -213,5 +214,29 @@ class EditExpenseViewModel {
         }
 
         isLoading = false
+    }
+
+    /// Una aportación a hucha con otro importe: la hucha y lo apartado de su
+    /// mes se mueven en la diferencia, igual que al borrarla se devuelve
+    /// entera. Antes se cambiaba el movimiento y la hucha se quedaba como estaba.
+    private func ajustarHuchaSiCambia(_ editado: Expense) async {
+        guard let goalId = original.goalId, !goalId.isEmpty else { return }
+        let diferencia = editado.amount - original.amount
+        guard abs(diferencia) >= 0.005 else { return }
+        let fecha = Calendar.current.dateComponents([.year, .month], from: original.dateAsDate)
+        guard let year = fecha.year, let month = fecha.month else { return }
+
+        let financiero = DependencyContainer.shared.financialService
+        do {
+            if diferencia > 0 {
+                try await financiero.feedPiggyBank(goalId: goalId, amount: diferencia, note: "Ajuste al editar la aportación")
+            } else {
+                try await financiero.refundPiggyBank(goalId: goalId, amount: -diferencia)
+            }
+            try await financiero.updateSavingsAllocated(year: year, month: month, amount: diferencia)
+        } catch {
+            FeedbackManager.shared.show(.error, title: "La hucha no se ha actualizado",
+                                        message: "El movimiento se guardó, pero la hucha no: \(error.safeUserMessage)")
+        }
     }
 }

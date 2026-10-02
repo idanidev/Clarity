@@ -40,7 +40,8 @@ final class WidgetDataManager {
         var todayCategoryTotals: [String: Double] = [:]
         var monthCategoryTotals: [String: Double] = [:]
 
-        for expense in expenses {
+        // Las aportaciones a huchas no son gasto (ver `Expense.esAhorro`).
+        for expense in expenses where !expense.esAhorro {
             guard let d = Formatters.date(from: expense.date) else { continue }
             let amount = expense.amount
 

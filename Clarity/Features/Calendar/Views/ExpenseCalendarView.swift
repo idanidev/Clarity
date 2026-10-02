@@ -133,7 +133,8 @@ struct ExpenseCalendarView: View {
         let prefijo = mesClave
         let clavesSemana = Set(semana.map(clave))
         var totales: [String: Double] = [:]
-        for gasto in expenses where gasto.date.hasPrefix(prefijo) || clavesSemana.contains(gasto.date) {
+        // Lo apartado en huchas no es gasto (ver `Expense.esAhorro`).
+        for gasto in expenses where !gasto.esAhorro && (gasto.date.hasPrefix(prefijo) || clavesSemana.contains(gasto.date)) {
             totales[gasto.date, default: 0] += gasto.amount
         }
         return totales

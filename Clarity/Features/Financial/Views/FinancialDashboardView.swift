@@ -279,6 +279,9 @@ struct FinancialDashboardView: View {
                         onFeed: { amount in
                             Task { await viewModel.feedPiggyBank(goalId: goal.id, amount: amount) }
                         },
+                        onWithdraw: { amount in
+                            Task { await viewModel.withdrawPiggyBank(goalId: goal.id, amount: amount) }
+                        },
                         onEdit: { viewModel.editingGoal = goal },
                         onDelete: { Task { await viewModel.deleteGoal(goal.id) } }
                     )

@@ -255,8 +255,11 @@ nonisolated struct HomeResumen: Sendable {
     let mediaDiariaAnalisis: Double
     /// La comparativa de lo filtrado frente a lo filtrado del mes anterior.
     let comparativaAnalisis: Comparativa?
+    /// Lo apartado en huchas este mes (`savingsAllocated`). No es gasto —no
+    /// está en `total`— pero tampoco está libre.
+    var apartado: Double = 0
 
-    var libres: Double? { presupuesto.map { $0 - total } }
+    var libres: Double? { presupuesto.map { $0 - total - apartado } }
 
     /// Lo que se puede gastar cada día, hoy incluido, sin pasarse del
     /// presupuesto. Es el dato con el que se decide; "quedan 17 días" no lo es.
@@ -295,7 +298,8 @@ nonisolated struct HomeResumen: Sendable {
         calendar: Calendar = .current,
         normal: HomeNormal? = nil,
         preferencias: HomePreferencias = HomePreferencias(),
-        filtro: ((Expense) -> Bool)? = nil
+        filtro: ((Expense) -> Bool)? = nil,
+        apartado: Double = 0
     ) -> HomeResumen {
         let total = gastos.reduce(0) { $0 + $1.amount }
         let diaActual = calendar.component(.day, from: hoy)
@@ -561,7 +565,8 @@ nonisolated struct HomeResumen: Sendable {
             totalAnalisis: totalAnalisis,
             numeroAnalisis: analisis.count,
             mediaDiariaAnalisis: diaActual > 0 ? totalAnalisis / Double(diaActual) : 0,
-            comparativaAnalisis: comparativaAnalisis
+            comparativaAnalisis: comparativaAnalisis,
+            apartado: apartado
         )
     }
 

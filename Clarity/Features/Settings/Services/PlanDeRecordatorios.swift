@@ -98,7 +98,8 @@ nonisolated enum ResumenSemanal {
         else { return Cifras() }
 
         var cifras = Cifras()
-        for gasto in gastos {
+        // Lo apartado en huchas no es gasto de la semana.
+        for gasto in gastos where !gasto.esAhorro {
             // Por si algún gasto antiguo guardó la hora detrás del día.
             let dia = String(gasto.date.prefix(10))
             if actual.contains(dia) {

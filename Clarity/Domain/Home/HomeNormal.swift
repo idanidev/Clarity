@@ -135,4 +135,10 @@ nonisolated struct HomeNormal: Sendable, Equatable {
 nonisolated extension Expense {
     /// Creado por una regla recurrente: no dice nada de cómo gasta el usuario.
     var esRecurrente: Bool { recurringId != nil || isRecurring == true || recurring == true }
+
+    /// Una aportación a una hucha («Aportación a …», con `goalId`). Es dinero
+    /// apartado, no gastado: sale en la lista como movimiento de ahorro, pero no
+    /// suma en el gastado, ni en las gráficas, ni en los límites de categoría.
+    /// Lo apartado se descuenta del dinero libre con `savingsAllocated` del mes.
+    var esAhorro: Bool { !(goalId ?? "").isEmpty }
 }

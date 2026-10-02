@@ -128,8 +128,9 @@ class FinancialHubViewModel {
         currentMonthExpenses.reduce(0) { $0 + $1.amount }
     }
 
-    /// Free Cash = Income - Total Spent (savingsAllocated shown separately)
-    var freeCash: Double { income - totalSpent }
+    /// Libre = ingresos − gastado − apartado en huchas. Lo apartado ya no está
+    /// en `totalSpent` (las aportaciones no son gasto), pero tampoco está libre.
+    var freeCash: Double { income - totalSpent - savingsAllocated }
 
     /// Lo ahorrado este mes para las metas de ahorro mensual: lo mismo que queda
     /// "libre" arriba. Puede ser negativo (gastado más que ingresado); la tarjeta
@@ -208,8 +209,10 @@ class FinancialHubViewModel {
             goals = try await goalsTask
             let expensesResult = (try? await expensesTask) ?? PageResult(expenses: [], hasMore: false)
             let rules = (try? await rulesTask) ?? []
+            // Sin las aportaciones a huchas: no son gasto ni cuentan en los
+            // límites (ver `Expense.esAhorro`).
             currentMonthExpenses = ExpenseSanitizer.sanitize(
-                expenses: expensesResult.expenses, rules: rules)
+                expenses: expensesResult.expenses, rules: rules).filter { !$0.esAhorro }
 
             hasLoaded = true
 
@@ -403,7 +406,9 @@ class FinancialHubViewModel {
                 currentBudget = budget
             }
 
-            // 4. Create a real expense so it appears in the expense list
+            // 4. El movimiento de ahorro, para que salga en la lista de la Home
+            //    (en su sección, sin contar como gasto: ver `Expense.esAhorro`) y
+            //    se pueda editar o borrar desde ahí; borrarlo devuelve el dinero.
             let expense = Expense(
                 amount: amount,
                 name: "Aportación a \(goalName)",
@@ -414,10 +419,14 @@ class FinancialHubViewModel {
                 goalId: goalId
             )
             do {
-                _ = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
+                var guardado = expense
+                guardado.id = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
+                AvisoDeGasto.anadido(guardado)
             } catch {
                 self.error = "Error al registrar aportación: \(error.safeUserMessage)"
             }
+            // La Home recarga el presupuesto: lo apartado baja lo libre.
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
 
             HapticManager.shared.playCustomPattern(.expenseAdded)
 
@@ -432,6 +441,32 @@ class FinancialHubViewModel {
         } catch {
             // Rollback on error
             goals[goalIndex].currentAmount -= amount
+            self.error = error.safeUserMessage
+        }
+    }
+
+    /// Saca dinero de una hucha: vuelve a estar libre este mes. Si se apartó
+    /// en otro mes, `savingsAllocated` de este queda en negativo, y es justo lo
+    /// que hace falta: ese dinero vuelve a lo libre ahora.
+    func withdrawPiggyBank(goalId: String, amount: Double) async {
+        guard let indice = goals.firstIndex(where: { $0.id == goalId }),
+              goals[indice].type == .savingsTarget else { return }
+        let importe = min(amount, goals[indice].currentAmount)
+        guard importe > 0 else { return }
+
+        goals[indice].currentAmount -= importe
+        do {
+            try await service.refundPiggyBank(goalId: goalId, amount: importe)
+            try await service.updateSavingsAllocated(year: currentYear, month: currentMonth, amount: -importe)
+            if var budget = currentBudget {
+                budget.savingsAllocated -= importe
+                currentBudget = budget
+            }
+            // La Home recarga el presupuesto: lo libre sube.
+            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            HapticManager.shared.playSuccess()
+        } catch {
+            if let i = goals.firstIndex(where: { $0.id == goalId }) { goals[i].currentAmount += importe }
             self.error = error.safeUserMessage
         }
     }
@@ -517,7 +552,7 @@ class FinancialHubViewModel {
               let rules = try? await recurringRepository.fetchAll()
         else { return }
         currentMonthExpenses = ExpenseSanitizer.sanitize(
-            expenses: result.expenses, rules: rules)
+            expenses: result.expenses, rules: rules).filter { !$0.esAhorro }
     }
 
     /// Force reload (e.g. after adding/archiving a goal)
