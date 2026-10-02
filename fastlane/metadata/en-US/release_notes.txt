@@ -1,6 +1,8 @@
 What's new in this version:
 
-• New in Settings: "Valorar Clarity en la App Store" (rate Clarity). If the app is helping you, a review really helps more people find it.
-• The app now asks for your opinion at a better moment: only once you use it regularly, and never while you're logging an expense.
+• Piggy banks: money you set aside no longer counts as spending. It's no longer free to spend, but it doesn't add to what you've spent or push you over your category limits.
+• New "Sacar" (withdraw) on every piggy bank: the money becomes free again whenever you need it.
+• Contributions are listed separately, under "Apartado en huchas", and you can edit or delete them.
+• When you create a recurring expense's charge by hand, it shows up right away in the list and in its history.
 
 If something isn't working, write to us from Settings → "Algo no funciona".

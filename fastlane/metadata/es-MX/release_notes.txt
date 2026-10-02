@@ -1,6 +1,8 @@
 Novedades de esta versión:
 
-• Nuevo en Ajustes: «Valorar Clarity en la App Store». Si la app te está ayudando, una reseña nos ayuda muchísimo a que la encuentre más gente.
-• La app te pedirá tu opinión en mejor momento: solo cuando ya la uses a menudo, y nunca en mitad de apuntar un gasto.
+• Huchas: lo que apartas ya no cuenta como gasto. Deja de estar libre, pero no suma en lo gastado ni te hace pasarte de los límites de tus categorías.
+• Nuevo «Sacar» en cada hucha: el dinero vuelve a estar libre cuando lo necesites.
+• Las aportaciones van aparte en la lista, en «Apartado en huchas», y puedes editarlas o borrarlas.
+• Al crear a mano el cargo de un gasto recurrente, sale al momento en la lista y en el historial.
 
 Si algo no funciona, escríbenos desde Ajustes → «Algo no funciona».
