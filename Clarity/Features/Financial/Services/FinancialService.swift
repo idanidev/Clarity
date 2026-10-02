@@ -128,10 +128,19 @@ class FinancialService {
 
         let documentId = MonthlyBudget.generateDocumentId(userId: userId, year: year, month: month)
 
-        try await budgetsCollection(userId).document(documentId).updateData([
-            "savingsAllocated": FieldValue.increment(amount),
-            "updatedAt": FieldValue.serverTimestamp(),
-        ])
+        do {
+            try await budgetsCollection(userId).document(documentId).updateData([
+                "savingsAllocated": FieldValue.increment(amount),
+                "updatedAt": FieldValue.serverTimestamp(),
+            ])
+        } catch let error as NSError where error.domain == "FIRFirestoreErrorDomain" && error.code == 5 {
+            // notFound: ese mes no tiene presupuesto (se cerró el asistente sin
+            // poner la nómina). Sin presupuesto no hay dinero libre que ajustar.
+            // Antes este error abortaba la aportación a medias: la hucha ya había
+            // subido en el servidor y no se creaba el movimiento.
+            logger.info("💰 Sin presupuesto ese mes: savingsAllocated no se toca")
+            return
+        }
 
         logger.info("💰 Updated savingsAllocated")
     }

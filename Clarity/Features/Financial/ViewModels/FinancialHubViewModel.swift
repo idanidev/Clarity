@@ -59,7 +59,7 @@ class FinancialHubViewModel {
         ) { [weak self] _ in
             Task { @MainActor in
                 guard let self, self.hasLoaded else { return }
-                await self.refreshCurrentMonthExpenses()
+                await self.refrescar()
             }
         }
     }
@@ -100,10 +100,11 @@ class FinancialHubViewModel {
         currentBudget?.extraIncomes ?? []
     }
 
-    /// Total allocated to Piggy Banks this month
-    var savingsAllocated: Double {
-        currentBudget?.savingsAllocated ?? 0
-    }
+    /// Lo apartado en huchas este mes: lo que suman sus movimientos de ahorro
+    /// (aportaciones, y retiradas en negativo). Como en la Home, de los
+    /// movimientos y no de `savingsAllocated` del presupuesto, que se descuadra.
+    var savingsAllocated: Double { apartadoDelMes }
+    private(set) var apartadoDelMes: Double = 0
 
     /// Separated goal lists
     var spendingLimits: [Goal] {
@@ -209,10 +210,7 @@ class FinancialHubViewModel {
             goals = try await goalsTask
             let expensesResult = (try? await expensesTask) ?? PageResult(expenses: [], hasMore: false)
             let rules = (try? await rulesTask) ?? []
-            // Sin las aportaciones a huchas: no son gasto ni cuentan en los
-            // límites (ver `Expense.esAhorro`).
-            currentMonthExpenses = ExpenseSanitizer.sanitize(
-                expenses: expensesResult.expenses, rules: rules).filter { !$0.esAhorro }
+            repartir(ExpenseSanitizer.sanitize(expenses: expensesResult.expenses, rules: rules))
 
             hasLoaded = true
 
@@ -376,11 +374,16 @@ class FinancialHubViewModel {
 
     // MARK: - Goal Actions
 
-    /// Feed a Piggy Bank: Subtract from freeCash, add to goal, and record an expense
+    /// Aporta a una hucha: el movimiento de ahorro (lo que baja lo libre) y la
+    /// hucha, por ese orden. El movimiento se guarda al momento, con o sin
+    /// conexión; la hucha espera al servidor. Antes iba al revés y, sin
+    /// conexión, la hucha subía al volver la red sin movimiento que la
+    /// acompañara: el dinero estaba en la hucha y seguía libre.
     func feedPiggyBank(goalId: String, amount: Double) async {
         // Solo las huchas se alimentan: así la enhorabuena de hucha completada no
         // puede saltar por otro tipo de meta.
-        guard let goalIndex = goals.firstIndex(where: { $0.id == goalId }),
+        guard amount > 0,
+              let goalIndex = goals.firstIndex(where: { $0.id == goalId }),
               goals[goalIndex].type == .savingsTarget else { return }
         let goalName = goals[goalIndex].name
         let category = goals[goalIndex].savingsExpenseCategory ?? "Ahorros"
@@ -389,86 +392,128 @@ class FinancialHubViewModel {
         // no cada aportación a una hucha que ya estaba llena.
         let importeAnterior = goals[goalIndex].currentAmount
 
+        // El movimiento de ahorro: sale en la Home, en su sección (no es gasto,
+        // ver `Expense.esAhorro`), y borrarlo devuelve el dinero.
+        let aportacion = Expense(
+            amount: amount,
+            name: "Aportación a \(goalName)",
+            category: category,
+            subcategory: subcategory,
+            date: Formatters.localDayString(from: Date()),
+            paymentMethod: "Transferencia",
+            goalId: goalId
+        )
+        guard let guardada = await guardarMovimiento(aportacion) else {
+            self.error = "No se ha podido apartar el dinero. Inténtalo de nuevo."
+            return
+        }
+
         // Optimistic UI update (animation handled by View)
-        goals[goalIndex].currentAmount += amount
+        sumarAHucha(goalId, amount)
+        apartadoDelMes += amount
 
         do {
-            // 1. Update goal in Firebase
             try await service.feedPiggyBank(goalId: goalId, amount: amount)
-
-            // 2. Update savingsAllocated in budget
-            try await service.updateSavingsAllocated(
-                year: currentYear, month: currentMonth, amount: amount)
-
-            // 3. Refresh local budget state
-            if var budget = currentBudget {
-                budget.savingsAllocated += amount
-                currentBudget = budget
-            }
-
-            // 4. El movimiento de ahorro, para que salga en la lista de la Home
-            //    (en su sección, sin contar como gasto: ver `Expense.esAhorro`) y
-            //    se pueda editar o borrar desde ahí; borrarlo devuelve el dinero.
-            let expense = Expense(
-                amount: amount,
-                name: "Aportación a \(goalName)",
-                category: category,
-                subcategory: subcategory,
-                date: Formatters.isoString(from: Date()),
-                paymentMethod: "Transferencia",
-                goalId: goalId
-            )
-            do {
-                var guardado = expense
-                guardado.id = try await DependencyContainer.shared.expenseRepository.addExpense(expense)
-                AvisoDeGasto.anadido(guardado)
-            } catch {
-                self.error = "Error al registrar aportación: \(error.safeUserMessage)"
-            }
-            // La Home recarga el presupuesto: lo apartado baja lo libre.
-            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
-
-            HapticManager.shared.playCustomPattern(.expenseAdded)
-
-            // Por id y no por goalIndex: durante los await la lista puede haber cambiado.
-            if let meta = goals.first(where: { $0.id == goalId }),
-               meta.targetAmount > 0,
-               importeAnterior < meta.targetAmount,
-               meta.currentAmount >= meta.targetAmount {
-                huchaCompletada = meta
-            }
-
         } catch {
-            // Rollback on error
-            goals[goalIndex].currentAmount -= amount
+            // La hucha no ha subido: fuera también el movimiento.
+            await deshacerMovimiento(guardada)
+            sumarAHucha(goalId, -amount)
+            apartadoDelMes -= amount
             self.error = error.safeUserMessage
+            return
+        }
+        // Informativo: lo que se muestra se cuenta de los movimientos.
+        try? await service.updateSavingsAllocated(year: currentYear, month: currentMonth, amount: amount)
+        // Con la hucha ya movida: la Home recarga su tarjeta de huchas.
+        NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+
+        HapticManager.shared.playCustomPattern(.expenseAdded)
+
+        // Por id y no por índice: durante los await la lista puede haber cambiado.
+        if let meta = goals.first(where: { $0.id == goalId }),
+           meta.targetAmount > 0,
+           importeAnterior < meta.targetAmount,
+           meta.currentAmount >= meta.targetAmount {
+            huchaCompletada = meta
         }
     }
 
-    /// Saca dinero de una hucha: vuelve a estar libre este mes. Si se apartó
-    /// en otro mes, `savingsAllocated` de este queda en negativo, y es justo lo
-    /// que hace falta: ese dinero vuelve a lo libre ahora.
+    /// Saca dinero de una hucha: vuelve a estar libre este mes. Queda como un
+    /// movimiento en negativo junto a las aportaciones; borrarlo lo devuelve a
+    /// la hucha. Si se apartó en otro mes, lo apartado de este queda en
+    /// negativo, y es justo lo que hace falta: ese dinero vuelve a lo libre ahora.
     func withdrawPiggyBank(goalId: String, amount: Double) async {
         guard let indice = goals.firstIndex(where: { $0.id == goalId }),
               goals[indice].type == .savingsTarget else { return }
-        let importe = min(amount, goals[indice].currentAmount)
-        guard importe > 0 else { return }
+        let nombre = goals[indice].name
+        let categoria = goals[indice].savingsExpenseCategory ?? "Ahorros"
+        let subcategoria = goals[indice].savingsExpenseSubcategory
 
-        goals[indice].currentAmount -= importe
+        // Lo que tiene la hucha ahora, no lo que había al abrir Metas: si desde
+        // la Home se borró una aportación, sacar lo de antes la dejaba en negativo.
+        let disponible = (try? await service.fetchGoals())?.first(where: { $0.id == goalId })?.currentAmount
+            ?? goals.first(where: { $0.id == goalId })?.currentAmount ?? 0
+        let importe = min(amount, disponible)
+        guard importe > 0.005 else {
+            if let i = goals.firstIndex(where: { $0.id == goalId }) { goals[i].currentAmount = disponible }
+            self.error = "Esa hucha ya no tiene dinero que sacar."
+            return
+        }
+
+        let retirada = Expense(
+            amount: -importe,
+            name: "Retirada de \(nombre)",
+            category: categoria,
+            subcategory: subcategoria,
+            date: Formatters.localDayString(from: Date()),
+            paymentMethod: "Transferencia",
+            goalId: goalId
+        )
+        guard let guardada = await guardarMovimiento(retirada) else {
+            self.error = "No se ha podido sacar el dinero. Inténtalo de nuevo."
+            return
+        }
+
+        sumarAHucha(goalId, -importe)
+        apartadoDelMes -= importe
+
         do {
             try await service.refundPiggyBank(goalId: goalId, amount: importe)
-            try await service.updateSavingsAllocated(year: currentYear, month: currentMonth, amount: -importe)
-            if var budget = currentBudget {
-                budget.savingsAllocated -= importe
-                currentBudget = budget
-            }
-            // La Home recarga el presupuesto: lo libre sube.
-            NotificationCenter.default.post(name: .expenseDidChange, object: nil)
-            HapticManager.shared.playSuccess()
         } catch {
-            if let i = goals.firstIndex(where: { $0.id == goalId }) { goals[i].currentAmount += importe }
+            await deshacerMovimiento(guardada)
+            sumarAHucha(goalId, importe)
+            apartadoDelMes += importe
             self.error = error.safeUserMessage
+            return
         }
+        try? await service.updateSavingsAllocated(year: currentYear, month: currentMonth, amount: -importe)
+        NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+        HapticManager.shared.playSuccess()
+    }
+
+    /// Guarda un movimiento de ahorro y se lo pasa a la Home, que lo pinta al
+    /// momento y recalcula lo libre. `nil` si no se ha podido guardar.
+    private func guardarMovimiento(_ movimiento: Expense) async -> Expense? {
+        do {
+            var guardado = movimiento
+            guardado.id = try await DependencyContainer.shared.expenseRepository.addExpense(movimiento)
+            AvisoDeGasto.anadido(guardado)
+            return guardado
+        } catch {
+            return nil
+        }
+    }
+
+    /// Borra un movimiento cuya hucha no se ha podido mover, para que no se
+    /// descuadren. También de la Home, que ya lo tenía pintado.
+    private func deshacerMovimiento(_ movimiento: Expense) async {
+        guard let id = movimiento.id else { return }
+        try? await DependencyContainer.shared.expenseRepository.deleteExpense(id: id)
+        AvisoDeGasto.quitado(movimiento)
+    }
+
+    private func sumarAHucha(_ goalId: String, _ importe: Double) {
+        if let i = goals.firstIndex(where: { $0.id == goalId }) { goals[i].currentAmount += importe }
     }
 
     /// Create a new goal
@@ -489,6 +534,13 @@ class FinancialHubViewModel {
 
     /// Update an existing goal
     func updateGoal(_ goal: Goal) async {
+        // Lo que hay en la hucha, tal como está ahora: el formulario trae lo que
+        // había al abrirlo, y guardarlo pisaba lo aportado o sacado después.
+        var goal = goal
+        if let actual = (try? await service.fetchGoals())?.first(where: { $0.id == goal.id }) {
+            goal.currentAmount = actual.currentAmount
+            goal.savedHistory = actual.savedHistory
+        }
         do {
             try await service.saveGoal(goal)
             if let idx = goals.firstIndex(where: { $0.id == goal.id }) {
@@ -551,8 +603,26 @@ class FinancialHubViewModel {
             .executePaginated(page: 0, filter: monthFilter),
               let rules = try? await recurringRepository.fetchAll()
         else { return }
-        currentMonthExpenses = ExpenseSanitizer.sanitize(
-            expenses: result.expenses, rules: rules).filter { !$0.esAhorro }
+        repartir(ExpenseSanitizer.sanitize(expenses: result.expenses, rules: rules))
+    }
+
+    /// Los gastos del mes por un lado (sin las aportaciones a huchas: no son
+    /// gasto ni cuentan en los límites, ver `Expense.esAhorro`) y lo apartado
+    /// por otro.
+    private func repartir(_ movimientos: [Expense]) {
+        currentMonthExpenses = movimientos.filter { !$0.esAhorro }
+        apartadoDelMes = movimientos.filter(\.esAhorro).reduce(0) { $0 + $1.amount }
+    }
+
+    /// Pone al día gastos, huchas y presupuesto sin pasar por la pantalla de
+    /// carga. Al volver de la Home (donde se puede borrar una aportación) o al
+    /// tirar hacia abajo: `load()` no hace nada después de la primera vez.
+    func refrescar() async {
+        await refreshCurrentMonthExpenses()
+        if let metas = try? await service.fetchGoals() { goals = metas }
+        if let presupuesto = try? await service.fetchMonthlyBudget(year: currentYear, month: currentMonth) {
+            currentBudget = presupuesto
+        }
     }
 
     /// Force reload (e.g. after adding/archiving a goal)

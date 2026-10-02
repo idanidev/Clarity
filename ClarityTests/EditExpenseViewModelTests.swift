@@ -19,6 +19,18 @@ struct EditExpenseViewModelTests {
                 isRecurring: true, recurringId: "regla-1", goalId: "hucha-1")
     }
 
+    /// La hucha del gasto, en memoria: guardar un gasto de hucha la mueve, y
+    /// ningún test toca Firestore.
+    private func financiero(enHucha: Double = 100) -> FinancialServiceDemo {
+        var hucha = Goal(name: "Viaje", type: .savingsTarget, targetAmount: 1000, currentAmount: enHucha)
+        hucha.documentId = "hucha-1"
+        return FinancialServiceDemo(presupuestos: [], metas: [hucha])
+    }
+
+    private func enHucha(_ financiero: FinancialServiceDemo) async -> Double? {
+        try? await financiero.fetchGoals().first { $0.id == "hucha-1" }?.currentAmount
+    }
+
     /// Una categoría real del usuario que casa con lo que el parser sugiere para
     /// «mercadona» (subcategoría «Supermercado»).
     private let categorias = [
@@ -31,10 +43,12 @@ struct EditExpenseViewModelTests {
     func conservaCamposOcultos() async {
         let repo = MockExpenseRepository()
         repo.expenses = [gasto()]
-        let vm = EditExpenseViewModel(expense: gasto(), repository: repo)
+        let financiero = financiero()
+        let vm = EditExpenseViewModel(expense: gasto(), repository: repo, financiero: financiero)
 
         vm.amountText = "55"
         await vm.save()
+        await vm.tareaHucha?.value
 
         let guardado = repo.expenses.first
         #expect(guardado?.amount == 55)
@@ -42,13 +56,48 @@ struct EditExpenseViewModelTests {
         #expect(guardado?.recurringId == "regla-1")
         #expect(guardado?.isRecurring == true)
         #expect(guardado?.isDeductible == true)
+        // La aportación sube de 40 a 55: la hucha, en la diferencia.
+        #expect(await enHucha(financiero) == 115)
+    }
+
+    @Test("Bajar una aportación saca la diferencia de la hucha")
+    func bajarAportacion() async {
+        let repo = MockExpenseRepository()
+        repo.expenses = [gasto()]
+        let financiero = financiero()
+        let vm = EditExpenseViewModel(expense: gasto(), repository: repo, financiero: financiero)
+
+        vm.amountText = "25"
+        await vm.save()
+        await vm.tareaHucha?.value
+
+        #expect(repo.expenses.first?.amount == 25)
+        #expect(await enHucha(financiero) == 85)
+    }
+
+    @Test("No deja bajar una aportación más de lo que queda en la hucha")
+    func bajarMasDeLoQueHay() async {
+        let repo = MockExpenseRepository()
+        repo.expenses = [gasto()]
+        // Se aportaron 40, pero luego se sacaron 30: quedan 10.
+        let financiero = financiero(enHucha: 10)
+        let vm = EditExpenseViewModel(expense: gasto(), repository: repo, financiero: financiero)
+
+        vm.amountText = "12"
+        await vm.save()
+        await vm.tareaHucha?.value
+
+        #expect(vm.showError)
+        #expect(repo.expenses.first?.amount == 40)
+        #expect(await enHucha(financiero) == 10)
     }
 
     @Test("Un método de pago fuera de la lista se conserva si no se cambia")
     func metodoDePagoDesconocido() async {
         let repo = MockExpenseRepository()
         repo.expenses = [gasto(paymentMethod: "Cheque regalo")]
-        let vm = EditExpenseViewModel(expense: gasto(paymentMethod: "Cheque regalo"), repository: repo)
+        let vm = EditExpenseViewModel(expense: gasto(paymentMethod: "Cheque regalo"), repository: repo,
+                                      financiero: financiero())
 
         vm.amountText = "12"
         await vm.save()
@@ -88,7 +137,7 @@ struct EditExpenseViewModelTests {
     func importeInvalido(texto: String) async {
         let repo = MockExpenseRepository()
         repo.expenses = [gasto()]
-        let vm = EditExpenseViewModel(expense: gasto(), repository: repo)
+        let vm = EditExpenseViewModel(expense: gasto(), repository: repo, financiero: financiero())
 
         vm.amountText = texto
         #expect(!vm.isValid)
@@ -102,7 +151,7 @@ struct EditExpenseViewModelTests {
         let tercio = 10.0 / 3
         let repo = MockExpenseRepository()
         repo.expenses = [gasto(amount: tercio)]
-        let vm = EditExpenseViewModel(expense: gasto(amount: tercio), repository: repo)
+        let vm = EditExpenseViewModel(expense: gasto(amount: tercio), repository: repo, financiero: financiero())
 
         // El campo enseña 3,33, pero el gasto sigue valiendo 3,3333…
         #expect(vm.amountText == EditExpenseViewModel.textoImporte(tercio))

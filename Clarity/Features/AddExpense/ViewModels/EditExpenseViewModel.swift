@@ -55,6 +55,8 @@ class EditExpenseViewModel {
     
     // MARK: - Dependencies
     private let repository: ExpenseRepositoryProtocol
+    /// Para mover la hucha de una aportación editada.
+    private let financiero: FinancialService
     /// Las categorías reales del usuario, para casar la sugerencia. Un cierre y
     /// no una copia: pueden terminar de cargarse con la hoja ya abierta.
     private let categorias: () -> [Category]
@@ -63,16 +65,21 @@ class EditExpenseViewModel {
     /// La búsqueda en curso; se cancela con cada tecla. Legible desde los tests
     /// para poder esperarla.
     @ObservationIgnored private(set) var tareaSugerencia: Task<Void, Never>?
+    /// El ajuste de la hucha tras guardar una aportación. Va aparte: espera al
+    /// servidor, y sin conexión dejaba la hoja colgada. Legible desde los tests.
+    @ObservationIgnored private(set) var tareaHucha: Task<Void, Never>?
 
     // MARK: - Init
-    /// `repository` y `categorias` solo se pasan en los tests; la app usa el
-    /// repositorio del contenedor y las categorías de `UserDataManager`.
+    /// `repository`, `categorias` y `financiero` solo se pasan en los tests; la
+    /// app usa los del contenedor y las categorías de `UserDataManager`.
     init(
         expense: Expense,
         repository: ExpenseRepositoryProtocol? = nil,
-        categorias: (() -> [Category])? = nil
+        categorias: (() -> [Category])? = nil,
+        financiero: FinancialService? = nil
     ) {
         self.repository = repository ?? DependencyContainer.shared.expenseRepository
+        self.financiero = financiero ?? DependencyContainer.shared.financialService
         self.categorias = categorias ?? { UserDataManager.shared.categories }
         self.expenseId = expense.id ?? ""
         self.original = expense
@@ -201,9 +208,16 @@ class EditExpenseViewModel {
             createdAt: original.createdAt
         )
         
+        if let enHucha = await huchaSinBastante(para: updatedExpense) {
+            errorMessage = "La hucha ya solo tiene \(Formatters.currency(max(enHucha, 0))): no se puede bajar tanto la aportación. Si sacaste dinero, borra antes la retirada."
+            showError = true
+            isLoading = false
+            return
+        }
+
         do {
             try await repository.updateExpense(updatedExpense)
-            await ajustarHuchaSiCambia(updatedExpense)
+            tareaHucha = Task { await ajustarHuchaSiCambia(updatedExpense) }
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
             HapticManager.shared.expenseEdited()
             FeedbackManager.shared.show(.success, title: "Gasto actualizado", message: "\(name) guardado correctamente")
@@ -216,27 +230,52 @@ class EditExpenseViewModel {
         isLoading = false
     }
 
-    /// Una aportación a hucha con otro importe: la hucha y lo apartado de su
-    /// mes se mueven en la diferencia, igual que al borrarla se devuelve
-    /// entera. Antes se cambiaba el movimiento y la hucha se quedaba como estaba.
+    /// Bajar el importe de una aportación saca la diferencia de su hucha. Si la
+    /// hucha ya no la tiene (se sacó con «Sacar»), quedaría en negativo: lo que
+    /// tiene, para avisar. `nil` si no hay problema.
+    private func huchaSinBastante(para editado: Expense) async -> Double? {
+        guard let goalId = original.goalId, !goalId.isEmpty else { return nil }
+        let baja = original.amount - editado.amount
+        guard baja > 0.005,
+              let hucha = (try? await financiero.fetchGoals())?.first(where: { $0.id == goalId }),
+              hucha.currentAmount + 0.005 < baja
+        else { return nil }
+        return hucha.currentAmount
+    }
+
+    /// Una aportación a hucha con otro importe: la hucha se mueve en la
+    /// diferencia, igual que al borrarla se devuelve entera. Antes se cambiaba
+    /// el movimiento y la hucha se quedaba como estaba. Lo libre del mes no hace
+    /// falta tocarlo: se cuenta de los movimientos.
     private func ajustarHuchaSiCambia(_ editado: Expense) async {
         guard let goalId = original.goalId, !goalId.isEmpty else { return }
         let diferencia = editado.amount - original.amount
-        guard abs(diferencia) >= 0.005 else { return }
-        let fecha = Calendar.current.dateComponents([.year, .month], from: original.dateAsDate)
-        guard let year = fecha.year, let month = fecha.month else { return }
-
-        let financiero = DependencyContainer.shared.financialService
         do {
-            if diferencia > 0 {
+            if diferencia > 0.005 {
                 try await financiero.feedPiggyBank(goalId: goalId, amount: diferencia, note: "Ajuste al editar la aportación")
-            } else {
+            } else if diferencia < -0.005 {
                 try await financiero.refundPiggyBank(goalId: goalId, amount: -diferencia)
             }
-            try await financiero.updateSavingsAllocated(year: year, month: month, amount: diferencia)
         } catch {
             FeedbackManager.shared.show(.error, title: "La hucha no se ha actualizado",
                                         message: "El movimiento se guardó, pero la hucha no: \(error.safeUserMessage)")
+            return
         }
+
+        // `savingsAllocated` del presupuesto, solo informativo: si la aportación
+        // cambia de mes, sale entera del de antes y entra entera en el nuevo.
+        guard let antes = Self.anioMes(original.date), let ahora = Self.anioMes(editado.date) else { return }
+        if antes != ahora {
+            try? await financiero.updateSavingsAllocated(year: antes.anio, month: antes.mes, amount: -original.amount)
+            try? await financiero.updateSavingsAllocated(year: ahora.anio, month: ahora.mes, amount: editado.amount)
+        } else if abs(diferencia) > 0.005 {
+            try? await financiero.updateSavingsAllocated(year: antes.anio, month: antes.mes, amount: diferencia)
+        }
+    }
+
+    /// Año y mes del texto de la fecha ("yyyy-MM-dd"), sin pasar por zonas horarias.
+    private static func anioMes(_ fecha: String) -> (anio: Int, mes: Int)? {
+        guard let anio = Int(fecha.prefix(4)), let mes = Int(fecha.dropFirst(5).prefix(2)) else { return nil }
+        return (anio, mes)
     }
 }

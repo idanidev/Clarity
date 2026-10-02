@@ -20,6 +20,10 @@ extension Notification.Name {
     /// `expenseDidChange`, lleva el gasto: la Home lo inserta en su sitio sin
     /// recargar la lista (ver `HomeViewModel.incorporarGastoDeFuera`).
     static let gastoAnadido = Notification.Name("gastoAnadido")
+
+    /// Se ha borrado fuera de la Home un gasto que ya se le había avisado con
+    /// `gastoAnadido` (un movimiento de hucha deshecho). `object` es el `Expense`.
+    static let gastoQuitado = Notification.Name("gastoQuitado")
 }
 
 @MainActor
@@ -29,6 +33,12 @@ enum AvisoDeGasto {
     static func anadido(_ gasto: Expense) {
         UserDataManager.shared.anadirGastoAlCache(gasto)
         NotificationCenter.default.post(name: .gastoAnadido, object: gasto)
+    }
+
+    /// Lo contrario de `anadido`: lo saca de la copia en memoria y de la Home.
+    static func quitado(_ gasto: Expense) {
+        UserDataManager.shared.expenses.removeAll { $0.id == gasto.id }
+        NotificationCenter.default.post(name: .gastoQuitado, object: gasto)
     }
 }
 

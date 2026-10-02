@@ -91,6 +91,9 @@ struct HomeView: View {
             .onReceive(NotificationCenter.default.publisher(for: .gastoAnadido)) { aviso in
                 if let gasto = aviso.object as? Expense { viewModel.incorporarGastoDeFuera(gasto) }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .gastoQuitado)) { aviso in
+                if let id = (aviso.object as? Expense)?.id { viewModel.removeExpense(id: id) }
+            }
             // El documento puede llegar después de que la Home ya esté montada.
             .onReceive(NotificationCenter.default.publisher(for: .userDocumentDidLoad)) { _ in
                 viewModel.applyDefaultFilterIfNeeded()
@@ -180,7 +183,8 @@ struct HomeView: View {
                     loadingView
                 } else if case .error(let error) = viewModel.state {
                     errorView(error.localizedDescription)
-                } else if viewModel.gastosDelMes.isEmpty && viewModel.searchText.isEmpty && !viewModel.cargandoMes {
+                } else if viewModel.gastosDelMes.isEmpty && viewModel.aportacionesDelMes.isEmpty
+                            && viewModel.searchText.isEmpty && !viewModel.cargandoMes {
                     // Solo con el mes ya cargado. Mientras llega uno nuevo se
                     // queda el carrusel: cambiarlo por este cartel y volver a
                     // montarlo entero era el tirón de cada cambio de mes.

@@ -26,6 +26,9 @@ enum HomeViewState: Equatable {
 /// datos, no en cada pintado: ver `HomeViewModel.derivados`.
 struct HomeDerivados {
     let gastosDelMes: [Expense]
+    /// Aportaciones a huchas del mes, con las retiradas en negativo. No son
+    /// gasto; lo que suman es lo apartado, que no está libre.
+    let aportacionesDelMes: [Expense]
     let gastosMesAnterior: [Expense]
     let resumen: HomeResumen
     let gruposDelMes: [CategoryGroup]
@@ -202,11 +205,8 @@ final class HomeViewModel {
     }
 
     var calculatedSavings: Double {
-        // Sin las aportaciones: ya están en `savingsAllocated`, y contarlas en
-        // los dos sitios las restaba dos veces.
-        let periodExpenses = currentMonthExpenses.filter { !$0.esAhorro }.reduce(0) { $0 + $1.amount }
-        let savingsAllocated = currentMonthlyBudget?.savingsAllocated ?? 0
-        return monthlyIncome - periodExpenses - savingsAllocated
+        // Con las aportaciones: no son gasto, pero lo apartado tampoco está libre.
+        monthlyIncome - currentMonthExpenses.reduce(0) { $0 + $1.amount }
     }
 
     /// Income for the currently selected month (from MonthlyBudget).
@@ -312,7 +312,7 @@ final class HomeViewModel {
     private let recurringRepository = DependencyContainer.shared.recurringExpenseRepository
     // El del contenedor, como los repositorios: así el modo demo (DEBUG) le
     // pone el suyo en memoria. Sin estado propio: da igual una instancia u otra.
-    private let financialService = DependencyContainer.shared.financialService
+    private let financialService: FinancialService
     private let logger = Logger(
         subsystem: Bundle.main.bundleIdentifier ?? "Clarity", category: "HomeViewModel")
 
@@ -550,6 +550,7 @@ final class HomeViewModel {
     /// esta pantalla tiraba de él: por eso no enseñaba nada. Queda como respaldo
     /// para meses distintos del cargado.
     var gastosDelMes: [Expense] { derivados.gastosDelMes }
+    var aportacionesDelMes: [Expense] { derivados.aportacionesDelMes }
 
     var gastosMesAnterior: [Expense] { derivados.gastosMesAnterior }
 
@@ -710,9 +711,15 @@ final class HomeViewModel {
         let clave = Self.monthKey(selectedMonth)
 
         // Las aportaciones a huchas no son gasto: fuera de todo lo que se
-        // analiza. Lo apartado se descuenta de lo libre con `savingsAllocated`.
-        let cargados = currentMonthExpenses.filter { $0.date.hasPrefix(clave) && !$0.esAhorro }
-        let gastos = cargados.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) && !$0.esAhorro } : cargados
+        // analiza. Lo que suman los movimientos de ahorro del mes (retiradas en
+        // negativo) es lo apartado, y se descuenta de lo libre. Se cuenta de los
+        // movimientos y no de `savingsAllocated` del presupuesto: ese contador
+        // se descuadra (un mes sin presupuesto, una fecha cambiada, un fallo a
+        // medias) y los movimientos son lo que el usuario ve y puede borrar.
+        let delMes = currentMonthExpenses.filter { $0.date.hasPrefix(clave) }
+        let movimientos = delMes.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) } : delMes
+        let gastos = movimientos.filter { !$0.esAhorro }
+        let aportaciones = movimientos.filter(\.esAhorro)
 
         let anteriores: [Expense] = {
             guard let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
@@ -768,7 +775,7 @@ final class HomeViewModel {
             calendar: cal,
             normal: normal,
             filtro: criterio,
-            apartado: currentMonthlyBudget?.savingsAllocated ?? 0
+            apartado: aportaciones.reduce(0) { $0 + $1.amount }
         )
 
         let ultimos = Array(analisis.sorted {
@@ -812,6 +819,7 @@ final class HomeViewModel {
 
         return HomeDerivados(
             gastosDelMes: gastos,
+            aportacionesDelMes: aportaciones,
             gastosMesAnterior: anteriores,
             resumen: resumen,
             gruposDelMes: agrupar(analisis),
@@ -838,8 +846,11 @@ final class HomeViewModel {
         deleteExpenseUseCase: DeleteExpenseUseCase,
         addExpenseUseCase: AddExpenseUseCase,
         /// `nil` = el de la app. Los tests pasan uno en memoria.
-        almacenDisposicion: HomeDisposicionAlmacen? = nil
+        almacenDisposicion: HomeDisposicionAlmacen? = nil,
+        /// `nil` = el de la app. Los tests pasan uno en memoria.
+        financialService: FinancialService? = nil
     ) {
+        self.financialService = financialService ?? DependencyContainer.shared.financialService
         self.getExpensesUseCase = getExpensesUseCase
         self.deleteExpenseUseCase = deleteExpenseUseCase
         self.addExpenseUseCase = addExpenseUseCase
@@ -864,15 +875,35 @@ final class HomeViewModel {
 
     func deleteExpense(_ expense: Expense) async {
         guard let id = expense.id else { return }
+        if expense.esAhorro, let metas = try? await financialService.fetchGoals(),
+           Self.aportacionYaSacada(expense, metas: metas) {
+            HapticManager.shared.notification(.warning)
+            FeedbackManager.shared.show(
+                .info,
+                title: "Ese dinero ya no está en la hucha",
+                message: "Si lo sacaste con «Sacar», borra antes la retirada y luego esta aportación."
+            )
+            // Deslizada del todo, la lista ya la había quitado: que vuelva.
+            applyFilters()
+            return
+        }
         do {
             try await deleteExpenseUseCase.execute(id: id)
+            // También de la copia compartida: el historial de un recurrente la
+            // lee, y con el cargo aún ahí no dejaba volver a crearlo.
+            UserDataManager.shared.expenses.removeAll { $0.id == id }
 
-            // Rollback linked piggy bank if this expense was a savings contribution
-            if let goalId = expense.goalId {
-                let comps = Calendar.current.dateComponents([.year, .month], from: expense.dateAsDate)
-                if let year = comps.year, let month = comps.month {
-                    try? await financialService.refundPiggyBank(goalId: goalId, amount: expense.amount)
-                    try? await financialService.updateSavingsAllocated(year: year, month: month, amount: -expense.amount)
+            // Una aportación borrada sale de la hucha; una retirada borrada
+            // vuelve a ella (su importe es negativo). Sin esperar al servidor:
+            // sin conexión la escritura queda en cola, y esperarla dejaba la
+            // fila en la lista para un segundo borrado que la devolvía otra vez.
+            if expense.esAhorro, let goalId = expense.goalId,
+               let anio = Int(expense.date.prefix(4)), let mes = Int(expense.date.dropFirst(5).prefix(2)) {
+                let financiero = financialService
+                let importe = expense.amount
+                Task {
+                    try? await financiero.refundPiggyBank(goalId: goalId, amount: importe)
+                    try? await financiero.updateSavingsAllocated(year: anio, month: mes, amount: -importe)
                 }
             }
 
@@ -1078,6 +1109,8 @@ final class HomeViewModel {
     /// de gastos (hacerlo re-entraba durante el borrado con swipe y crasheaba la List).
     func reloadBudget() async {
         await loadMonthlyBudget(for: selectedMonth)
+        // Y las huchas: aportar o sacar en Metas cambia lo que tiene cada una.
+        await loadMetas()
     }
 
     /// Inserts an expense directly into in-memory state — no network roundtrip.
@@ -1105,6 +1138,17 @@ final class HomeViewModel {
             currentMonthExpenses,
             monthBudget: currentMonthlyBudget?.totalIncome
         )
+    }
+
+    /// Borrar una aportación saca su importe de la hucha. Si la hucha ya no lo
+    /// tiene (se sacó con «Sacar»), quedaría en negativo y ese dinero contaría
+    /// dos veces como libre: hay que borrar antes la retirada. Con la hucha
+    /// borrada no hay nada que descuadrar y se deja borrar.
+    static func aportacionYaSacada(_ gasto: Expense, metas: [Goal]) -> Bool {
+        guard gasto.esAhorro, gasto.amount > 0,
+              let hucha = metas.first(where: { $0.id == gasto.goalId })
+        else { return false }
+        return hucha.currentAmount + 0.005 < gasto.amount
     }
 
     /// Un gasto guardado fuera de la Home (un cargo recurrente, sobre todo), que

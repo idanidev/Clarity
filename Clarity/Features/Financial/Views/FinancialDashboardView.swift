@@ -122,10 +122,10 @@ struct FinancialDashboardView: View {
             .padding(.bottom, Spacing.lg)
         }
         .refreshable {
-            // En una tarea aparte: `load()` enciende `isLoading`, la vista cambia
-            // este scroll por la pantalla de carga y, al desaparecer el scroll,
-            // SwiftUI cancela la tarea del `refreshable` con la carga a medias.
-            await Task { await viewModel.load() }.value
+            // `load()` no hace nada tras la primera carga: esto pone al día
+            // huchas, gastos y presupuesto sin la pantalla de carga. En una tarea
+            // aparte para que SwiftUI no la cancele a medias.
+            await Task { await viewModel.refrescar() }.value
         }
     }
 
@@ -314,7 +314,7 @@ struct FinancialDashboardView: View {
                 iconColor: Color.clarityPrimary,
                 title: "Hucha",
                 subtitle: "Ahorra hacia un objetivo",
-                example: "Ej: 1.500€ para vacaciones. Cada aportación se registra como gasto y suma a tu hucha."
+                example: "Ej: 1.500€ para vacaciones. Lo que apartas deja de estar libre, pero no cuenta como gasto, y puedes sacarlo cuando quieras."
             )
             explainerCard(
                 icon: "🛡️",

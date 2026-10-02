@@ -210,7 +210,7 @@ struct ResumenPage: View {
             let apartado = viewModel.aportacionesFiltradas.reduce(0) { $0 + $1.amount }
             VStack(alignment: .leading, spacing: 2) {
                 CabeceraSeccionClarity(titulo: "Apartado en huchas", detalle: Formatters.currency(apartado))
-                Text("Sigue siendo tuyo: no cuenta como gasto. Bórralo y vuelve a estar libre.")
+                Text("Sigue siendo tuyo: no cuenta como gasto. Para recuperarlo, sácalo de la hucha en Metas o borra la aportación.")
                     .font(.caption)
                     .foregroundStyle(Color.textSecondary)
                     .padding(.horizontal, 6)
@@ -219,27 +219,49 @@ struct ResumenPage: View {
             .filaDeTarjeta(arriba: 10)
 
             ForEach(viewModel.aportacionesFiltradas, id: \.stableId) { gasto in
-                let origen = "lista-\(gasto.stableId)"
-                FilaGasto(gasto: gasto, color: .clarityMango)
-                    .origenZoom(id: origen, en: zoom)
-                    .contentShape(Rectangle())
-                    .onTapGesture { onEditar(gasto, origen) }
-                    .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                        Button(role: .destructive) {
-                            Task { await viewModel.deleteExpense(gasto) }
-                        } label: { Label("Borrar", systemImage: "trash") }
-                        Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
-                            .tint(Color.clarityPrimary)
-                    }
-                    .contextMenu {
-                        Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
-                        Button(role: .destructive) {
-                            Task { await viewModel.deleteExpense(gasto) }
-                        } label: { Label("Borrar y devolverlo a la hucha", systemImage: "trash") }
-                    }
-                    .filaDeTarjeta(arriba: 3, abajo: 3)
+                FilaAportacion(gasto: gasto, zoom: zoom, onEditar: onEditar) {
+                    Task { await viewModel.deleteExpense(gasto) }
+                }
+                .filaDeTarjeta(arriba: 3, abajo: 3)
             }
         }
+    }
+}
+
+/// Una aportación a hucha (importe positivo) o una retirada (negativo) en la
+/// lista de la Home. La aportación se edita como un gasto; la retirada solo se
+/// borra, y el formulario no admitiría un importe negativo.
+private struct FilaAportacion: View {
+    let gasto: Expense
+    let zoom: Namespace.ID
+    let onEditar: (Expense, String) -> Void
+    let onBorrar: () -> Void
+
+    private var esRetirada: Bool { gasto.amount < 0 }
+    private var origen: String { "lista-\(gasto.stableId)" }
+    /// Lo que pasa al borrarlo, dicho al revés de como se hizo.
+    private var textoBorrar: String {
+        esRetirada ? "Borrar: vuelve a la hucha" : "Borrar: vuelve a tu dinero libre"
+    }
+
+    var body: some View {
+        FilaGasto(gasto: gasto, color: esRetirada ? .claritySecondary : .clarityMango)
+            .origenZoom(id: origen, en: zoom)
+            .contentShape(Rectangle())
+            .onTapGesture { if !esRetirada { onEditar(gasto, origen) } }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button(role: .destructive, action: onBorrar) { Label("Borrar", systemImage: "trash") }
+                if !esRetirada {
+                    Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
+                        .tint(Color.clarityPrimary)
+                }
+            }
+            .contextMenu {
+                if !esRetirada {
+                    Button { onEditar(gasto, origen) } label: { Label("Editar", systemImage: "pencil") }
+                }
+                Button(role: .destructive, action: onBorrar) { Label(textoBorrar, systemImage: "trash") }
+            }
     }
 }
 

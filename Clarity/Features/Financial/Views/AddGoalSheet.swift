@@ -268,7 +268,7 @@ struct AddGoalSheet: View {
                     } header: {
                         Text("Categoría del gasto")
                     } footer: {
-                        Text("Cada aportación se registra como un gasto en esta categoría.")
+                        Text("Las aportaciones salen en tu lista con esta categoría, sin contar como gasto.")
                     }
                     .onAppear {
                         if savingsCategory.isEmpty, let first = categories.first {

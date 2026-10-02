@@ -39,11 +39,18 @@ final class WidgetDataManager {
         var monthTotal: Double = 0
         var todayCategoryTotals: [String: Double] = [:]
         var monthCategoryTotals: [String: Double] = [:]
+        var apartadoDelMes: Double = 0
 
-        // Las aportaciones a huchas no son gasto (ver `Expense.esAhorro`).
-        for expense in expenses where !expense.esAhorro {
+        for expense in expenses {
             guard let d = Formatters.date(from: expense.date) else { continue }
             let amount = expense.amount
+
+            // Las aportaciones a huchas no son gasto (ver `Expense.esAhorro`),
+            // pero lo apartado tampoco se puede gastar: sale del presupuesto.
+            if expense.esAhorro {
+                if d >= monthStart && d <= now { apartadoDelMes += amount }
+                continue
+            }
 
             if d >= monthStart && d <= now {
                 monthTotal += amount
@@ -76,6 +83,7 @@ final class WidgetDataManager {
 
         // ── Recent 5 expenses (partial sort) ──
         let recentExpenses = expenses
+            .filter { !$0.esAhorro }
             .sorted { ($0.date, $0.name) > ($1.date, $1.name) }
             .prefix(5)
             .map { e -> WidgetExpense in
@@ -91,11 +99,15 @@ final class WidgetDataManager {
         // ── Month name ──
         let monthName = Formatters.fullMonthName(from: now)
 
+        // Lo que se puede gastar: los ingresos menos lo apartado. Así el «te
+        // quedan» de Siri y el % del widget cuadran con lo libre de la Home.
+        let presupuesto = monthBudget.map { $0 - apartadoDelMes }
+
         var data = SharedWidgetData(
             todayTotal:       todayTotal,
             weekTotal:        weekTotal,
             monthTotal:       monthTotal,
-            monthBudget:      monthBudget,   // Lo pasa el caller (HomeVM con income - savings)
+            monthBudget:      presupuesto,
             recentExpenses:   Array(recentExpenses),
             topCategoryEmoji: topEmoji,
             currency:         "€",
@@ -110,7 +122,7 @@ final class WidgetDataManager {
         // Único punto donde coinciden gasto del mes y presupuesto, así que es
         // aquí donde se detecta que el usuario se pasa del límite (#41).
         AnalyticsService.shared.trackBudgetThresholdIfCrossed(
-            spent: monthTotal, budget: monthBudget)
+            spent: monthTotal, budget: presupuesto)
     }
 
     // MARK: - Read (for debugging)
