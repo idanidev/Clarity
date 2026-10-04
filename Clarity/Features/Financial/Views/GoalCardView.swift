@@ -55,8 +55,11 @@ struct GoalCardView: View {
             // Progress Bar
             BarraProgresoClarity(progreso: progreso, color: progressColor, alto: 8)
 
-            // Stats & Action
-            HStack(alignment: .bottom) {
+            // Stats & Action. Con «Sacar» y «Alimentar» no caben junto a la cifra
+            // (partían el texto por sílabas): bajan a su propia fila. Con
+            // `AnyLayout` los botones conservan su identidad al cambiar, y sus
+            // hojas no se cierran al aportar a una hucha que estaba a cero.
+            filaDeCifras {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(mainStatText)
                         .estiloCifraClarity(tamano: 24)
@@ -75,7 +78,7 @@ struct GoalCardView: View {
                     }
                 }
 
-                Spacer()
+                if !puedeSacar { Spacer() }
 
                 if goal.type == .savingsTarget {
                     HStack(spacing: 8) {
@@ -189,6 +192,14 @@ struct GoalCardView: View {
     @State private var showFeedSheet = false
     @State private var showWithdrawSheet = false
 
+    /// En fila junto a la cifra o, con los dos botones de la hucha, debajo.
+    private func filaDeCifras<Contenido: View>(@ViewBuilder _ contenido: () -> Contenido) -> some View {
+        let disposicion = puedeSacar
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+            : AnyLayout(HStackLayout(alignment: .bottom))
+        return disposicion(contenido)
+    }
+
     private var puedeSacar: Bool {
         goal.type == .savingsTarget && goal.currentAmount > 0 && onWithdraw != nil
     }
@@ -202,6 +213,8 @@ struct GoalCardView: View {
                 Image(systemName: "arrow.uturn.backward.circle")
                 Text("Sacar")
             }
+            .lineLimit(1)
+            .fixedSize()
         }
         .buttonStyle(.secundarioClarity)
         .sheet(isPresented: $showWithdrawSheet) {
@@ -220,6 +233,8 @@ struct GoalCardView: View {
                 Image(systemName: "plus.circle.fill")
                 Text("Alimentar")
             }
+            .lineLimit(1)
+            .fixedSize()
         }
         .buttonStyle(.secundarioClarity)
         .origenZoom(id: "aportar", en: ns)
