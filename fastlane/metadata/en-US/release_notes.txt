@@ -1,8 +1,7 @@
 What's new in this version:
 
-• Piggy banks: money you set aside no longer counts as spending. It's no longer free to spend, but it doesn't add to what you've spent or push you over your category limits.
-• New "Sacar" (withdraw) on every piggy bank: the money becomes free again whenever you need it.
-• Contributions are listed separately, under "Apartado en huchas", and you can edit or delete them.
-• When you create a recurring expense's charge by hand, it shows up right away in the list and in its history.
+• Piggy banks: the "Sacar" (withdraw) and "Alimentar" (add) buttons now display properly when the piggy bank has money. The text used to get cut off.
+
+Since 2.4.2, money you set aside in a piggy bank doesn't count as spending or toward your limits, and you can withdraw it whenever you want.
 
 If something isn't working, write to us from Settings → "Algo no funciona".

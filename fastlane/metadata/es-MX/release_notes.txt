@@ -1,8 +1,7 @@
 Novedades de esta versión:
 
-• Huchas: lo que apartas ya no cuenta como gasto. Deja de estar libre, pero no suma en lo gastado ni te hace pasarte de los límites de tus categorías.
-• Nuevo «Sacar» en cada hucha: el dinero vuelve a estar libre cuando lo necesites.
-• Las aportaciones van aparte en la lista, en «Apartado en huchas», y puedes editarlas o borrarlas.
-• Al crear a mano el cargo de un gasto recurrente, sale al momento en la lista y en el historial.
+• Huchas: los botones «Sacar» y «Alimentar» se ven bien cuando la hucha tiene dinero. Antes el texto se cortaba.
+
+Desde la 2.4.2, lo que apartas en una hucha no cuenta como gasto ni para tus límites, y puedes sacarlo cuando quieras.
 
 Si algo no funciona, escríbenos desde Ajustes → «Algo no funciona».
