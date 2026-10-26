@@ -62,18 +62,25 @@ struct RejillaHome: Layout {
 
 // MARK: - Una tarjeta
 
-/// Una tarjeta tal cual se pinta: el contenido de su clase, los últimos
-/// gastos o, solo en edición, el aviso de que este mes no tiene nada.
+/// Una tarjeta tal cual se pinta: el contenido de su clase, una gráfica, los
+/// últimos gastos o, solo en edición, el aviso de que este mes no tiene nada.
 struct CuerpoTarjeta: View {
     let tarjeta: HomeDisposicion.Tarjeta
     let contenidos: [String: HomeResumen.Contenido]
     let ultimos: [Expense]
     let zoom: Namespace.ID
     let onEditar: (Expense, String) -> Void
+    /// Lo de las gráficas. Sin ello (las capturas de los tests) una gráfica
+    /// sale como tarjeta sin datos.
+    var graficas: DatosGraficas? = nil
+    /// Fuera de la Home (edición, copia flotante) salen ya dibujadas.
+    var graficasAnimadas: Bool = true
 
     var body: some View {
         if let clase = tarjeta.clase, let contenido = contenidos[clase] {
             SlotCard(contenido: contenido, compacta: tarjeta.tamano == .pequena)
+        } else if let grafica = tarjeta.grafica, let graficas, tarjeta.conDatos {
+            GraficaCard(grafica: grafica, datos: graficas, animada: graficasAnimadas)
         } else if tarjeta.elemento.tipo == .ultimos, !ultimos.isEmpty {
             UltimosCard(gastos: ultimos, zoom: zoom, onEditar: onEditar)
         } else {

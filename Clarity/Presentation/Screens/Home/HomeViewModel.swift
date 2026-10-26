@@ -578,6 +578,31 @@ final class HomeViewModel {
     /// El filtro sigue aplicando a la lista de gastos.
     var gruposDelMes: [CategoryGroup] { derivados.gruposDelMes }
 
+    /// Lo que pintan las tarjetas de gráficas (#73), en una foto: se saca una
+    /// vez por pintado de la rejilla y baja a cada tarjeta.
+    var datosGraficas: DatosGraficas {
+        DatosGraficas(
+            grupos: gruposDelMes,
+            total: resumen.totalAnalisis,
+            gastosPorDia: gastosPorDia,
+            mediaDiaria: resumen.mediaDiariaAnalisis,
+            diaMasCaro: resumen.diaMasCaro,
+            mes: selectedMonth,
+            nombreMesAnterior: nombreMesAnterior,
+            comparativaPorCategoria: comparativaPorCategoria,
+            comparativa: resumen.comparativaAnalisis,
+            evolucion: evolucion(meses: DatosGraficas.mesesDeEvolucion),
+            historico: allHistoricalExpenses,
+            semanas: semanasDelMes
+        )
+    }
+
+    /// La fila de la primera gráfica puesta en la Home, para bajar hasta ella
+    /// desde la cifra del mes. `nil` sin ninguna.
+    var idFilaDeLaPrimeraGrafica: String? {
+        filasHome.first { $0.contains { $0.grafica != nil } }?.first?.id
+    }
+
     /// "agosto", para los textos de la comparativa.
     var nombreMesAnterior: String {
         guard let prev = Calendar.current.date(byAdding: .month, value: -1, to: selectedMonth) else { return "el mes pasado" }
@@ -816,7 +841,8 @@ final class HomeViewModel {
             .map { (etiqueta: "\($0.desde)–\($0.hasta)", importe: $0.importe) }
 
         // Qué enseña cada tarjeta de la Home, y en qué filas van las que salen.
-        let tarjetas = disposicion.tarjetas(relevancias: resumen.relevancias, hayUltimos: !ultimos.isEmpty)
+        let tarjetas = disposicion.tarjetas(relevancias: resumen.relevancias, hayUltimos: !ultimos.isEmpty,
+                                            hayMesAnterior: !anteriores.isEmpty)
         let filas = HomeDisposicion.filas(tarjetas.filter(\.conDatos), tamano: \.tamano)
 
         return HomeDerivados(

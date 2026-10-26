@@ -1,76 +1,87 @@
-// GraficasPage.swift
-// Segunda página de la Home: en qué se te va (#65).
+// GraficasCards.swift
+// Las gráficas de la Home como tarjetas (#73). Hasta la 2.4 eran la segunda
+// página, «en qué se te va» (#65). Cada una se dibuja al aparecer y lee de
+// `DatosGraficas`, una foto de lo del mes que saca `HomeViewModel`, para
+// pintarse igual en la Home, en edición, en la galería y en las capturas.
 
 import SwiftUI
 import Charts
 
-struct GraficasPage: View {
-    @Bindable var viewModel: HomeViewModel
-    /// Hueco de la barra de navegación, medido por quien presenta la página.
-    var margenSuperior: CGFloat = 0
-    /// Si es la página visible. Al llegar a ella los gráficos se dibujan desde
-    /// cero; al irse se reinician sin animación para dibujarse otra vez al volver.
-    var activa: Bool = true
-    @Environment(\.medidaBarraInferior) private var barra
-    @State private var evolucionMeses = 6
-    /// 0 → 1 al entrar en la página. Todo lo que se dibuja cuelga de aquí.
-    @State private var dibujado: Double = 0
+/// Lo que necesitan las gráficas, sacado una vez por pintado de la rejilla
+/// (`HomeViewModel.datosGraficas`). Sin el ViewModel: así las tarjetas se
+/// pintan igual en la Home, en edición, en la galería y en las capturas.
+struct DatosGraficas {
+    /// Las categorías del mes entero, sin el filtro de la lista.
+    let grupos: [CategoryGroup]
+    /// El total que pasa los filtros, contra el que se reparten los sectores.
+    let total: Double
+    let gastosPorDia: [(dia: Int, importe: Double)]
+    let mediaDiaria: Double
+    let diaMasCaro: HomeResumen.DiaCaro?
+    /// El mes que se enseña.
+    let mes: Date
+    let nombreMesAnterior: String
+    let comparativaPorCategoria: [(categoria: String, actual: Double, anterior: Double)]
+    let comparativa: HomeResumen.Comparativa?
+    /// Los últimos `mesesDeEvolucion` meses hasta el que se enseña.
+    let evolucion: [MonthlySpending]
+    /// Todo el histórico, para el calendario.
+    let historico: [Expense]
+    let semanas: [(etiqueta: String, importe: Double)]
 
-    var body: some View {
-        ScrollView {
-            // Las tarjetas ya no entran deslizándose una a una: moverlas movía su
-            // vidrio, que se recalculaba en cada frame, y era el tirón al llegar
-            // a la página. Lo que se anima es lo de dentro: el anillo se traza,
-            // las barras crecen y las cifras cuentan.
-            LazyVStack(spacing: Spacing.md) {
-                reparto
-                porDia
-                if !viewModel.gastosMesAnterior.isEmpty { comparativa }
-                evolucion
-                calendario
-                semanas
-            }
-            .padding(.horizontal, Spacing.sm)
-            .padding(.top, Spacing.xs)
-        }
-        .contentMargins(.top, margenSuperior, for: .scrollContent)
-        // Llega hasta el borde y pasa por debajo de la barra de pestañas: el
-        // final deja su hueco y el de los puntos de página.
-        .contentMargins(.bottom, barra.total + 28, for: .scrollContent)
-        .scrollIndicators(.hidden)
-        .trackScreen("home_graficas")
-        .onAppear { if activa { dibujar() } }
-        .onChange(of: activa) { _, ahora in
-            if ahora {
-                dibujar()
-            } else {
-                var t = Transaction()
-                t.disablesAnimations = true
-                withTransaction(t) { dibujado = 0 }
-            }
-        }
-        // Cambiar de mes ya no redibuja desde cero: las seis tarjetas a la vez
-        // era medio segundo de tirón con cada flecha.
+    static let mesesDeEvolucion = 6
+}
+
+/// Una gráfica como tarjeta de la Home. Al aparecer se dibuja: el anillo se
+/// traza, las barras crecen y las cifras cuentan. En edición y en la galería
+/// sale ya dibujada, que ahí lo que se mira es el sitio, no el trazo.
+struct GraficaCard: View {
+    let grafica: HomeDisposicion.Grafica
+    let datos: DatosGraficas
+    let animada: Bool
+    /// 0 → 1 al aparecer. Todo lo que se dibuja cuelga de aquí.
+    @State private var dibujado: Double
+
+    init(grafica: HomeDisposicion.Grafica, datos: DatosGraficas, animada: Bool = true) {
+        self.grafica = grafica
+        self.datos = datos
+        self.animada = animada
+        _dibujado = State(initialValue: animada ? 0 : 1)
     }
 
-    private func dibujar() {
-        withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) { dibujado = 1 }
+    var body: some View {
+        Group {
+            switch grafica {
+            case .reparto: reparto
+            case .porDia: porDia
+            case .comparativa: comparativa
+            case .evolucion: evolucion
+            case .calendario: calendario
+            case .semanas: semanas
+            }
+        }
+        // Cambiar de mes no redibuja desde cero: las seis a la vez era medio
+        // segundo de tirón con cada flecha.
+        .onAppear {
+            guard animada, dibujado < 1 else { return }
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.85)) { dibujado = 1 }
+        }
     }
 
     // Reparto por categoría
     private var reparto: some View {
-        let datos = gruposParaAnillo(viewModel.gruposDelMes)
+        let grupos = gruposParaAnillo(datos.grupos)
         // Lo que pasa los filtros: con el total del mes entero y los grupos
         // filtrados, los porcentajes dejaban de sumar el 100 %.
-        let total = viewModel.resumen.totalAnalisis
-        let sectores = porciones(datos: datos, total: total)
+        let total = datos.total
+        let sectores = porciones(datos: grupos, total: total)
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 18) {
                 // En su propia vista: la selección del anillo cambia en cada frame
                 // del arrastre y así solo se repinta él, no la página entera.
-                AnilloReparto(datos: datos, sectores: sectores, total: total, dibujado: dibujado)
+                AnilloReparto(datos: grupos, sectores: sectores, total: total, dibujado: dibujado)
                 VStack(alignment: .leading, spacing: 9) {
-                    ForEach(datos, id: \.id) { g in
+                    ForEach(grupos, id: \.id) { g in
                         HStack(spacing: 8) {
                             Circle().fill(g.color).frame(width: 8, height: 8)
                             Text(g.name.nombreSinEmoji).font(.footnote).lineLimit(1)
@@ -91,13 +102,13 @@ struct GraficasPage: View {
     private var porDia: some View {
         VStack(alignment: .leading, spacing: 12) {
             GraficoPorDia(
-                dias: viewModel.gastosPorDia,
-                media: viewModel.resumen.mediaDiariaAnalisis,
-                mes: viewModel.selectedMonth,
+                dias: datos.gastosPorDia,
+                media: datos.mediaDiaria,
+                mes: datos.mes,
                 dibujado: dibujado
             )
 
-            if let d = viewModel.resumen.diaMasCaro, d.importe > 0 {
+            if let d = datos.diaMasCaro, d.importe > 0 {
                 Aviso(icono: "exclamationmark.circle", color: .error,
                       texto: "Día más caro: **\(d.fecha.formatted(.dateTime.weekday(.wide).day()))** · \(Formatters.currency(d.importe))")
             }
@@ -108,14 +119,14 @@ struct GraficasPage: View {
 
     // Este mes frente al anterior, por categoría
     private var comparativa: some View {
-        let filas = viewModel.comparativaPorCategoria
+        let filas = datos.comparativaPorCategoria
         let maximo = max(filas.map { max($0.actual, $0.anterior) }.max() ?? 1, 1)
         // La de lo filtrado: las filas de abajo también lo son.
-        let c = viewModel.resumen.comparativaAnalisis
+        let c = datos.comparativa
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Frente a \(viewModel.nombreMesAnterior)").font(.subheadline.weight(.semibold))
+                    Text("Frente a \(datos.nombreMesAnterior)").font(.subheadline.weight(.semibold))
                     if let c, c.parcial {
                         Text("hasta el día \(c.hastaDia), en los dos meses").font(.caption2).foregroundStyle(Color.textSecondary)
                     }
@@ -125,7 +136,7 @@ struct GraficasPage: View {
             }
             HStack(spacing: 14) {
                 Label { Text("Este mes") } icon: { Capsule().fill(Color.clarityPrimary).frame(width: 10, height: 6) }
-                Label { Text(viewModel.nombreMesAnterior.capitalized) } icon: { Capsule().fill(Color.primary.opacity(0.28)).frame(width: 10, height: 6) }
+                Label { Text(datos.nombreMesAnterior.capitalized) } icon: { Capsule().fill(Color.primary.opacity(0.28)).frame(width: 10, height: 6) }
             }
             .font(.caption).foregroundStyle(Color.textSecondary)
             ForEach(Array(filas.enumerated()), id: \.element.categoria) { i, f in
@@ -193,10 +204,10 @@ struct GraficasPage: View {
     // Últimos seis meses
     private var evolucion: some View {
         // Con filtros, cada mes suma solo lo que los pasa.
-        let evo = viewModel.evolucion(meses: evolucionMeses)
+        let evo = datos.evolucion
         let media = evo.isEmpty ? 0 : evo.map(\.total).reduce(0, +) / Double(evo.count)
-        let clave = String(Formatters.localDayString(from: viewModel.selectedMonth).prefix(7))
-        return GraficoEvolucion(meses: evolucionMeses, evo: evo, media: media, clave: clave, dibujado: dibujado)
+        let clave = String(Formatters.localDayString(from: datos.mes).prefix(7))
+        return GraficoEvolucion(meses: DatosGraficas.mesesDeEvolucion, evo: evo, media: media, clave: clave, dibujado: dibujado)
             .padding(16)
             .glassCard()
     }
@@ -204,14 +215,14 @@ struct GraficasPage: View {
 
 // MARK: - Cuándo
 
-extension GraficasPage {
+extension GraficaCard {
     private var calendario: some View {
-        ExpenseCalendarView(expenses: viewModel.allHistoricalExpenses, mes: viewModel.selectedMonth)
+        ExpenseCalendarView(expenses: datos.historico, mes: datos.mes)
             .glassCard()
     }
 
     private var semanas: some View {
-        let filas = viewModel.semanasDelMes
+        let filas = datos.semanas
         let maximo = filas.map(\.importe).max() ?? 0
         return VStack(alignment: .leading, spacing: 12) {
             Text("Por semanas").font(.subheadline.weight(.semibold))

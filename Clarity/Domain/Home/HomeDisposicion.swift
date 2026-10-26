@@ -7,6 +7,10 @@
 // tarjetas, pequeñas (media fila) o anchas (fila entera), y una «pila
 // inteligente» enseña sola lo más relevante que no esté ya colocado a mano.
 //
+// Las gráficas que iban en una segunda página (#73) son tarjetas anchas más
+// (`Tipo.grafica`): se añaden, mueven y quitan como las demás, y quien nunca
+// edita ve el anillo de categorías debajo de las tres pilas.
+//
 // Todo lo que decide qué se pinta y dónde vive aquí, sin SwiftUI, para
 // probarlo con un puñado de datos. La vista solo pinta lo que sale de aquí.
 
@@ -23,6 +27,35 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case ancha
     }
 
+    /// Las gráficas de la Home. Hasta la 2.4 iban en una segunda página que se
+    /// pasaba deslizando; ahora cada una es una tarjeta ancha (#73). El valor en
+    /// crudo es lo que se guarda en la cuenta.
+    enum Grafica: String, Sendable, Codable, CaseIterable {
+        case reparto, porDia, comparativa, evolucion, calendario, semanas
+
+        var nombre: String {
+            switch self {
+            case .reparto: "Anillo de categorías"
+            case .porDia: "Gasto por día"
+            case .comparativa: "Mes contra mes"
+            case .evolucion: "Últimos seis meses"
+            case .calendario: "Calendario"
+            case .semanas: "Por semanas"
+            }
+        }
+
+        var descripcion: String {
+            switch self {
+            case .reparto: "Lo que pesa cada categoría, en un anillo que se toca."
+            case .porDia: "Cuánto gastaste cada día, con el más caro señalado."
+            case .comparativa: "Este mes frente al anterior, categoría a categoría."
+            case .evolucion: "Lo gastado en cada uno de los últimos seis meses."
+            case .calendario: "El mes en un calendario, con el importe de cada día."
+            case .semanas: "Lo gastado en cada semana del mes."
+            }
+        }
+    }
+
     enum Tipo: Sendable, Hashable {
         /// Una clase de `HomeResumen.Contenido` colocada a mano.
         case clase(String)
@@ -30,6 +63,8 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case pila
         /// Los tres últimos gastos del mes.
         case ultimos
+        /// Una gráfica, siempre a lo ancho.
+        case grafica(Grafica)
     }
 
     struct Elemento: Sendable, Hashable, Identifiable {
@@ -53,6 +88,12 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         }
 
         var esPila: Bool { tipo == .pila }
+
+        /// La gráfica que pinta, si lo es.
+        var grafica: Grafica? {
+            if case .grafica(let g) = tipo { return g }
+            return nil
+        }
 
         /// La clase colocada a mano, si lo es.
         var clase: String? {
@@ -87,11 +128,14 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
 
     // MARK: - Por defecto y migración
 
-    /// La Home de siempre: hueco A, B y C en una fila, los últimos gastos y el E.
+    /// La Home de siempre: hueco A, B y C en una fila, el anillo de categorías
+    /// (lo primero que enseñaba la página de Gráficas, #73), los últimos gastos
+    /// y el E.
     static let porDefecto = HomeDisposicion(elementos: [
         Elemento(id: "pila-a", tipo: .pila, tamano: .ancha, hueco: .a),
         Elemento(id: "pila-b", tipo: .pila, tamano: .pequena, hueco: .b),
         Elemento(id: "pila-c", tipo: .pila, tamano: .pequena, hueco: .c),
+        Elemento(id: "grafica-reparto", tipo: .grafica(.reparto), tamano: .ancha),
         Elemento(id: "ultimos", tipo: .ultimos, tamano: .ancha),
         Elemento(id: "pila-e", tipo: .pila, tamano: .ancha, hueco: .e),
     ])
@@ -160,6 +204,8 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case .pila: [.ancha, .pequena]
         // Tres filas con nombre, fecha, categoría e importe: en media fila no caben.
         case .ultimos: [.ancha]
+        // Un anillo, un calendario o seis barras de meses no caben en media fila.
+        case .grafica: [.ancha]
         }
     }
 
@@ -168,6 +214,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case .clase(let c): ficha(c)?.nombre ?? c
         case .pila: "Pila inteligente"
         case .ultimos: "Últimos gastos"
+        case .grafica(let g): g.nombre
         }
     }
 
@@ -198,6 +245,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         var id: String { elemento.id }
         var tamano: Tamano { elemento.tamano }
         var esPila: Bool { elemento.esPila }
+        var grafica: Grafica? { elemento.grafica }
     }
 
     /// Todas las tarjetas, en orden, con lo que enseña cada una.
@@ -206,7 +254,9 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
     ///   - relevancias: las de `HomeResumen`: una clase con datos este mes y
     ///     cuánto importa. Una clase que no está no tiene datos.
     ///   - hayUltimos: si el mes tiene algún gasto que enseñar en «Últimos».
-    func tarjetas(relevancias: [String: Double], hayUltimos: Bool) -> [Tarjeta] {
+    ///   - hayMesAnterior: si hay gastos del mes anterior; sin ellos, «Mes contra
+    ///     mes» no tiene qué dibujar.
+    func tarjetas(relevancias: [String: Double], hayUltimos: Bool, hayMesAnterior: Bool = true) -> [Tarjeta] {
         let pilas = contenidoDePilas(relevancias: relevancias)
         return elementos.compactMap { e in
             switch e.tipo {
@@ -219,6 +269,9 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
                 return Tarjeta(elemento: e, clase: clase, conDatos: clase != nil)
             case .ultimos:
                 return Tarjeta(elemento: e, clase: nil, conDatos: hayUltimos)
+            case .grafica(let g):
+                // Con gastos en el mes siempre hay qué dibujar; mes contra mes, solo con mes anterior.
+                return Tarjeta(elemento: e, clase: nil, conDatos: hayUltimos && (g != .comparativa || hayMesAnterior))
             }
         }
     }
@@ -276,13 +329,14 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
 
     func contiene(_ tipo: Tipo) -> Bool { elementos.contains { $0.tipo == tipo } }
 
-    /// Si se puede añadir: las clases y los últimos gastos, una vez cada uno;
+    /// Si se puede añadir: las clases, las gráficas y los últimos gastos, una vez cada uno;
     /// pilas, las que se quiera.
     func admite(_ tipo: Tipo) -> Bool {
         switch tipo {
         case .pila: true
         case .clase(let c): Self.ficha(c) != nil && !contiene(tipo)
         case .ultimos: !contiene(tipo)
+        case .grafica: !contiene(tipo)
         }
     }
 
@@ -365,7 +419,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
     /// Sin repetidos ni tamaños imposibles. Lo que llega de la cuenta o de otra
     /// versión pasa por aquí antes de pintarse.
     func normalizada() -> HomeDisposicion {
-        var ids = Set<String>(), clases = Set<String>()
+        var ids = Set<String>(), clases = Set<String>(), graficas = Set<Grafica>()
         var hayUltimos = false
         var limpios: [Elemento] = []
         for var e in elementos {
@@ -375,6 +429,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
             case .ultimos:
                 guard !hayUltimos else { continue }
                 hayUltimos = true
+            case .grafica(let g): guard graficas.insert(g).inserted else { continue }
             case .pila: break
             }
             let admitidos = Self.tamanos(de: e.tipo)
@@ -469,7 +524,7 @@ nonisolated extension HomeDisposicion: Codable {
 
 nonisolated extension HomeDisposicion.Elemento: Codable {
     private enum Claves: String, CodingKey {
-        case id, tipo, clase, tamano, hueco
+        case id, tipo, clase, grafica, tamano, hueco
     }
 
     init(from decoder: Decoder) throws {
@@ -479,6 +534,7 @@ nonisolated extension HomeDisposicion.Elemento: Codable {
         case "clase": tipo = .clase(try c.decode(String.self, forKey: .clase))
         case "pila": tipo = .pila
         case "ultimos": tipo = .ultimos
+        case "grafica": tipo = .grafica(try c.decode(HomeDisposicion.Grafica.self, forKey: .grafica))
         default:
             throw DecodingError.dataCorruptedError(forKey: .tipo, in: c, debugDescription: "Tipo de tarjeta desconocido")
         }
@@ -495,6 +551,9 @@ nonisolated extension HomeDisposicion.Elemento: Codable {
             try c.encode(clase, forKey: .clase)
         case .pila: try c.encode("pila", forKey: .tipo)
         case .ultimos: try c.encode("ultimos", forKey: .tipo)
+        case .grafica(let grafica):
+            try c.encode("grafica", forKey: .tipo)
+            try c.encode(grafica, forKey: .grafica)
         }
         try c.encode(tamano, forKey: .tamano)
         try c.encodeIfPresent(hueco?.rawValue, forKey: .hueco)

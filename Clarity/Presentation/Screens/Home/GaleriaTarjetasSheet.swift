@@ -36,7 +36,8 @@ struct GaleriaTarjetasSheet: View {
                         withAnimation(.snappy) { viewModel.restablecerDisposicion() }
                         HapticManager.shared.notification(.success)
                         dismiss()
-                    }
+                    },
+                    graficas: viewModel.datosGraficas
                 )
                 .padding(.horizontal, Spacing.md)
                 .padding(.bottom, Spacing.xl)
@@ -64,6 +65,9 @@ struct ContenidoGaleria: View {
     let onAnadir: (HomeDisposicion.Tipo, HomeDisposicion.Tamano) -> Void
     let onDevolver: (String) -> Void
     let onRestablecer: () -> Void
+    /// Lo de las gráficas, para su sección y sus vistas previas. Sin ello (las
+    /// capturas de los tests) la sección no sale.
+    var graficas: DatosGraficas? = nil
 
     @State private var preguntandoRestablecer = false
 
@@ -100,6 +104,22 @@ struct ContenidoGaleria: View {
                 }
             }
 
+            // Las gráficas (#73): las seis, con los datos de verdad del mes.
+            if let graficas {
+                VStack(alignment: .leading, spacing: Spacing.sm) {
+                    CabeceraSeccionClarity(titulo: "Gráficas")
+                    ForEach(HomeDisposicion.Grafica.allCases, id: \.self) { grafica in
+                        FilaGaleria(
+                            tipo: .grafica(grafica),
+                            nombre: grafica.nombre,
+                            descripcion: grafica.descripcion,
+                            previa: { _ in PreviaDeGaleria(grafica: grafica, graficas: graficas, esEjemplo: false) },
+                            enLaHome: disposicion.contiene(.grafica(grafica)),
+                            onAnadir: onAnadir
+                        )
+                    }
+                }
+            }
             if !disposicion.contiene(.ultimos) {
                 VStack(alignment: .leading, spacing: Spacing.sm) {
                     CabeceraSeccionClarity(titulo: "Gastos")
@@ -182,6 +202,9 @@ struct ContenidoGaleria: View {
 struct PreviaDeGaleria {
     var contenido: HomeResumen.Contenido?
     var ultimos: [Expense] = []
+    /// Una gráfica, con lo que necesita para dibujarse.
+    var grafica: HomeDisposicion.Grafica? = nil
+    var graficas: DatosGraficas? = nil
     /// Sin datos este mes: un ejemplo, y se dice.
     let esEjemplo: Bool
 }
@@ -212,6 +235,8 @@ private struct FilaGaleria: View {
                 Group {
                     if let contenido = vista.contenido {
                         SlotCard(contenido: contenido, compacta: elegido == .pequena)
+                    } else if let grafica = vista.grafica, let graficas = vista.graficas {
+                        GraficaCard(grafica: grafica, datos: graficas, animada: false)
                     } else {
                         UltimosCard(gastos: vista.ultimos, zoom: sinZoom, onEditar: { _, _ in })
                     }

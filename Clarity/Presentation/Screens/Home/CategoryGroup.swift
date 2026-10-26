@@ -1,6 +1,6 @@
 // CategoryGroup.swift
 // Gastos agrupados por categoría y subcategoría: lo que construye
-// `HomeViewModel.agrupar` y pintan `ResumenPage` y `GraficasPage`.
+// `HomeViewModel.agrupar` y pintan `ResumenPage` y las tarjetas de `GraficasCards`.
 // Vivían en ExpandableExpenseList.swift, que se eliminó por no tener usos.
 
 import SwiftUI

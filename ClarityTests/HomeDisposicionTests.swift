@@ -288,6 +288,69 @@ struct HomeDisposicionTests {
         #expect(!otra)
     }
 
+    // MARK: - Gráficas como tarjetas (#73)
+
+    @Test("Las gráficas son tarjetas anchas, una vez cada una, y el anillo va por defecto debajo de las pilas")
+    func graficas() {
+        for g in D.Grafica.allCases {
+            #expect(D.tamanos(de: .grafica(g)) == [.ancha], "\(g)")
+            #expect(D.nombre(de: .grafica(g)) == g.nombre)
+        }
+        #expect(D.porDefecto.elementos.map(\.id) == ["pila-a", "pila-b", "pila-c", "grafica-reparto", "ultimos", "pila-e"])
+        #expect(D.porDefecto.contiene(.grafica(.reparto)))
+        #expect(D.porDefecto.elementos[3].grafica == .reparto)
+
+        var d = D.porDefecto
+        // Una vez cada una, y a lo ancho aunque se pida pequeña.
+        #expect(d.anadir(.grafica(.reparto)) == nil)
+        #expect(d.anadir(.grafica(.porDia), tamano: .pequena, id: "p") == "p")
+        #expect(d.elementos.first == D.Elemento(id: "p", tipo: .grafica(.porDia), tamano: .ancha))
+        #expect(d.anadir(.grafica(.porDia)) == nil)
+        #expect(!d.cambiarTamano("p", a: .pequena))
+
+        // Se pinta mientras el mes tenga gastos, sin clase ni relevancia.
+        let t = tarjetas(d, [:])
+        let anillo = t.first { $0.id == "grafica-reparto" }
+        #expect(anillo?.clase == nil)
+        #expect(anillo?.grafica == .reparto)
+        #expect(anillo?.conDatos == true)
+        #expect(tarjetas(d, [:], ultimos: false).first { $0.id == "p" }?.conDatos == false)
+
+        // Mes contra mes necesita mes anterior; las demás, no.
+        var e = D.porDefecto
+        e.anadir(.grafica(.comparativa), id: "m")
+        let sinAnterior = e.tarjetas(relevancias: [:], hayUltimos: true, hayMesAnterior: false)
+        #expect(sinAnterior.first { $0.id == "m" }?.conDatos == false)
+        #expect(sinAnterior.first { $0.id == "grafica-reparto" }?.conDatos == true)
+    }
+
+    @Test("Las gráficas van y vuelven del JSON, repetidas se quedan en una, y una que no se conoce se salta")
+    func graficasJSON() throws {
+        var d = D.porDefecto
+        d.anadir(.grafica(.calendario), id: "c")
+        let data = try JSONEncoder().encode(d)
+        #expect(try JSONDecoder().decode(D.self, from: data) == d)
+        let objeto = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let elementos = try #require(objeto["elementos"] as? [[String: Any]])
+        #expect(elementos[0]["tipo"] as? String == "grafica")
+        #expect(elementos[0]["grafica"] as? String == "calendario")
+        #expect(elementos[0]["tamano"] as? String == "ancha")
+
+        let json = """
+        {"elementos": [
+            {"id": "1", "tipo": "grafica", "grafica": "semanas", "tamano": "pequena"},
+            {"id": "2", "tipo": "grafica", "grafica": "semanas", "tamano": "ancha"},
+            {"id": "3", "tipo": "grafica", "grafica": "holograma", "tamano": "ancha"},
+            {"id": "4", "tipo": "pila", "tamano": "ancha", "hueco": "a"}
+        ]}
+        """
+        let leida = try JSONDecoder().decode(D.self, from: Data(json.utf8))
+        #expect(leida.elementos.map(\.id) == ["1", "4"])
+        // Una gráfica no cabe en media fila: vuelve a lo ancho.
+        #expect(leida.elementos[0].tamano == .ancha)
+        #expect(leida.elementos[0].grafica == .semanas)
+    }
+
     // MARK: - iPhone y cuenta
 
     @Test("Gana la más reciente; la del iPhone se sube si la cuenta no la tiene; la no editada, nunca")

@@ -1,8 +1,8 @@
 // HomeView.swift
-// La Home (#65): tres páginas que se pasan deslizando —resumen, gráficas,
-// calendario— y ningún cuadro vacío. La barra flotante que había para elegir
-// vista se fue: costaba 60 pt fijos sobre los gastos y los puntos de abajo
-// dicen lo mismo sin ocupar nada.
+// La Home (#65): la cifra del mes, las tarjetas y la lista de gastos en un
+// solo desplazamiento, y ningún cuadro vacío. Hasta la 2.4 las gráficas eran
+// una segunda página que se pasaba deslizando; desde #73 son tarjetas más de
+// la rejilla, y los puntos de página se fueron con ella.
 
 import SwiftUI
 
@@ -10,10 +10,6 @@ struct HomeView: View {
     @State private var viewModel: HomeViewModel
     private var userDataManager = UserDataManager.shared
 
-    /// Página visible del carrusel.
-    @State private var pagina: HomePagina = .resumen
-    /// La barra de pestañas flotante: el carrusel llega hasta el borde y deja su hueco.
-    @Environment(\.medidaBarraInferior) private var barra
     @State private var expenseToEdit: Expense?
     /// Desde dónde se abrió la edición, para que la hoja crezca desde ahí (hasta iOS 26).
     @State private var origenEdicion = "gasto"
@@ -25,15 +21,17 @@ struct HomeView: View {
     /// El modo edición de las tarjetas, como el de la pantalla de inicio.
     @State private var edicion = HomeEdicion()
     @State private var showAddExpense = false
-    /// El buscador se abre desde la barra y ocupa su fila encima del carrusel:
+    /// El buscador se abre desde la barra y ocupa su fila encima de la lista:
     /// el `.searchable` nativo se abría encima de la primera tarjeta porque el
-    /// carrusel horizontal no le hacía hueco.
+    /// desplazamiento no le hacía hueco.
     @State private var buscando = false
     @FocusState private var buscadorEnfocado: Bool
     /// Pantalla a la que se navega desde una tarjeta.
     @State private var rutaPush: HomeDestino?
     /// Sube para pedir a Resumen que baje hasta la lista de gastos.
     @State private var irALista = 0
+    /// Sube para pedir a Resumen que baje hasta la primera gráfica.
+    @State private var irAGraficas = 0
     /// Para saltar a otra pestaña (Metas). Lo pone MainTabView, que es quien las tiene.
     var abrirPestana: (Int) -> Void = { _ in }
 
@@ -68,7 +66,12 @@ struct HomeView: View {
                 // Modo demo (capturas): la página o el modo pedidos con `-demoPantalla`.
                 if ModoDemo.activo {
                     switch ModoDemo.pantalla {
-                    case .graficas: pagina = .graficas
+                    case .graficas:
+                        // Con la lista ya montada: hasta entonces no hay fila a la que bajar.
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(800))
+                            irAGraficas += 1
+                        }
                     case .edicion: edicion.entrar()
                     case .home, .metas: break
                     }
@@ -155,8 +158,6 @@ struct HomeView: View {
             // La barra de navegación del sistema se queda fuera: la del diseño es
             // una píldora de vidrio con el mes y los iconos, y eso se pinta aquí.
             .toolbar(.hidden, for: .navigationBar)
-            // Un toque al encajar cada página, como al pasar de pantalla de inicio.
-            .sensoryFeedback(.selection, trigger: pagina)
     }
 
     // MARK: - Contenido
@@ -186,21 +187,16 @@ struct HomeView: View {
                 } else if viewModel.gastosDelMes.isEmpty && viewModel.aportacionesDelMes.isEmpty
                             && viewModel.searchText.isEmpty && !viewModel.cargandoMes {
                     // Solo con el mes ya cargado. Mientras llega uno nuevo se
-                    // queda el carrusel: cambiarlo por este cartel y volver a
-                    // montarlo entero era el tirón de cada cambio de mes.
+                    // queda la lista: cambiarla por este cartel y volver a
+                    // montarla entera era el tirón de cada cambio de mes.
                     emptyStateView
                 } else {
-                    // Las páginas llegan hasta el borde y pasan por debajo de la
-                    // barra de pestañas; cada una deja su hueco al final. Los
-                    // puntos se colocan desde ese mismo borde, justo encima de la
-                    // barra: con el carrusel ignorando el área segura, un relleno
-                    // sobre el área segura los dejaba tapados por ella.
+                    // La lista llega hasta el borde y pasa por debajo de la barra
+                    // de pestañas; deja su hueco al final.
                     ZStack(alignment: .bottom) {
-                        // En edición, el carrusel sigue montado debajo —al salir
-                        // se vuelve a la misma posición de la lista— pero ni se
-                        // ve ni se toca: pasar de página a medio arrastre movería
-                        // la Home entera en vez de la tarjeta.
-                        carrusel
+                        // En edición, la lista sigue montada debajo —al salir se
+                        // vuelve a la misma posición— pero ni se ve ni se toca.
+                        resumen
                             .opacity(edicion.activa ? 0 : 1)
                             .allowsHitTesting(!edicion.activa)
                             .accessibilityHidden(edicion.activa)
@@ -208,13 +204,10 @@ struct HomeView: View {
                             EdicionHomeView(viewModel: viewModel, edicion: edicion,
                                             margenSuperior: Spacing.xxs, zoom: zoom)
                                 .transition(.opacity)
-                        } else {
-                            HomePuntos(actual: pagina)
-                                .padding(.bottom, barra.total + 6)
                         }
                     }
                     // El teclado solo cuenta si es el del buscador. El de una
-                    // hoja (añadir o editar gasto) encogía el carrusel que
+                    // hoja (añadir o editar gasto) encogía la lista que
                     // queda debajo y subía la cabecera sobre el reloj.
                     .ignoresSafeArea(buscando ? .container : .all, edges: .bottom)
                 }
@@ -314,9 +307,15 @@ struct HomeView: View {
     private func irA(_ destino: HomeDestino) {
         HapticManager.shared.selection()
         switch destino {
-        case .graficas: withAnimation(.snappy) { pagina = .graficas }
+        case .graficas:
+            // A la primera gráfica puesta; sin ninguna, a la galería, que es donde se añaden.
+            if viewModel.idFilaDeLaPrimeraGrafica != nil {
+                irAGraficas += 1
+            } else {
+                edicion.entrar()
+                edicion.mostrandoGaleria = true
+            }
         case .gastos:
-            withAnimation(.snappy) { pagina = .resumen }
             irALista += 1
         case .metas: abrirPestana(1)
         case .recurrentes, .deudas: rutaPush = destino
@@ -358,47 +357,24 @@ struct HomeView: View {
         .onAppear { buscadorEnfocado = true }
     }
 
-    /// Las páginas, a lo ancho, encajando de una en una.
-    ///
-    /// `TabView` paginado, no dos ScrollView anidados: el TabView bloquea el
-    /// eje y solo se mueve a los lados. Con el ScrollView horizontal, un gesto
-    /// en diagonal movía las dos cosas a la vez. Lo que rompía iOS 26 no era
-    /// el TabView anidado sino los shaders sobre el vidrio (ver Efectos.swift).
-    ///
-    /// Las páginas ya no se alejan ni se apagan al deslizar: escalar y apagar
-    /// una página llena de vidrio obligaba a recalcular cada tarjeta en cada
-    /// frame del gesto, y era el tirón al pasar a Gráficas.
-    private var carrusel: some View {
-        TabView(selection: $pagina) {
-            ForEach(HomePagina.allCases) { p in
-                pagina(p, margenSuperior: Spacing.xxs)
-                    .tag(p)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        // El paginado no hereda el hueco de la barra: cada página deja el suyo.
+    /// La Home entera: la cifra del mes, las tarjetas (gráficas incluidas) y la
+    /// lista de gastos, en un solo desplazamiento.
+    private var resumen: some View {
+        ResumenPage(
+            viewModel: viewModel,
+            margenSuperior: Spacing.xxs,
+            irALista: irALista,
+            irAGraficas: irAGraficas,
+            zoom: zoom,
+            onEditar: { gasto, origen in
+                origenEdicion = origen
+                expenseToEdit = gasto
+            },
+            onDestino: irA,
+            edicion: edicion
+        )
+        // No hereda el hueco de la barra: la lista deja el suyo.
         .sinHuecoBarraInferior()
-    }
-
-    @ViewBuilder
-    private func pagina(_ p: HomePagina, margenSuperior: CGFloat) -> some View {
-        switch p {
-        case .resumen:
-            ResumenPage(
-                viewModel: viewModel,
-                margenSuperior: margenSuperior,
-                irALista: irALista,
-                zoom: zoom,
-                onEditar: { gasto, origen in
-                    origenEdicion = origen
-                    expenseToEdit = gasto
-                },
-                onDestino: irA,
-                edicion: edicion
-            )
-        case .graficas:
-            GraficasPage(viewModel: viewModel, margenSuperior: margenSuperior, activa: pagina == .graficas)
-        }
     }
 
     // MARK: - View States
@@ -532,36 +508,6 @@ private struct HomeTituloMes: View {
 enum HomeDestino: Hashable {
     case graficas, gastos, metas, recurrentes, deudas
 }
-
-// MARK: - Páginas
-
-enum HomePagina: CaseIterable, Identifiable, Hashable {
-    case resumen, graficas
-    var id: Self { self }
-}
-
-/// Los puntos de página. El activo se alarga, como en la pantalla de inicio.
-private struct HomePuntos: View {
-    let actual: HomePagina
-
-    var body: some View {
-        HStack(spacing: 7) {
-            ForEach(HomePagina.allCases) { p in
-                Capsule()
-                    .fill(p == actual ? Color.clarityPrimary : Color.primary.opacity(0.22))
-                    .frame(width: p == actual ? 22 : 5, height: 5)
-            }
-        }
-        // Una cápsula oscura detrás: los puntos flotan sobre la lista que pasa
-        // por debajo y sin fondo se mezclaban con el texto de las tarjetas.
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color.black.opacity(0.35), in: Capsule())
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: actual)
-        .accessibilityHidden(true)
-    }
-}
-
 
 #Preview {
     NavigationStack { HomeView() }

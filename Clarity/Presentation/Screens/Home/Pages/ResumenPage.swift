@@ -11,6 +11,8 @@ struct ResumenPage: View {
     var margenSuperior: CGFloat = 0
     /// Cambia cuando otra tarjeta pide bajar hasta la lista de gastos.
     var irALista: Int = 0
+    /// Cambia cuando la cifra del mes pide bajar hasta la primera gráfica.
+    var irAGraficas: Int = 0
     /// Las transiciones de zoom de la Home: cada tarjeta que abre una pantalla es un origen.
     let zoom: Namespace.ID
     /// El gasto y desde dónde se tocó, para que la hoja crezca desde ahí.
@@ -46,7 +48,8 @@ struct ResumenPage: View {
             List {
                 let r = viewModel.resumen
 
-                // El total lleva a Gráficas: es donde se desmenuza.
+                // El total lleva al anillo de categorías (o a la galería, si no
+                // hay ninguna gráfica puesta): es donde se desmenuza.
                 Button { onDestino(.graficas) } label: {
                     HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior, filtrado: filtrado)
                 }
@@ -77,11 +80,15 @@ struct ResumenPage: View {
             .scrollContentBackground(.hidden)
             .contentMargins(.top, margenSuperior, for: .scrollContent)
             // Llega hasta el borde y pasa por debajo de la barra de pestañas: el
-            // final deja su hueco y el de los puntos de página.
-            .contentMargins(.bottom, barra.total + 28, for: .scrollContent)
+            // final deja su hueco.
+            .contentMargins(.bottom, barra.total + 12, for: .scrollContent)
             .scrollIndicators(.hidden)
             .onChange(of: irALista) { _, _ in
                 withAnimation(.snappy) { proxy.scrollTo("lista", anchor: .top) }
+            }
+            .onChange(of: irAGraficas) { _, _ in
+                guard let id = viewModel.idFilaDeLaPrimeraGrafica else { return }
+                withAnimation(.snappy) { proxy.scrollTo(id, anchor: .top) }
             }
         }
         .trackScreen("home")
@@ -278,9 +285,14 @@ private struct TarjetasDeLaHome: View {
     var body: some View {
         let contenidos = viewModel.resumen.disponibles
         let ultimos = viewModel.ultimosGastos
+        // Una foto por pintado de la rejilla, no una por gráfica.
+        let graficas = viewModel.datosGraficas
         ForEach(viewModel.filasHome, id: \.first?.id) { fila in
-            FilaDeTarjetas(fila: fila, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones)
+            FilaDeTarjetas(fila: fila, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones,
+                           graficas: graficas)
                 .filaDeTarjeta()
+                // Para bajar hasta la fila de la primera gráfica desde la cifra del mes.
+                .id(fila.first?.id ?? "")
         }
     }
 }
@@ -293,11 +305,13 @@ struct FilaDeTarjetas: View {
     let ultimos: [Expense]
     let zoom: Namespace.ID
     let acciones: AccionesDeTarjeta
+    var graficas: DatosGraficas? = nil
 
     var body: some View {
         RejillaHome {
             ForEach(fila) { tarjeta in
-                TarjetaNormal(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones)
+                TarjetaNormal(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones,
+                              graficas: graficas)
                     .layoutValue(key: TamanoEnRejilla.self, value: tarjeta.tamano)
             }
         }
@@ -312,6 +326,7 @@ private struct TarjetaNormal: View {
     let ultimos: [Expense]
     let zoom: Namespace.ID
     let acciones: AccionesDeTarjeta
+    let graficas: DatosGraficas?
 
     var body: some View {
         Group {
@@ -324,9 +339,9 @@ private struct TarjetaNormal: View {
                 }
                 .buttonStyle(TarjetaButtonStyle())
             } else {
-                // Los últimos gastos: cada fila abre su gasto.
+                // Las gráficas, y los últimos gastos: cada fila abre su gasto.
                 CuerpoTarjeta(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom,
-                              onEditar: acciones.editarGasto)
+                              onEditar: acciones.editarGasto, graficas: graficas)
             }
         }
         .contextMenu { MenuDeTarjeta(tarjeta: tarjeta, acciones: acciones) }

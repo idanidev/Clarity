@@ -159,7 +159,7 @@ Apple Swift Testing (`import Testing`). `@Test` + `#expect()` + `try #require()`
 | `Expenses` / `AddExpense` | `Features/Expenses/`, `Features/AddExpense/` | CRUD + paginación |
 | `RecurringExpenses` | `Features/RecurringExpenses/` | LOCAL (NO Cloud Functions) |
 | `Financial` | `Features/Financial/` | Pestaña Metas (`FinancialDashboardView`): metas, nómina/presupuesto mensual (`MonthlyBudgetsViewModel`), ingresos extra |
-| `Charts` | `Features/Charts/` | Solo `CategoryBreakdownTable` (desglose de una categoría, menú contextual de `ResumenPage`). Las gráficas viven en la Home: `Presentation/Screens/Home/Pages/GraficasPage.swift` |
+| `Charts` | `Features/Charts/` | Solo `CategoryBreakdownTable` (desglose de una categoría, menú contextual de `ResumenPage`). Las gráficas son tarjetas de la Home (#73): `Presentation/Screens/Home/Pages/GraficasCards.swift` |
 
 ## Data Persistence
 

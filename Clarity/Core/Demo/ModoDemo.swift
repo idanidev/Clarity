@@ -14,7 +14,8 @@
 // Analytics no se arranca.
 //
 // `-demoPantalla home|graficas|metas|edicion` abre directamente cada pantalla
-// (`edicion` es la Home en modo edición), para capturar sin automatizar toques.
+// (`graficas` es la Home bajada hasta el anillo de categorías, `edicion` la
+// Home en modo edición), para capturar sin automatizar toques.
 
 #if DEBUG
 import Foundation

@@ -30,7 +30,8 @@ struct EdicionHomeView: View {
                 ultimos: viewModel.ultimosGastos,
                 edicion: edicion,
                 zoom: zoom,
-                acciones: acciones
+                acciones: acciones,
+                graficas: viewModel.datosGraficas
             )
             .frame(minHeight: max(altoVisible - margenSuperior - barra.total - 28, 0), alignment: .top)
             // Detrás de las tarjetas: un toque en un hueco sale de la edición, y
@@ -109,6 +110,8 @@ struct RejillaEditable: View {
     let edicion: HomeEdicion
     let zoom: Namespace.ID
     let acciones: AccionesDeEdicion
+    /// Lo de las gráficas; sin ello (las capturas de los tests) salen sin datos.
+    var graficas: DatosGraficas? = nil
 
     var body: some View {
         VStack(spacing: Spacing.sm) {
@@ -131,6 +134,7 @@ struct RejillaEditable: View {
                         tarjeta: tarjeta,
                         contenidos: resumen.disponibles,
                         ultimos: ultimos,
+                        graficas: graficas,
                         zoom: zoom,
                         edicion: edicion,
                         esPrimera: indice == 0,
@@ -154,7 +158,8 @@ struct RejillaEditable: View {
     private var copiaFlotante: some View {
         if let id = edicion.arrastrando, let tarjeta = tarjetas.first(where: { $0.id == id }) {
             let marco = edicion.marcoArrastre
-            CuerpoTarjeta(tarjeta: tarjeta, contenidos: resumen.disponibles, ultimos: ultimos, zoom: zoom, onEditar: { _, _ in })
+            CuerpoTarjeta(tarjeta: tarjeta, contenidos: resumen.disponibles, ultimos: ultimos, zoom: zoom, onEditar: { _, _ in },
+                          graficas: graficas, graficasAnimadas: false)
                 .opacity(tarjeta.conDatos ? 1 : 0.55)
                 .frame(width: marco.width, height: marco.height)
                 .scaleEffect(edicion.soltando ? 1 : 1.04)
@@ -196,6 +201,7 @@ private struct TarjetaEditable: View {
     let tarjeta: HomeDisposicion.Tarjeta
     let contenidos: [String: HomeResumen.Contenido]
     let ultimos: [Expense]
+    let graficas: DatosGraficas?
     let zoom: Namespace.ID
     let edicion: HomeEdicion
     let esPrimera: Bool
@@ -215,7 +221,8 @@ private struct TarjetaEditable: View {
 
     var body: some View {
         let arrastrada = edicion.arrastrando == tarjeta.id
-        CuerpoTarjeta(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom, onEditar: { _, _ in })
+        CuerpoTarjeta(tarjeta: tarjeta, contenidos: contenidos, ultimos: ultimos, zoom: zoom, onEditar: { _, _ in },
+                      graficas: graficas, graficasAnimadas: false)
             // Lo de dentro no se toca en edición: las filas de «Últimos» son
             // botones y se quedarían el dedo del arrastre.
             .allowsHitTesting(false)
