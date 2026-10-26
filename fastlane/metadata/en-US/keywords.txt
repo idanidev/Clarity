@@ -1,1 +1,1 @@
-budget,spending,money,voice,siri,subscriptions,debts,savings,widget,finance,payday,receipts
+money,finance,personal,saving,bills,subscriptions,income,payday,debts,goals,manager,widget,monthly

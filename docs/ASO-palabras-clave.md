@@ -80,3 +80,42 @@ palabras clave para esos países, con su vocabulario: «plata», «sueldo»,
   no es lo que frena el crecimiento.
 - **La descripción.** No entra en el índice de búsqueda de Apple (a diferencia
   de Google Play). Sirve para convencer a quien ya está en la ficha.
+
+## Segunda vuelta (26/10/2026): subtítulos que indexan y palabras clave sin promesas
+
+El detalle y la checklist están en el issue #75. Lo que se ha cambiado en
+`fastlane/metadata/`:
+
+| Campo | Antes | Ahora |
+|---|---|---|
+| Subtítulo (en) | Say it, it's logged. Save more | **Budget Planner & Spending Log** |
+| Palabras clave (en) | budget,spending,money,voice,siri,subscriptions,debts,savings,widget,finance,payday,receipts | money,finance,personal,saving,bills,subscriptions,income,payday,debts,goals,manager,widget,monthly |
+| Subtítulo (es-ES) | Apunta por voz y ahorra más | **Presupuesto y ahorro por voz** |
+| Palabras clave (es-ES) | presupuesto,finanzas,dinero,cuentas,recurrentes,suscripciones,deudas,nomina,hucha,siri,widget,diario | finanzas,dinero,cuentas,ingresos,nomina,hucha,suscripciones,deudas,mensual,apuntar,siri,widget,metas |
+| Subtítulo (es-MX) | Registra por voz y ahorra | **Presupuesto y ahorro por voz** |
+| Palabras clave (es-MX) | presupuesto,finanzas,dinero,plata,sueldo,quincena,deudas,suscripciones,ahorro,siri,widget,mensual | finanzas,dinero,plata,sueldo,quincena,ingresos,deudas,suscripciones,mensual,diario,metas,widget,siri |
+
+Criterios:
+
+- **El subtítulo deja de ser eslogan.** En español mete «presupuesto», el
+  término con volumen que iba gastando palabras clave, y «ahorro» (lo que se
+  busca es el sustantivo). En inglés, «budget planner» y «spending log».
+- **Nada que la app no haga.** Fuera «receipts» (no hay escaneo de tickets) y
+  fuera de la ficha en inglés «voice», «dictate» y «speech»: el reconocedor va
+  fijo en `es-ES` (`SpeechRecognitionManager`), el parser solo entiende euros y
+  números en castellano y las frases de Siri son en español. «Voice» vuelve al
+  título en inglés (`Clarity: Voice Expense Tracker`, 30) cuando la voz y la
+  interfaz funcionen en inglés.
+- **Fuera términos con intención equivocada:** «facturas» (apps de facturación),
+  «cartera»/«wallet» (billeteras y marca ajena), «hogar» (no hay gasto
+  compartido del hogar).
+- **Las palabras clave siguen sin repetir** nada del nombre ni del subtítulo.
+  Los 100 caracteres de es-ES y es-MX van llenos; en-US quedan 98.
+
+El nombre no cambia: «Clarity: Control de gastos» y «Clarity: Expense Tracker».
+Nombre, subtítulo y palabras clave solo se pueden editar al enviar una versión
+nueva, así que esto sale con la siguiente.
+
+Las valoraciones se piden también, desde esta versión, al cerrar la enhorabuena
+de hucha completada, al cerrar la de mes dentro del presupuesto y al marcar una
+deuda como cobrada (`ReviewRequestManager`, mismas reglas de frecuencia).
