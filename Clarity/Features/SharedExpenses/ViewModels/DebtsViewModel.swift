@@ -77,6 +77,10 @@ final class DebtsViewModel {
             HapticManager.shared.success()
             AnalyticsService.shared.track(.debtSettled)
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            // Cobrar es un momento de éxito; deshacer un cobro, no.
+            if debtors[debtorIndex].isPaid {
+                ReviewRequestManager.shared.requestReviewIfAppropriate()
+            }
         } catch {
             // Revertir el cambio optimista si el guardado falla.
             debtors[debtorIndex].isPaid.toggle()
@@ -103,6 +107,7 @@ final class DebtsViewModel {
             try await repository.updateExpense(updated)
             HapticManager.shared.success()
             NotificationCenter.default.post(name: .expenseDidChange, object: nil)
+            ReviewRequestManager.shared.requestReviewIfAppropriate()
         } catch {
             summaries[index] = DebtSummary(expense: rebuild(updated, debtors: debtors))
             errorMessage = error.safeUserMessage

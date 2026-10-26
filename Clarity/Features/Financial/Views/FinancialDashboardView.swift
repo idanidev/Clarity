@@ -98,7 +98,7 @@ struct FinancialDashboardView: View {
                     icono: "star.fill",
                     titulo: "¡Hucha completada!",
                     detalle: "Has llegado a \(Formatters.currency(meta.targetAmount)) en \(meta.name).",
-                    onCerrar: { viewModel.huchaCompletada = nil }
+                    onCerrar: { viewModel.cerrarCelebracionHucha() }
                 )
             }
         }

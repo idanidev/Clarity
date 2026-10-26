@@ -36,6 +36,13 @@ class FinancialHubViewModel {
     /// La vista enseña la enhorabuena mientras no sea nil y la limpia al cerrarla.
     var huchaCompletada: Goal? = nil
 
+    /// Al cerrar la enhorabuena de hucha completada. Es el momento más alto de
+    /// Metas: después del velo, no encima, se pide la reseña si toca.
+    func cerrarCelebracionHucha() {
+        huchaCompletada = nil
+        ReviewRequestManager.shared.requestReviewIfAppropriate()
+    }
+
     // Services
     private let service: FinancialService
     private let getExpensesUseCase: GetExpensesUseCase

@@ -616,6 +616,8 @@ final class HomeViewModel {
         guard let anterior = Calendar.current.date(byAdding: .month, value: -1, to: Date()) else { return }
         cierresCelebrados.insert(Self.monthKey(anterior))
         UserDefaults.standard.set(Array(cierresCelebrados), forKey: "celebrados.cierreMes")
+        // Mes cerrado dentro del presupuesto y enhorabuena vista: la reseña, si toca.
+        ReviewRequestManager.shared.requestReviewIfAppropriate()
     }
 
     /// Al abrir la app el presupuesto del mes anterior puede no estar aún: se
