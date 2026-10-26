@@ -1,1 +1,1 @@
-finanzas,dinero,cuentas,ingresos,nomina,hucha,suscripciones,deudas,mensual,apuntar,siri,widget,metas
+presupuesto,dinero,ingresos,nomina,hucha,suscripciones,deudas,mensual,apuntar,siri,widget,metas,voz

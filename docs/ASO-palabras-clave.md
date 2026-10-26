@@ -90,16 +90,20 @@ El detalle y la checklist están en el issue #75. Lo que se ha cambiado en
 |---|---|---|
 | Subtítulo (en) | Say it, it's logged. Save more | **Budget Planner & Spending Log** |
 | Palabras clave (en) | budget,spending,money,voice,siri,subscriptions,debts,savings,widget,finance,payday,receipts | money,finance,personal,saving,bills,subscriptions,income,payday,debts,goals,manager,widget,monthly |
-| Subtítulo (es-ES) | Apunta por voz y ahorra más | **Presupuesto y ahorro por voz** |
-| Palabras clave (es-ES) | presupuesto,finanzas,dinero,cuentas,recurrentes,suscripciones,deudas,nomina,hucha,siri,widget,diario | finanzas,dinero,cuentas,ingresos,nomina,hucha,suscripciones,deudas,mensual,apuntar,siri,widget,metas |
-| Subtítulo (es-MX) | Registra por voz y ahorra | **Presupuesto y ahorro por voz** |
-| Palabras clave (es-MX) | presupuesto,finanzas,dinero,plata,sueldo,quincena,deudas,suscripciones,ahorro,siri,widget,mensual | finanzas,dinero,plata,sueldo,quincena,ingresos,deudas,suscripciones,mensual,diario,metas,widget,siri |
+| Subtítulo (es-ES) | Apunta por voz y ahorra más | **Finanzas personales y ahorro** |
+| Palabras clave (es-ES) | presupuesto,finanzas,dinero,cuentas,recurrentes,suscripciones,deudas,nomina,hucha,siri,widget,diario | presupuesto,dinero,ingresos,nomina,hucha,suscripciones,deudas,mensual,apuntar,siri,widget,metas,voz |
+| Subtítulo (es-MX) | Registra por voz y ahorra | **Finanzas personales y ahorro** |
+| Palabras clave (es-MX) | presupuesto,finanzas,dinero,plata,sueldo,quincena,deudas,suscripciones,ahorro,siri,widget,mensual | presupuesto,dinero,plata,sueldo,quincena,ingresos,deudas,suscripciones,mensual,metas,widget,siri,voz |
 
 Criterios:
 
-- **El subtítulo deja de ser eslogan.** En español mete «presupuesto», el
-  término con volumen que iba gastando palabras clave, y «ahorro» (lo que se
-  busca es el sustantivo). En inglés, «budget planner» y «spending log».
+- **El subtítulo deja de ser eslogan.** En español lleva «finanzas
+  personales», la búsqueda genérica de la categoría, y «ahorro» (se busca el
+  sustantivo). «Presupuesto» no va en el subtítulo: en español también es
+  «cotización» y arrastra búsquedas de apps de presupuestos y facturas para
+  autónomos; se queda en palabras clave, donde esa mezcla no penaliza. «Voz»
+  pasa también a palabras clave. En inglés, «budget planner» y «spending log».
+  Pendiente de contrastar con la popularidad que dé la herramienta de ASO.
 - **Nada que la app no haga.** Fuera «receipts» (no hay escaneo de tickets) y
   fuera de la ficha en inglés «voice», «dictate» y «speech»: el reconocedor va
   fijo en `es-ES` (`SpeechRecognitionManager`), el parser solo entiende euros y
@@ -110,7 +114,7 @@ Criterios:
   «cartera»/«wallet» (billeteras y marca ajena), «hogar» (no hay gasto
   compartido del hogar).
 - **Las palabras clave siguen sin repetir** nada del nombre ni del subtítulo.
-  Los 100 caracteres de es-ES y es-MX van llenos; en-US quedan 98.
+  es-MX va lleno (100); es-ES queda en 99 y en-US en 98.
 
 El nombre no cambia: «Clarity: Control de gastos» y «Clarity: Expense Tracker».
 Nombre, subtítulo y palabras clave solo se pueden editar al enviar una versión

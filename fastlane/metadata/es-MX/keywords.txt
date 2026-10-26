@@ -1,1 +1,1 @@
-finanzas,dinero,plata,sueldo,quincena,ingresos,deudas,suscripciones,mensual,diario,metas,widget,siri
+presupuesto,dinero,plata,sueldo,quincena,ingresos,deudas,suscripciones,mensual,metas,widget,siri,voz
