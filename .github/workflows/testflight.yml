@@ -1,6 +1,8 @@
 # TestFlight sin Mac: un runner macOS de GitHub compila la rama y sube la build
-# a TestFlight (pruebas internas). Se lanza a mano desde Actions → TestFlight →
-# Run workflow, eligiendo la rama.
+# a TestFlight (pruebas internas). Arranca con cada push a la rama de abajo;
+# el lanzamiento a mano (Actions → TestFlight → Run workflow) solo funciona
+# cuando el fichero exista también en la rama principal, que es la que GitHub
+# indexa.
 #
 # Necesita tres secretos del repo (Settings → Secrets and variables → Actions):
 #   ASC_KEY_ID      Key ID de una clave de la API de App Store Connect
@@ -16,6 +18,9 @@
 name: TestFlight
 
 on:
+  push:
+    branches:
+      - claude/hola-2zj9qt
   workflow_dispatch:
 
 concurrency:
