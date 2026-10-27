@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Exportación para la tienda (etiquetas v*): la build sube a App Store Connect
+	     apta para enviarse a revisión y también para TestFlight, con firma automática
+	     en la nube y el número de build que toque. -->
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>destination</key>
+	<string>upload</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>teamID</key>
+	<string>AXK73U74AC</string>
+	<key>manageAppVersionAndBuildNumber</key>
+	<true/>
+	<key>uploadSymbols</key>
+	<true/>
+</dict>
+</plist>

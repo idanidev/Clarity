@@ -1,6 +1,12 @@
-# TestFlight sin Mac: un runner macOS de GitHub compila la rama y sube la build
-# a TestFlight (pruebas internas). Arranca con cada push a la rama de abajo;
-# el lanzamiento a mano (Actions → TestFlight → Run workflow) solo funciona
+# TestFlight y tienda sin Mac: un runner macOS de GitHub compila y sube la
+# build a App Store Connect.
+#   - Push a la rama de abajo → build solo para pruebas internas de TestFlight
+#     (no vale para enviar a la tienda). Los cambios que solo tocan .github,
+#     docs o los metadatos de fastlane no la disparan.
+#   - Push de una etiqueta v* (p. ej. v2.4.4) → build apta para la tienda:
+#     después se elige en App Store Connect, en la versión nueva, y se envía
+#     a revisión desde la web.
+# El lanzamiento a mano (Actions → TestFlight → Run workflow) solo funciona
 # cuando el fichero exista también en la rama principal, que es la que GitHub
 # indexa.
 #
@@ -21,6 +27,12 @@ on:
   push:
     branches:
       - claude/hola-2zj9qt
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - 'fastlane/metadata/**'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 concurrency:
@@ -82,11 +94,16 @@ jobs:
           grep -E "error:|\*\* ARCHIVE" "$RUNNER_TEMP/archive.log" || true
           exit $estado
 
-      - name: Subir a TestFlight
+      - name: Subir a App Store Connect
         run: |
+          # Etiqueta v*: build de tienda. Rama: solo pruebas internas de TestFlight.
+          plist=.github/ExportOptions.plist
+          case "$GITHUB_REF" in
+            refs/tags/*) plist=.github/ExportOptionsAppStore.plist; echo "Build de tienda ($GITHUB_REF_NAME)";;
+          esac
           xcodebuild -exportArchive \
             -archivePath "$RUNNER_TEMP/Clarity.xcarchive" \
-            -exportOptionsPlist .github/ExportOptions.plist \
+            -exportOptionsPlist "$plist" \
             -exportPath "$RUNNER_TEMP/export" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
