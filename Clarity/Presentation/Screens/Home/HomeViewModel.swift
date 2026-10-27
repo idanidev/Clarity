@@ -38,7 +38,10 @@ struct HomeDerivados {
     let semanasDelMes: [(etiqueta: String, importe: Double)]
     /// Todas las tarjetas de la disposición, con lo que enseña cada una.
     let tarjetas: [HomeDisposicion.Tarjeta]
-    /// Las que tienen algo que enseñar, ya en filas: lo que se pinta fuera de edición.
+    /// Las que tienen algo que enseñar, ya en filas: lo que se pinta fuera de
+    /// edición, encima y debajo de la lista de gastos, y las dos juntas.
+    let filasArriba: [[HomeDisposicion.Tarjeta]]
+    let filasAbajo: [[HomeDisposicion.Tarjeta]]
     let filas: [[HomeDisposicion.Tarjeta]]
 }
 
@@ -474,6 +477,9 @@ final class HomeViewModel {
 
     /// Las que se pintan fuera de edición, en filas.
     var filasHome: [[HomeDisposicion.Tarjeta]] { derivados.filas }
+    /// Las de encima y las de debajo de la lista de gastos.
+    var filasHomeArriba: [[HomeDisposicion.Tarjeta]] { derivados.filasArriba }
+    var filasHomeAbajo: [[HomeDisposicion.Tarjeta]] { derivados.filasAbajo }
 
     /// Los meses anteriores al que se enseña, traídos de red una vez por mes
     /// visitado, para medir el mes contra la costumbre del usuario y no contra
@@ -843,7 +849,9 @@ final class HomeViewModel {
         // Qué enseña cada tarjeta de la Home, y en qué filas van las que salen.
         let tarjetas = disposicion.tarjetas(relevancias: resumen.relevancias, hayUltimos: !ultimos.isEmpty,
                                             hayMesAnterior: !anteriores.isEmpty)
-        let filas = HomeDisposicion.filas(tarjetas.filter(\.conDatos), tamano: \.tamano)
+        let partes = HomeDisposicion.alrededorDeLaLista(tarjetas.filter(\.conDatos))
+        let filasArriba = HomeDisposicion.filas(partes.arriba, tamano: \.tamano)
+        let filasAbajo = HomeDisposicion.filas(partes.abajo, tamano: \.tamano)
 
         return HomeDerivados(
             gastosDelMes: gastos,
@@ -856,7 +864,9 @@ final class HomeViewModel {
             comparativaPorCategoria: Array(comparativa),
             semanasDelMes: semanasDelMes,
             tarjetas: tarjetas,
-            filas: filas
+            filasArriba: filasArriba,
+            filasAbajo: filasAbajo,
+            filas: filasArriba + filasAbajo
         )
     }
 

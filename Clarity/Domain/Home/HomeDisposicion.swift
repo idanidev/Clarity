@@ -8,8 +8,12 @@
 // inteligente» enseña sola lo más relevante que no esté ya colocado a mano.
 //
 // Las gráficas que iban en una segunda página (#73) son tarjetas anchas más
-// (`Tipo.grafica`): se añaden, mueven y quitan como las demás, y quien nunca
-// edita ve el anillo de categorías debajo de las tres pilas.
+// (`Tipo.grafica`): se añaden, mueven y quitan como las demás.
+//
+// La lista de gastos del mes es un bloque más (`Tipo.lista`): siempre está, no
+// se quita, y lo que va antes se pinta encima de la lista y lo que va después,
+// debajo. Por defecto, encima solo el anillo (en media fila) y el mes frente al
+// anterior; la lista justo después, y las pilas de siempre debajo.
 //
 // Todo lo que decide qué se pinta y dónde vive aquí, sin SwiftUI, para
 // probarlo con un puñado de datos. La vista solo pinta lo que sale de aquí.
@@ -63,8 +67,11 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case pila
         /// Los tres últimos gastos del mes.
         case ultimos
-        /// Una gráfica, siempre a lo ancho.
+        /// Una gráfica, a lo ancho (el anillo también en media fila).
         case grafica(Grafica)
+        /// La lista de gastos del mes: un bloque fijo que parte la Home en
+        /// lo que va encima y lo que va debajo.
+        case lista
     }
 
     struct Elemento: Sendable, Hashable, Identifiable {
@@ -88,6 +95,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         }
 
         var esPila: Bool { tipo == .pila }
+        var esLista: Bool { tipo == .lista }
 
         /// La gráfica que pinta, si lo es.
         var grafica: Grafica? {
@@ -128,14 +136,16 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
 
     // MARK: - Por defecto y migración
 
-    /// La Home de siempre: hueco A, B y C en una fila, el anillo de categorías
-    /// (lo primero que enseñaba la página de Gráficas, #73), los últimos gastos
-    /// y el E.
+    /// Lo que ve quien nunca edita (#73): debajo de la cifra, el anillo de
+    /// categorías en media fila con el mes frente al anterior al lado, la lista
+    /// de gastos, y después los huecos de siempre (A, B y C, los últimos y E).
     static let porDefecto = HomeDisposicion(elementos: [
+        Elemento(id: "grafica-reparto", tipo: .grafica(.reparto), tamano: .pequena),
+        Elemento(id: "pila-m", tipo: .pila, tamano: .pequena, hueco: .m),
+        Elemento(id: "lista", tipo: .lista, tamano: .ancha),
         Elemento(id: "pila-a", tipo: .pila, tamano: .ancha, hueco: .a),
         Elemento(id: "pila-b", tipo: .pila, tamano: .pequena, hueco: .b),
         Elemento(id: "pila-c", tipo: .pila, tamano: .pequena, hueco: .c),
-        Elemento(id: "grafica-reparto", tipo: .grafica(.reparto), tamano: .ancha),
         Elemento(id: "ultimos", tipo: .ultimos, tamano: .ancha),
         Elemento(id: "pila-e", tipo: .pila, tamano: .ancha, hueco: .e),
     ])
@@ -204,8 +214,11 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case .pila: [.ancha, .pequena]
         // Tres filas con nombre, fecha, categoría e importe: en media fila no caben.
         case .ultimos: [.ancha]
-        // Un anillo, un calendario o seis barras de meses no caben en media fila.
-        case .grafica: [.ancha]
+        // El anillo cabe en media fila (con la leyenda corta); un calendario o
+        // seis barras de meses, no.
+        case .grafica(let g): g == .reparto ? [.pequena, .ancha] : [.ancha]
+        // La lista entera de gastos, siempre a lo ancho.
+        case .lista: [.ancha]
         }
     }
 
@@ -215,6 +228,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case .pila: "Pila inteligente"
         case .ultimos: "Últimos gastos"
         case .grafica(let g): g.nombre
+        case .lista: "Gastos del mes"
         }
     }
 
@@ -246,6 +260,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         var tamano: Tamano { elemento.tamano }
         var esPila: Bool { elemento.esPila }
         var grafica: Grafica? { elemento.grafica }
+        var esLista: Bool { elemento.esLista }
     }
 
     /// Todas las tarjetas, en orden, con lo que enseña cada una.
@@ -272,6 +287,9 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
             case .grafica(let g):
                 // Con gastos en el mes siempre hay qué dibujar; mes contra mes, solo con mes anterior.
                 return Tarjeta(elemento: e, clase: nil, conDatos: hayUltimos && (g != .comparativa || hayMesAnterior))
+            case .lista:
+                // La lista entera siempre se pinta (también con solo aportaciones).
+                return Tarjeta(elemento: e, clase: nil, conDatos: true)
             }
         }
     }
@@ -285,9 +303,17 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         let bonus = HomePreferencias(prioridad: prioridad).bonus
         var resultado: [String: String] = [:]
         for e in elementos where e.esPila {
-            let candidatos = e.hueco.map(\.candidatos) ?? Self.candidatosDePila(e.tamano)
-            guard let clase = HomeResumen.elegir(entre: candidatos, relevancias: relevancias,
-                                                 excluidas: excluidas, bonus: bonus) else { continue }
+            let clase: String?
+            if e.hueco == .m {
+                // El hueco M va por preferencia, no por relevancia: el mes frente
+                // al anterior si lo hay, y si no, lo siguiente de su lista con datos.
+                clase = HomeResumen.Slot.m.candidatos.first { relevancias[$0] != nil && !excluidas.contains($0) }
+            } else {
+                let candidatos = e.hueco.map(\.candidatos) ?? Self.candidatosDePila(e.tamano)
+                clase = HomeResumen.elegir(entre: candidatos, relevancias: relevancias,
+                                           excluidas: excluidas, bonus: bonus)
+            }
+            guard let clase else { continue }
             resultado[e.id] = clase
             excluidas.insert(clase)
         }
@@ -325,6 +351,13 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         return filas
     }
 
+    /// Las tarjetas que van encima de la lista de gastos y las que van debajo,
+    /// sin el bloque de la lista. Sin bloque, todo va encima.
+    static func alrededorDeLaLista(_ tarjetas: [Tarjeta]) -> (arriba: [Tarjeta], abajo: [Tarjeta]) {
+        guard let i = tarjetas.firstIndex(where: \.esLista) else { return (tarjetas, []) }
+        return (Array(tarjetas[..<i]), Array(tarjetas[(i + 1)...]))
+    }
+
     // MARK: - Editar
 
     func contiene(_ tipo: Tipo) -> Bool { elementos.contains { $0.tipo == tipo } }
@@ -337,6 +370,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
         case .clase(let c): Self.ficha(c) != nil && !contiene(tipo)
         case .ultimos: !contiene(tipo)
         case .grafica: !contiene(tipo)
+        case .lista: !contiene(tipo)
         }
     }
 
@@ -354,7 +388,8 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
 
     @discardableResult
     mutating func quitar(_ id: String) -> Bool {
-        guard let i = elementos.firstIndex(where: { $0.id == id }) else { return false }
+        // La lista de gastos no se quita: se mueve.
+        guard let i = elementos.firstIndex(where: { $0.id == id }), !elementos[i].esLista else { return false }
         elementos.remove(at: i)
         return true
     }
@@ -420,7 +455,7 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
     /// versión pasa por aquí antes de pintarse.
     func normalizada() -> HomeDisposicion {
         var ids = Set<String>(), clases = Set<String>(), graficas = Set<Grafica>()
-        var hayUltimos = false
+        var hayUltimos = false, hayLista = false
         var limpios: [Elemento] = []
         for var e in elementos {
             guard ids.insert(e.id).inserted else { continue }
@@ -430,12 +465,20 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
                 guard !hayUltimos else { continue }
                 hayUltimos = true
             case .grafica(let g): guard graficas.insert(g).inserted else { continue }
+            case .lista:
+                guard !hayLista else { continue }
+                hayLista = true
             case .pila: break
             }
             let admitidos = Self.tamanos(de: e.tipo)
             if let primero = admitidos.first, !admitidos.contains(e.tamano) { e.tamano = primero }
             if !e.esPila || e.hueco?.tamano != e.tamano { e.hueco = nil }
             limpios.append(e)
+        }
+        // La lista de gastos siempre está. La de antes de este bloque (otra
+        // versión, la cuenta) la lleva al final, que es donde estaba.
+        if !hayLista {
+            limpios.append(Elemento(id: ids.contains("lista") ? UUID().uuidString : "lista", tipo: .lista, tamano: .ancha))
         }
         var d = self
         d.elementos = limpios
@@ -471,11 +514,11 @@ nonisolated struct HomeDisposicion: Sendable, Equatable {
 }
 
 nonisolated extension HomeResumen.Slot {
-    /// A y E son anchos; B y C, medias tarjetas.
+    /// A y E son anchos; B, C y M, medias tarjetas.
     var tamano: HomeDisposicion.Tamano {
         switch self {
         case .a, .e: .ancha
-        case .b, .c: .pequena
+        case .b, .c, .m: .pequena
         }
     }
 }
@@ -535,6 +578,7 @@ nonisolated extension HomeDisposicion.Elemento: Codable {
         case "pila": tipo = .pila
         case "ultimos": tipo = .ultimos
         case "grafica": tipo = .grafica(try c.decode(HomeDisposicion.Grafica.self, forKey: .grafica))
+        case "lista": tipo = .lista
         default:
             throw DecodingError.dataCorruptedError(forKey: .tipo, in: c, debugDescription: "Tipo de tarjeta desconocido")
         }
@@ -554,6 +598,7 @@ nonisolated extension HomeDisposicion.Elemento: Codable {
         case .grafica(let grafica):
             try c.encode("grafica", forKey: .tipo)
             try c.encode(grafica, forKey: .grafica)
+        case .lista: try c.encode("lista", forKey: .tipo)
         }
         try c.encode(tamano, forKey: .tamano)
         try c.encodeIfPresent(hueco?.rawValue, forKey: .hueco)

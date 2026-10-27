@@ -39,13 +39,17 @@ struct GraficaCard: View {
     let grafica: HomeDisposicion.Grafica
     let datos: DatosGraficas
     let animada: Bool
+    /// En media fila: el anillo pequeño con la leyenda corta. Solo el reparto
+    /// admite media fila.
+    let compacta: Bool
     /// 0 → 1 al aparecer. Todo lo que se dibuja cuelga de aquí.
     @State private var dibujado: Double
 
-    init(grafica: HomeDisposicion.Grafica, datos: DatosGraficas, animada: Bool = true) {
+    init(grafica: HomeDisposicion.Grafica, datos: DatosGraficas, animada: Bool = true, compacta: Bool = false) {
         self.grafica = grafica
         self.datos = datos
         self.animada = animada
+        self.compacta = compacta
         _dibujado = State(initialValue: animada ? 0 : 1)
     }
 
@@ -75,27 +79,49 @@ struct GraficaCard: View {
         // filtrados, los porcentajes dejaban de sumar el 100 %.
         let total = datos.total
         let sectores = porciones(datos: grupos, total: total)
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 18) {
-                // En su propia vista: la selección del anillo cambia en cada frame
-                // del arrastre y así solo se repinta él, no la página entera.
-                AnilloReparto(datos: grupos, sectores: sectores, total: total, dibujado: dibujado)
-                VStack(alignment: .leading, spacing: 9) {
-                    ForEach(grupos, id: \.id) { g in
-                        HStack(spacing: 8) {
-                            Circle().fill(g.color).frame(width: 8, height: 8)
-                            Text(g.name.nombreSinEmoji).font(.footnote).lineLimit(1)
-                            Spacer()
-                            Text("\(total > 0 ? Int((g.totalAmount / total * 100).rounded()) : 0) %").font(.footnote.weight(.semibold))
+        return Group {
+            if compacta {
+                // Media fila: el anillo centrado y las tres categorías que más pesan.
+                VStack(spacing: 10) {
+                    AnilloReparto(datos: grupos, sectores: sectores, total: total, dibujado: dibujado, diametro: 104)
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(grupos.prefix(3), id: \.id) { g in
+                            HStack(spacing: 6) {
+                                Circle().fill(g.color).frame(width: 6, height: 6)
+                                Text(g.name.nombreSinEmoji).font(.caption2).lineLimit(1)
+                                Spacer(minLength: 4)
+                                Text("\(total > 0 ? Int((g.totalAmount / total * 100).rounded()) : 0) %").font(.caption2.weight(.semibold))
+                            }
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
+                .padding(14)
+                .glassCard()
+            } else {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(alignment: .center, spacing: 18) {
+                        // En su propia vista: la selección del anillo cambia en cada frame
+                        // del arrastre y así solo se repinta él, no la página entera.
+                        AnilloReparto(datos: grupos, sectores: sectores, total: total, dibujado: dibujado)
+                        VStack(alignment: .leading, spacing: 9) {
+                            ForEach(grupos, id: \.id) { g in
+                                HStack(spacing: 8) {
+                                    Circle().fill(g.color).frame(width: 8, height: 8)
+                                    Text(g.name.nombreSinEmoji).font(.footnote).lineLimit(1)
+                                    Spacer()
+                                    Text("\(total > 0 ? Int((g.totalAmount / total * 100).rounded()) : 0) %").font(.footnote.weight(.semibold))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                // Sin onda: con un Chart dentro el efecto rasteriza la vista y el vidrio
+                // se vuelve un rectángulo opaco.
+                .glassCard()
             }
         }
-        .padding(16)
-        // Sin onda: con un Chart dentro el efecto rasteriza la vista y el vidrio
-        // se vuelve un rectángulo opaco.
-        .glassCard()
     }
 
     // Gasto por día, con el más caro señalado
@@ -265,6 +291,8 @@ private struct AnilloReparto: View {
     let sectores: [Porcion]
     let total: Double
     let dibujado: Double
+    /// 150 a lo ancho; 104 en media fila, con la cifra del centro abreviada.
+    var diametro: CGFloat = 150
     /// Euros acumulados bajo el dedo, en el orden de los sectores.
     @State private var angulo: Double?
 
@@ -277,8 +305,8 @@ private struct AnilloReparto: View {
                 // revienta ("Double value cannot be converted to Int").
                 // Pasaba al ir a un mes que aún no había llegado de red.
                 Circle()
-                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 24)
-                    .frame(width: 150, height: 150)
+                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: diametro * 0.16)
+                    .frame(width: diametro, height: diametro)
             } else {
                 // El anillo se traza: cada sector crece con `dibujado` y un
                 // sector transparente ocupa lo que falta hasta la vuelta
@@ -291,7 +319,7 @@ private struct AnilloReparto: View {
                 }
                 .chartLegend(.hidden)
                 .chartAngleSelection(value: $angulo)
-                .frame(width: 150, height: 150)
+                .frame(width: diametro, height: diametro)
                 .rotationEffect(.degrees((1 - dibujado) * -120))
             }
             VStack(spacing: 2) {
@@ -305,12 +333,12 @@ private struct AnilloReparto: View {
                         .font(.caption2.weight(.semibold)).foregroundStyle(Color.textSecondary)
                 } else {
                     Text("TOTAL").font(.caption2).tracking(0.6).foregroundStyle(Color.textSecondary)
-                    Text(Formatters.currency(total * dibujado))
+                    Text(diametro < 120 ? Formatters.currencyCompact(total * dibujado) : Formatters.currency(total * dibujado))
                         .font(.headline.weight(.bold)).lineLimit(1).minimumScaleFactor(0.6)
                         .contentTransition(.numericText(value: total * dibujado))
                 }
             }
-            .frame(width: 96)
+            .frame(width: diametro * 0.64)
             // El centro queda encima del gráfico: sin esto se tragaría los
             // arrastres que empiezan en el hueco del anillo.
             .allowsHitTesting(false)

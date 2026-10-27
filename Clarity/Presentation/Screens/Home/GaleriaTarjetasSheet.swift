@@ -236,7 +236,7 @@ private struct FilaGaleria: View {
                     if let contenido = vista.contenido {
                         SlotCard(contenido: contenido, compacta: elegido == .pequena)
                     } else if let grafica = vista.grafica, let graficas = vista.graficas {
-                        GraficaCard(grafica: grafica, datos: graficas, animada: false)
+                        GraficaCard(grafica: grafica, datos: graficas, animada: false, compacta: elegido == .pequena)
                     } else {
                         UltimosCard(gastos: vista.ultimos, zoom: sinZoom, onEditar: { _, _ in })
                     }

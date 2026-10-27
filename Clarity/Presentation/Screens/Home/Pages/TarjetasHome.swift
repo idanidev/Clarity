@@ -62,8 +62,9 @@ struct RejillaHome: Layout {
 
 // MARK: - Una tarjeta
 
-/// Una tarjeta tal cual se pinta: el contenido de su clase, una gráfica, los
-/// últimos gastos o, solo en edición, el aviso de que este mes no tiene nada.
+/// Una tarjeta tal cual se pinta: el contenido de su clase, una gráfica, el asa
+/// de la lista de gastos, los últimos gastos o, solo en edición, el aviso de
+/// que este mes no tiene nada.
 struct CuerpoTarjeta: View {
     let tarjeta: HomeDisposicion.Tarjeta
     let contenidos: [String: HomeResumen.Contenido]
@@ -80,7 +81,11 @@ struct CuerpoTarjeta: View {
         if let clase = tarjeta.clase, let contenido = contenidos[clase] {
             SlotCard(contenido: contenido, compacta: tarjeta.tamano == .pequena)
         } else if let grafica = tarjeta.grafica, let graficas, tarjeta.conDatos {
-            GraficaCard(grafica: grafica, datos: graficas, animada: graficasAnimadas)
+            GraficaCard(grafica: grafica, datos: graficas, animada: graficasAnimadas, compacta: tarjeta.tamano == .pequena)
+        } else if tarjeta.esLista {
+            // En la Home normal la lista no es una tarjeta: aquí (edición, copia
+            // flotante, capturas) hace de asa para ponerla donde se quiera.
+            ListaCard()
         } else if tarjeta.elemento.tipo == .ultimos, !ultimos.isEmpty {
             UltimosCard(gastos: ultimos, zoom: zoom, onEditar: onEditar)
         } else {
@@ -111,6 +116,26 @@ struct TarjetaSinDatos: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(tarjeta.tamano == .pequena ? 14 : 16)
+        .glassCard()
+    }
+}
+
+/// El asa del bloque «Gastos del mes» en edición: lo que va encima de esta
+/// tarjeta se ve antes que la lista; lo que va debajo, después.
+struct ListaCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Gastos del mes")
+                .estiloEtiquetaClarity()
+            Text("La lista completa, por categorías.")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Color.textSecondary)
+            Text("Lo de encima se ve antes que la lista; lo de debajo, después.")
+                .font(.caption)
+                .foregroundStyle(Color.textTertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
         .glassCard()
     }
 }

@@ -239,8 +239,11 @@ private struct TarjetaEditable: View {
                 }
             }
             .overlay(alignment: .topLeading) {
-                BotonDeEsquina(icono: "minus", desplazamiento: CGSize(width: -18, height: -18)) {
-                    acciones.quitar(tarjeta.id)
+                // La lista de gastos se mueve, no se quita.
+                if !tarjeta.esLista {
+                    BotonDeEsquina(icono: "minus", desplazamiento: CGSize(width: -18, height: -18)) {
+                        acciones.quitar(tarjeta.id)
+                    }
                 }
             }
             .contentShape(RoundedRectangle(cornerRadius: CornerRadius.large, style: .continuous))
@@ -269,7 +272,7 @@ private struct TarjetaEditable: View {
             .accessibilityActions {
                 if !esPrimera { Button("Mover antes") { acciones.mover(tarjeta.id, -1) } }
                 if !esUltima { Button("Mover después") { acciones.mover(tarjeta.id, 1) } }
-                Button("Quitar") { acciones.quitar(tarjeta.id) }
+                if !tarjeta.esLista { Button("Quitar") { acciones.quitar(tarjeta.id) } }
                 if admiteLosDos {
                     Button(tarjeta.tamano == .ancha ? "Hacer pequeña" : "Hacer ancha") {
                         acciones.cambiarTamano(tarjeta.id, tarjeta.tamano.otro)

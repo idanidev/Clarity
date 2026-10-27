@@ -216,16 +216,21 @@ nonisolated struct HomeResumen: Sendable {
     /// El valor en crudo es lo que se guarda en la cuenta.
     enum Slot: String, CaseIterable, Sendable {
         case a, b, c, e
+        /// La media tarjeta junto al anillo, encima de la lista (#73): el mes
+        /// frente al anterior y, si no lo hay, lo primero de su lista con datos.
+        /// Va por preferencia, no por relevancia, y no entra en `slots`.
+        case m
 
-        /// Lo que le cabe a cada hueco. A y E son anchos; B y C, medias
+        /// Lo que le cabe a cada hueco. A y E son anchos; B, C y M, medias
         /// tarjetas. Entre lo que cabe gana el más relevante; a igualdad, el
-        /// que va antes en la lista.
+        /// que va antes en la lista. En M gana el primero con datos.
         var candidatos: [String] {
             switch self {
             case .a: ["limites", "fueraDeNormal", "reparto", "sitios", "limiteSugerido"]
             case .b: ["cargos", "diaCaro", "subeFuerte", "fueraDeNormal", "hormiga", "diaSemana", "ranking", "ahorro", "racha"]
             case .c: ["teDeben", "hucha", "semana", "diaCaro", "ahorro", "diaSemana", "hormiga", "ranking", "racha"]
             case .e: ["hucha", "comparativa", "semanaASemana", "sitios", "limiteSugerido", "subeFuerte", "fueraDeNormal"]
+            case .m: ["comparativa", "semana", "diaCaro", "ahorro", "subeFuerte", "ranking", "hormiga", "diaSemana", "racha", "fueraDeNormal"]
             }
         }
     }
@@ -544,7 +549,8 @@ nonisolated struct HomeResumen: Sendable {
         // Lo que el usuario ocultó no sale en los huecos, puntúe lo que puntúe.
         var usados = preferencias.ocultas
         var slots: [Slot: Contenido] = [:]
-        for slot in Slot.allCases {
+        // Los cuatro huecos de siempre; M es de la Home editable y se resuelve allí.
+        for slot in Slot.allCases where slot != .m {
             guard let mejor = Self.elegir(entre: slot.candidatos, relevancias: relevancias,
                                           excluidas: usados, bonus: preferencias.bonus) else { continue }
             slots[slot] = disponibles[mejor]

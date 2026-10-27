@@ -56,9 +56,15 @@ struct ResumenPage: View {
                 .buttonStyle(TarjetaButtonStyle())
                 .filaDeTarjeta()
 
-                // Una fila de la lista por fila de tarjetas, como antes el hueco
-                // A, el B y C juntos, los últimos y el E.
-                TarjetasDeLaHome(viewModel: viewModel, zoom: zoom, acciones: acciones)
+                // Las tarjetas que van encima de la lista: por defecto, el anillo
+                // y el mes frente al anterior. Una fila de la lista por fila.
+                TarjetasDeLaHome(viewModel: viewModel, filas: viewModel.filasHomeArriba, zoom: zoom, acciones: acciones)
+
+                listaDeGastos(total: r.total)
+
+                // Y las que van debajo. La lista es un bloque más que se mueve en
+                // edición: cada uno decide qué va antes y qué después.
+                TarjetasDeLaHome(viewModel: viewModel, filas: viewModel.filasHomeAbajo, zoom: zoom, acciones: acciones)
 
                 // La puerta al modo edición, donde acaban las tarjetas.
                 Button { edicion.entrar() } label: {
@@ -71,8 +77,6 @@ struct ResumenPage: View {
                 }
                 .buttonStyle(.plain)
                 .filaDeTarjeta()
-
-                listaDeGastos(total: r.total)
 
                 Color.clear.frame(height: 12).filaDeTarjeta()
             }
@@ -279,6 +283,8 @@ private struct FilaAportacion: View {
 /// sus cambios no repinten la cabecera ni la lista de gastos.
 private struct TarjetasDeLaHome: View {
     @Bindable var viewModel: HomeViewModel
+    /// Las de encima o las de debajo de la lista.
+    let filas: [[HomeDisposicion.Tarjeta]]
     let zoom: Namespace.ID
     let acciones: AccionesDeTarjeta
 
@@ -287,7 +293,7 @@ private struct TarjetasDeLaHome: View {
         let ultimos = viewModel.ultimosGastos
         // Una foto por pintado de la rejilla, no una por gráfica.
         let graficas = viewModel.datosGraficas
-        ForEach(viewModel.filasHome, id: \.first?.id) { fila in
+        ForEach(filas, id: \.first?.id) { fila in
             FilaDeTarjetas(fila: fila, contenidos: contenidos, ultimos: ultimos, zoom: zoom, acciones: acciones,
                            graficas: graficas)
                 .filaDeTarjeta()

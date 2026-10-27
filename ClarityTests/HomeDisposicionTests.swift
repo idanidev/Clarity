@@ -48,26 +48,39 @@ struct HomeDisposicionTests {
 
     // MARK: - Quien nunca edita ve lo de siempre
 
-    /// Cada pila de la disposición por defecto enseña lo mismo que su hueco.
-    private func reproduceLosHuecos(_ r: HomeResumen, _ d: D, sourceLocation: SourceLocation = #_sourceLocation) {
+    /// Cada pila de los huecos de siempre enseña lo mismo que su hueco.
+    private func reproduceLosHuecos(_ r: HomeResumen, _ d: D, huecos: [HomeResumen.Slot] = [.a, .b, .c, .e],
+                                    sourceLocation: SourceLocation = #_sourceLocation) {
         let t = d.tarjetas(relevancias: r.relevancias, hayUltimos: true)
-        for (slot, id) in [(HomeResumen.Slot.a, "pila-a"), (.b, "pila-b"), (.c, "pila-c"), (.e, "pila-e")] {
+        for slot in huecos {
+            let id = "pila-\(slot.rawValue)"
             #expect(t.first { $0.id == id }?.clase == r.slots[slot]?.clase, "\(id)", sourceLocation: sourceLocation)
         }
     }
 
-    @Test("La disposición por defecto reproduce los cuatro huecos de siempre")
-    func porDefectoReproduceLosHuecos() {
-        // Sin nada configurado (el caso de `HomeResumenTests.huecosNuncaVacios`).
+    @Test("Por defecto: anillo y mes frente al anterior encima de la lista, y debajo los huecos de siempre")
+    func porDefecto() throws {
+        #expect(D.porDefecto.elementos.map(\.id)
+                == ["grafica-reparto", "pila-m", "lista", "pila-a", "pila-b", "pila-c", "ultimos", "pila-e"])
+        #expect(D.porDefecto.elementos[0].tamano == .pequena)
+        #expect(D.porDefecto.elementos[1].hueco == .m)
+
+        // Sin mes anterior (usuario nuevo): la pila de arriba enseña otra cosa
+        // pequeña con datos, y nada se repite entre pilas.
         let sencillo = resumen([
             gasto(20, "Alimentación", dia: 1), gasto(30, "Ocio", dia: 2),
             gasto(46, "Ocio", dia: 4, name: "Cena"), gasto(12, "Transporte", dia: 8), gasto(9, "Alimentación", dia: 9),
         ])
-        reproduceLosHuecos(sencillo, .porDefecto)
-        #expect(D.porDefecto.tarjetas(relevancias: sencillo.relevancias, hayUltimos: true).compactMap(\.clase)
-                == ["reparto", "diaCaro", "semana", "semanaASemana"])
+        let t1 = tarjetas(.porDefecto, sencillo.relevancias).filter(\.conDatos)
+        let arriba = try #require(t1.first { $0.id == "pila-m" }?.clase)
+        #expect(["semana", "diaCaro"].contains(arriba))
+        let clases1 = t1.compactMap(\.clase)
+        #expect(Set(clases1).count == clases1.count)
+        #expect(clases1.contains("reparto") && clases1.contains("semanaASemana"))
+        reproduceLosHuecos(sencillo, .porDefecto, huecos: [.a, .e])
 
-        // Con todo configurado (`huecosCompletos`): límites, cargos, deudas, comparativa.
+        // Con mes anterior: arriba, el mes frente al anterior; A, B y C como
+        // siempre; E no lo repite.
         let metas = [
             Goal(name: "Ocio", type: .spendingLimit, targetAmount: 300, linkedCategoryId: "Ocio"),
             Goal(name: "Moto", type: .savingsTarget, targetAmount: 5000, currentAmount: 200),
@@ -75,9 +88,47 @@ struct HomeDisposicionTests {
         let completo = resumen([gasto(209.54, "Ocio", dia: 3, debtors: [Debtor(name: "Marcos", amount: 40)])],
                                anterior: [gasto(260, "Ocio", dia: 5, mes: 3)], metas: metas,
                                recurrentes: [regla("Netflix", 12.99, dia: 15)], presupuesto: 2080)
-        reproduceLosHuecos(completo, .porDefecto)
-        #expect(D.porDefecto.tarjetas(relevancias: completo.relevancias, hayUltimos: true).compactMap(\.clase)
-                == ["limites", "cargos", "teDeben", "comparativa"])
+        let t2 = tarjetas(.porDefecto, completo.relevancias)
+        #expect(t2.first { $0.id == "pila-m" }?.clase == "comparativa")
+        reproduceLosHuecos(completo, .porDefecto, huecos: [.a, .b, .c])
+        #expect(t2.first { $0.id == "pila-e" }?.clase != "comparativa")
+
+        // La lista siempre se pinta, sin clase, y parte la Home en dos.
+        let lista = try #require(t2.first { $0.id == "lista" })
+        #expect(lista.esLista && lista.conDatos && lista.clase == nil)
+        let partes = D.alrededorDeLaLista(t2.filter(\.conDatos))
+        #expect(partes.arriba.map(\.id) == ["grafica-reparto", "pila-m"])
+        #expect(partes.abajo.first?.id == "pila-a")
+        #expect(!partes.abajo.contains { $0.esLista })
+    }
+
+    @Test("La lista de gastos es un bloque fijo: siempre está, no se quita, y sin él todo va encima")
+    func listaFija() throws {
+        var d = D.porDefecto
+        #expect(!d.quitar("lista"))
+        #expect(d.anadir(.lista) == nil)
+        #expect(D.tamanos(de: .lista) == [.ancha])
+        #expect(D.nombre(de: .lista) == "Gastos del mes")
+        #expect(d.mover("lista", puestos: -2))
+        #expect(d.elementos.first?.esLista == true)
+
+        // Una disposición de antes del bloque: la lista aparece al final.
+        let vieja = D(elementos: [elemento(.pila, .ancha, id: "p"), elemento(.ultimos, .ancha, id: "u")]).normalizada()
+        #expect(vieja.elementos.map(\.id) == ["p", "u", "lista"])
+        // Y dos listas se quedan en una.
+        let doble = D(elementos: [elemento(.lista, .ancha, id: "l1"), elemento(.lista, .ancha, id: "l2")]).normalizada()
+        #expect(doble.elementos.map(\.id) == ["l1"])
+        // Sin bloque, todo va encima.
+        let sinLista = D(elementos: [elemento(.pila, .ancha, id: "p")])
+        let partes = D.alrededorDeLaLista(sinLista.tarjetas(relevancias: ["reparto": 1], hayUltimos: true))
+        #expect(partes.arriba.count == 1 && partes.abajo.isEmpty)
+
+        // JSON de ida y vuelta.
+        let data = try JSONEncoder().encode(D.porDefecto)
+        let objeto = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let elementos = try #require(objeto["elementos"] as? [[String: Any]])
+        #expect(elementos[2]["tipo"] as? String == "lista")
+        #expect(try JSONDecoder().decode(D.self, from: data) == D.porDefecto)
     }
 
     @Test("Migrada, lo ocultado y lo ordenado en la hoja de antes pesan igual que en los huecos")
@@ -189,7 +240,8 @@ struct HomeDisposicionTests {
     func claseDesconocida() {
         let d = D(elementos: [elemento(.clase("deOtraVersion"), .ancha, id: "x"), elemento(.ultimos, .ancha, id: "u")])
         #expect(tarjetas(d, ["deOtraVersion": 1]).map(\.id) == ["u"])
-        #expect(d.normalizada().elementos.count == 2)
+        // Más la lista, que normalizar añade al final.
+        #expect(d.normalizada().elementos.map(\.id) == ["x", "u", "lista"])
     }
 
     // MARK: - Filas
@@ -237,10 +289,11 @@ struct HomeDisposicionTests {
         #expect(!r8)
         let r9 = d.cambiarTamano("pila-a", a: .pequena)
         #expect(r9)
-        #expect(d.elementos[0].tamano == .pequena)
-        #expect(d.elementos[0].hueco == nil)
-        // Ya sin la cola del hueco A elige entre todo lo pequeño.
-        #expect(d.tarjetas(relevancias: ["racha": 0.2], hayUltimos: true).first?.clase == "racha")
+        #expect(d.elementos[3].tamano == .pequena)
+        #expect(d.elementos[3].hueco == nil)
+        // Ya sin la cola del hueco A elige entre todo lo pequeño («hucha» no
+        // está en la lista del hueco M, así que la pila de arriba no se la lleva).
+        #expect(d.tarjetas(relevancias: ["hucha": 0.2], hayUltimos: true).first { $0.id == "pila-a" }?.clase == "hucha")
     }
 
     @Test("Ordenar, mover un puesto y quitar")
@@ -248,7 +301,7 @@ struct HomeDisposicionTests {
         var d = D.porDefecto
         let r10 = d.ordenar(["pila-e", "ultimos"])
         #expect(r10)
-        #expect(d.elementos.map(\.id) == ["pila-e", "ultimos", "pila-a", "pila-b", "pila-c"])
+        #expect(d.elementos.map(\.id) == ["pila-e", "ultimos", "grafica-reparto", "pila-m", "lista", "pila-a", "pila-b", "pila-c"])
         let r11 = d.ordenar(d.elementos.map(\.id))
         #expect(!r11)
         let r12 = d.mover("pila-e", puestos: 1)
@@ -290,15 +343,15 @@ struct HomeDisposicionTests {
 
     // MARK: - Gráficas como tarjetas (#73)
 
-    @Test("Las gráficas son tarjetas anchas, una vez cada una, y el anillo va por defecto debajo de las pilas")
+    @Test("Las gráficas son tarjetas, una vez cada una; el anillo va por defecto en media fila encima de la lista")
     func graficas() {
         for g in D.Grafica.allCases {
-            #expect(D.tamanos(de: .grafica(g)) == [.ancha], "\(g)")
+            // Solo el anillo cabe en media fila, y es su tamaño por defecto.
+            #expect(D.tamanos(de: .grafica(g)) == (g == .reparto ? [.pequena, .ancha] : [.ancha]), "\(g)")
             #expect(D.nombre(de: .grafica(g)) == g.nombre)
         }
-        #expect(D.porDefecto.elementos.map(\.id) == ["pila-a", "pila-b", "pila-c", "grafica-reparto", "ultimos", "pila-e"])
         #expect(D.porDefecto.contiene(.grafica(.reparto)))
-        #expect(D.porDefecto.elementos[3].grafica == .reparto)
+        #expect(D.porDefecto.elementos[0].grafica == .reparto)
 
         var d = D.porDefecto
         // Una vez cada una, y a lo ancho aunque se pida pequeña.
@@ -345,7 +398,7 @@ struct HomeDisposicionTests {
         ]}
         """
         let leida = try JSONDecoder().decode(D.self, from: Data(json.utf8))
-        #expect(leida.elementos.map(\.id) == ["1", "4"])
+        #expect(leida.elementos.map(\.id) == ["1", "4", "lista"])
         // Una gráfica no cabe en media fila: vuelve a lo ancho.
         #expect(leida.elementos[0].tamano == .ancha)
         #expect(leida.elementos[0].grafica == .semanas)
@@ -412,7 +465,8 @@ struct HomeDisposicionTests {
         #expect(elementos[0]["tipo"] as? String == "clase")
         #expect(elementos[0]["clase"] as? String == "hucha")
         #expect(elementos[0]["tamano"] as? String == "pequena")
-        #expect(elementos[1]["hueco"] as? String == "a")
+        #expect(elementos[2]["hueco"] as? String == "m")
+        #expect(elementos[4]["hueco"] as? String == "a")
         #expect(objeto["ocultas"] as? [String] == ["diaCaro", "racha"])
     }
 
@@ -431,7 +485,7 @@ struct HomeDisposicionTests {
         ], "ocultas": ["racha"]}
         """
         let d = try JSONDecoder().decode(D.self, from: Data(json.utf8))
-        #expect(d.elementos.map(\.id) == ["1", "5", "6", "7"])
+        #expect(d.elementos.map(\.id) == ["1", "5", "6", "7", "lista"])
         // La pila pequeña no puede llevar la cola del hueco A, que es ancho.
         #expect(d.elementos[1].hueco == nil)
         // «Dónde se te va» no cabe en media fila: vuelve a la suya.
