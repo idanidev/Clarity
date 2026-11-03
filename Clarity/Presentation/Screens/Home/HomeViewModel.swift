@@ -342,6 +342,33 @@ final class HomeViewModel {
         }
     }
 
+    // MARK: Histórico al día (#77)
+    //
+    // El histórico se carga una vez, de la caché, y el calendario y «últimos
+    // seis meses» leen de él. Lo que después entra, sale o se recarga por mes
+    // se le aplica aquí: si no, el calendario se quedaba como al arrancar y un
+    // gasto recién apuntado no salía hasta volver a abrir la app.
+
+    private func historicoIncorporar(_ gasto: Expense) {
+        if let id = gasto.id, allHistoricalExpenses.contains(where: { $0.id == id }) { return }
+        allHistoricalExpenses.insert(gasto, at: 0)
+    }
+
+    private func historicoQuitar(id: String) {
+        allHistoricalExpenses.removeAll { $0.id == id }
+    }
+
+    /// Un mes entero recién traído de red sustituye al que había: así editar o
+    /// borrar un gasto se ve también en el calendario. Con el histórico aún
+    /// vacío no hace nada: la carga completa de la caché viene justo detrás.
+    private func historicoSustituirMes(_ clave: String, por gastos: [Expense]) {
+        guard !allHistoricalExpenses.isEmpty else { return }
+        let ids = Set(gastos.compactMap(\.id))
+        var nuevo = allHistoricalExpenses.filter { !$0.date.hasPrefix(clave) && !($0.id.map(ids.contains) ?? false) }
+        nuevo.append(contentsOf: gastos)
+        allHistoricalExpenses = nuevo
+    }
+
     /// Memo: gasto total agregado por "YYYY-MM". Se reconstruye cuando cambia
     /// `allHistoricalExpenses`. Evita filter+reduce O(N·M) por render del calendar.
     @ObservationIgnored private var _monthlyTotalsByKey: [String: Double]?
@@ -945,6 +972,7 @@ final class HomeViewModel {
                 }
             }
 
+            historicoQuitar(id: id)
             mesesEnMemoria.removeValue(forKey: String(expense.date.prefix(7)))
             // `loadExpenses` ya actualiza el widget: repetirlo aquí gastaba dos
             // recargas de WidgetKit por cada borrado.
@@ -1087,6 +1115,8 @@ final class HomeViewModel {
             self.allExpenses = sanitized
             self.currentMonthExpenses = sanitizedMonth
             self.hasMorePages = morePages
+            // Editar o borrar pasa por aquí: el mes del histórico se pone al día (#77).
+            historicoSustituirMes(Self.monthKey(mesPedido), por: sanitizedMonth)
 
             // Solo cargar historial completo si está vacío (no en cada keystroke
             // de búsqueda / cada delete). Decodificar cientos de records en
@@ -1163,6 +1193,8 @@ final class HomeViewModel {
         if expense.date.hasPrefix(monthPrefix) {
             currentMonthExpenses.insert(expense, at: 0)
         }
+        // Y al histórico, que es de donde leen el calendario y la evolución (#77).
+        historicoIncorporar(expense)
         // Lo guardado de ese mes ya no está completo: que se vuelva a pedir.
         mesesEnMemoria.removeValue(forKey: String(expense.date.prefix(7)))
 
@@ -1205,6 +1237,7 @@ final class HomeViewModel {
             let enMes = currentMonthExpenses.firstIndex { $0.date <= gasto.date } ?? currentMonthExpenses.endIndex
             currentMonthExpenses.insert(gasto, at: enMes)
         }
+        historicoIncorporar(gasto)
         // Lo guardado de ese mes ya no está completo: que se vuelva a pedir.
         mesesEnMemoria.removeValue(forKey: mes)
         UserDataManager.shared.anadirGastoAlCache(gasto)
@@ -1224,6 +1257,7 @@ final class HomeViewModel {
     func removeExpense(id: String) {
         allExpenses.removeAll { $0.id == id }
         currentMonthExpenses.removeAll { $0.id == id }
+        historicoQuitar(id: id)
         mesesEnMemoria.removeAll()
         UserDataManager.shared.expenses.removeAll { $0.id == id }
         applyFilters()

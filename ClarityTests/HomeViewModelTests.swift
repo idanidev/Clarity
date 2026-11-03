@@ -116,6 +116,29 @@ struct HomeViewModelTests {
         #expect(vm.allExpenses.first?.id == "new")
     }
 
+    // MARK: - Histórico (calendario y últimos seis meses), #77
+
+    @Test("apuntar, incorporar de fuera y quitar un gasto mantienen al día el histórico del calendario")
+    func historicoAlDia() {
+        let (vm, _) = makeSUT()
+        #expect(vm.datosGraficas.historico.isEmpty)
+
+        let nuevo = sampleExpense(id: "h-1", name: "Nuevo")
+        vm.prependExpense(nuevo)
+        #expect(vm.datosGraficas.historico.compactMap(\.id) == ["h-1"])
+
+        // Repetido: no se duplica.
+        vm.incorporarGastoDeFuera(nuevo)
+        #expect(vm.datosGraficas.historico.count == 1)
+
+        let deFuera = sampleExpense(id: "h-2", name: "Cargo")
+        vm.incorporarGastoDeFuera(deFuera)
+        #expect(Set(vm.datosGraficas.historico.compactMap(\.id)) == ["h-1", "h-2"])
+
+        vm.removeExpense(id: "h-1")
+        #expect(vm.datosGraficas.historico.compactMap(\.id) == ["h-2"])
+    }
+
     // MARK: - Search
 
     // El test de antes solo comprobaba que el setter guardaba el texto. Y, de
