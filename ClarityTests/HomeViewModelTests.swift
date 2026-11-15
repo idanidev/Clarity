@@ -116,6 +116,42 @@ struct HomeViewModelTests {
         #expect(vm.allExpenses.first?.id == "new")
     }
 
+    // MARK: - Filtros de importe, recurrentes y orden (#78)
+
+    @Test("el importe mínimo y máximo, «solo recurrentes» y el orden se aplican a la lista, no solo a las tarjetas")
+    func filtrosDeImporteRecurrentesYOrden() {
+        let (vm, _) = makeSUT()
+        let hoy = Formatters.isoString(from: Date())
+        let barato = sampleExpense(id: "f-1", amount: 5, name: "Café")
+        let medio = sampleExpense(id: "f-2", amount: 40, name: "Cena")
+        let caro = Expense(id: "f-3", amount: 120, name: "Luz", category: "Hogar", date: hoy, isRecurring: true)
+        vm.allExpenses = [barato, medio, caro]
+
+        var importe = ExpenseFilter()
+        importe.minAmount = 10
+        vm.selectedFilter = importe
+        #expect(vm.filtroActivo)
+        #expect(Set(vm.filteredExpenses.compactMap(\.id)) == ["f-2", "f-3"])
+
+        importe.maxAmount = 100
+        vm.selectedFilter = importe
+        #expect(vm.filteredExpenses.compactMap(\.id) == ["f-2"])
+
+        var recurrentes = ExpenseFilter()
+        recurrentes.showOnlyRecurring = true
+        vm.selectedFilter = recurrentes
+        #expect(vm.filteredExpenses.compactMap(\.id) == ["f-3"])
+
+        var orden = ExpenseFilter()
+        orden.sortBy = .amountAsc
+        vm.selectedFilter = orden
+        #expect(!vm.filtroActivo)
+        #expect(vm.filteredExpenses.map(\.amount) == [5, 40, 120])
+
+        vm.selectedFilter = ExpenseFilter()
+        #expect(vm.filteredExpenses.count == 3)
+    }
+
     // MARK: - Histórico (calendario y últimos seis meses), #77
 
     @Test("apuntar, incorporar de fuera y quitar un gasto mantienen al día el histórico del calendario")

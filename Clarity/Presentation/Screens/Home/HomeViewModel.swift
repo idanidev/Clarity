@@ -1339,25 +1339,17 @@ final class HomeViewModel {
             }
         }
 
-        // Category Filter — pre-normaliza UNA vez las categorías del filtro
-        // (antes recreaba la closure + normalizaba por cada par gasto×categoría).
-        if !selectedFilter.selectedCategories.isEmpty {
-            func firstWord(_ s: String) -> String {
-                s.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
-                    .replacingOccurrences(of: " / ", with: " ")
-                    .replacingOccurrences(of: " - ", with: " ")
-                    .components(separatedBy: " ").first ?? ""
-            }
-            let filterFirstWords = Set(selectedFilter.selectedCategories.map(firstWord))
-            result = result.filter { filterFirstWords.contains(firstWord($0.category)) }
+        // Categorías, métodos de pago, importe mínimo y máximo y «solo
+        // recurrentes»: el mismo criterio que las tarjetas y las gráficas
+        // (`criterioDeFiltro`). Hasta ahora la lista aplicaba solo categorías y
+        // métodos de pago, y con un importe o «solo recurrentes» la Home decía
+        // «Filtrado» pero la lista seguía igual (#78).
+        if let criterio = criterioDeFiltro() {
+            result = result.filter(criterio)
         }
 
-        // Payment Method Filter
-        if !selectedFilter.selectedPaymentMethods.isEmpty {
-            result = result.filter { expense in
-                selectedFilter.selectedPaymentMethods.contains(expense.paymentMethod)
-            }
-        }
+        // Y el orden elegido en la hoja, que la lista también ignoraba.
+        result = selectedFilter.ordenados(result)
 
         // Las aportaciones a huchas, aparte: no son gasto.
         self.aportacionesFiltradas = result.filter(\.esAhorro)

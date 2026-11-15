@@ -182,7 +182,13 @@ nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
             result = result.filter { $0.isRecurring == true }
         }
         
-        // Sort
+        return ordenados(result)
+    }
+
+    /// Los gastos en el orden del filtro. Lo usan `apply(to:)` y la lista de la
+    /// Home, que hasta ahora ignoraba «Ordenar por» (#78).
+    func ordenados(_ expenses: [Expense]) -> [Expense] {
+        var result = expenses
         switch sortBy {
         case .dateDesc:
             result.sort { $0.date > $1.date }
@@ -197,7 +203,6 @@ nonisolated struct ExpenseFilter: Identifiable, Equatable, Sendable, Codable {
         case .nameDesc:
             result.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedDescending }
         }
-        
         return result
     }
     
