@@ -51,7 +51,8 @@ struct ResumenPage: View {
                 // El total lleva al anillo de categorías (o a la galería, si no
                 // hay ninguna gráfica puesta): es donde se desmenuza.
                 Button { onDestino(.graficas) } label: {
-                    HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior, filtrado: filtrado, periodo: viewModel.periodo)
+                    HeroCard(resumen: r, mesAnterior: viewModel.nombreMesAnterior, filtrado: filtrado, periodo: viewModel.periodo,
+                             diasConGasto: Set(viewModel.filteredExpenses.map { String($0.date.prefix(10)) }).count)
                 }
                 .buttonStyle(TarjetaButtonStyle())
                 .filaDeTarjeta()
@@ -387,12 +388,18 @@ struct HeroCard: View {
     /// El mes de la cabecera o un período de la hoja (#78): fuera del mes la
     /// cifra es la del tramo y no hay presupuesto ni ritmo.
     var periodo: HomePeriodo = .mes
+    /// Días distintos con algún gasto de lo que se enseña (fuera del mes).
+    var diasConGasto: Int = 0
     /// Si la cifra sube desde cero al aparecer. No en la Home en edición: al
     /// entrar volvería a rodar un total que ya se estaba viendo.
     var animarCifra = true
     /// La cifra sube desde cero al aparecer: los dígitos ruedan hasta el total.
     @State private var mostrado = false
-    private var cifra: Double { mostrado || !animarCifra ? resumen.total : 0 }
+    /// Fuera del mes la cifra es lo que pasa los filtros: con Vivienda quitada,
+    /// el total sin Vivienda (#78). En el mes sigue siendo el total, contra el
+    /// que se mide el presupuesto.
+    private var valor: Double { periodo.esMes ? resumen.total : resumen.totalAnalisis }
+    private var cifra: Double { mostrado || !animarCifra ? valor : 0 }
 
     /// Con presupuesto y por debajo del 85 %: el mismo umbral en el que la barra
     /// empieza a ondular.
@@ -424,11 +431,11 @@ struct HeroCard: View {
                 // Los dígitos ruedan al nuevo valor en vez de parpadear.
                 .contentTransition(.numericText(value: cifra))
                 .animation(.snappy(duration: 0.9), value: mostrado)
-                .animation(.snappy(duration: 0.5), value: resumen.total)
+                .animation(.snappy(duration: 0.5), value: valor)
                 .padding(.top, 4)
                 .onAppear { mostrado = true }
 
-            if let filtrado {
+            if periodo.esMes, let filtrado {
                 // Lo filtrado debajo, en pequeño: responde a "¿y de lo que he
                 // filtrado, cuánto?" sin cambiar lo que mide el presupuesto.
                 HStack(spacing: 6) {
@@ -456,7 +463,9 @@ struct HeroCard: View {
 
             if !periodo.esMes {
                 // Fuera del mes no hay presupuesto ni ritmo: el tramo, y ya.
-                Text(resumen.numeroGastos == 1 ? "1 gasto en este período." : "\(resumen.numeroGastos) gastos en este período.")
+                Text(filtrado != nil
+                     ? "Con tus filtros, de \(Formatters.currency(resumen.total)) en total."
+                     : (resumen.numeroGastos == 1 ? "1 gasto en este período." : "\(resumen.numeroGastos) gastos en este período."))
                     .font(.footnote)
                     .foregroundStyle(Color.textSecondary)
                     .padding(.top, 10)
@@ -505,9 +514,9 @@ struct HeroCard: View {
             } else {
                 // Lo que se saca de los propios gastos, sin mes de por medio.
                 HStack {
-                    Dato("Gastos", "\(resumen.numeroGastos)")
-                    Dato("Media por gasto", Formatters.currency(resumen.numeroGastos > 0 ? resumen.total / Double(resumen.numeroGastos) : 0))
-                    Dato("Días con gasto", "\(resumen.diasApuntando)")
+                    Dato("Gastos", "\(resumen.numeroAnalisis)")
+                    Dato("Media por gasto", Formatters.currency(resumen.numeroAnalisis > 0 ? resumen.totalAnalisis / Double(resumen.numeroAnalisis) : 0))
+                    Dato("Días con gasto", "\(diasConGasto)")
                 }
             }
         }
@@ -536,7 +545,7 @@ struct HeroCard: View {
                 .foregroundStyle(baja ? Color.success : Color.error)
                 .padding(.horizontal, 9).padding(.vertical, 4)
                 .background((baja ? Color.success : Color.error).opacity(0.16), in: Capsule())
-        } else if resumen.diasApuntando > 0 {
+        } else if periodo.esMes, resumen.diasApuntando > 0 {
             Text("\(resumen.diasApuntando) días apuntando")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.textSecondary)

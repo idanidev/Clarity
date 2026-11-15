@@ -190,8 +190,16 @@ final class HomeViewModel {
     /// cambiabas de mes.
     var filtroActivo: Bool {
         let f = selectedFilter
-        return !f.selectedCategories.isEmpty || !f.selectedPaymentMethods.isEmpty
+        return !categoriasQueFiltran.isEmpty || !f.selectedPaymentMethods.isEmpty
             || f.minAmount != nil || f.maxAmount != nil || f.showOnlyRecurring
+    }
+
+    /// Las categorías marcadas, salvo que estén todas: todas marcadas es no
+    /// filtrar por categoría, y la Home no tiene que decir «Con tus filtros» (#78).
+    private var categoriasQueFiltran: Set<String> {
+        let marcadas = selectedFilter.selectedCategories
+        let todas = Set(UserDataManager.shared.categoryNames)
+        return !todas.isEmpty && todas.isSubset(of: marcadas) ? [] : marcadas
     }
 
     /// Quita los filtros sin moverse del mes que se está viendo. Asignar un
@@ -742,7 +750,7 @@ final class HomeViewModel {
     private func criterioDeFiltro() -> ((Expense) -> Bool)? {
         guard filtroActivo else { return nil }
         let f = selectedFilter
-        let categorias = Set(f.selectedCategories.map(Self.primeraPalabra))
+        let categorias = Set(categoriasQueFiltran.map(Self.primeraPalabra))
         return { gasto in
             if !categorias.isEmpty, !categorias.contains(Self.primeraPalabra(gasto.category)) { return false }
             if !f.selectedPaymentMethods.isEmpty, !f.selectedPaymentMethods.contains(gasto.paymentMethod) { return false }
