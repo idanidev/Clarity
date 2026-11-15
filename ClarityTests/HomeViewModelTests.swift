@@ -116,6 +116,38 @@ struct HomeViewModelTests {
         #expect(vm.allExpenses.first?.id == "new")
     }
 
+    // MARK: - Período de la hoja (#78)
+
+    @Test("con «Todos» la cifra, el anillo y la lista son de todos los gastos, sin presupuesto; al quitarlo vuelve el mes")
+    func periodoTodos() {
+        let (vm, _) = makeSUT()
+        let hoy = Formatters.localDayString(from: Date())
+        let haceUnAnio = Formatters.localDayString(from: Calendar.current.date(byAdding: .year, value: -1, to: Date())!)
+        let deEsteMes = sampleExpense(id: "p-1", amount: 10, name: "Café", date: hoy)
+        let viejo = sampleExpense(id: "p-2", amount: 90, name: "Cena", date: haceUnAnio)
+        vm.allExpenses = [deEsteMes, viejo]
+        vm.currentMonthExpenses = [deEsteMes]
+        #expect(vm.periodo == .mes)
+        #expect(vm.resumen.total == 10)
+
+        var todos = ExpenseFilter()
+        todos.dateRange = .allTime
+        vm.selectedFilter = todos
+        #expect(vm.periodo.nombre == "Todos")
+        #expect(vm.resumen.total == 100)
+        #expect(vm.resumen.numeroGastos == 2)
+        #expect(vm.resumen.presupuesto == nil)
+        #expect(vm.gruposDelMes.reduce(0) { $0 + $1.totalAmount } == 100)
+        #expect(vm.filteredExpenses.count == 2)
+        // Los filtros de verdad siguen aparte: un período no es «Filtrado».
+        #expect(!vm.filtroActivo)
+
+        vm.limpiarFiltros()
+        #expect(vm.periodo == .mes)
+        #expect(vm.resumen.total == 10)
+        #expect(vm.filteredExpenses.count == 1)
+    }
+
     // MARK: - Filtros de importe, recurrentes y orden (#78)
 
     @Test("el importe mínimo y máximo, «solo recurrentes» y el orden se aplican a la lista, no solo a las tarjetas")

@@ -109,8 +109,22 @@ final class HomeViewModel {
             applyFilters()
             // Tarjetas, últimos y gráficas también siguen al filtro.
             invalidarDerivados()
+            // Un período nuevo en la hoja (#78): hay que ir a por los gastos de
+            // fuera del mes, sin esperar a Aplicar. No al ajustar el mes desde
+            // la barra, que ya los pide.
+            if hasLoaded, !ajustandoMes, oldValue.dateRangeForQuery() != selectedFilter.dateRangeForQuery() {
+                Task { await loadExpenses(silent: true) }
+            }
         }
     }
+
+    /// Mientras la barra del mes reescribe el rango del filtro: ese cambio no
+    /// recarga por su cuenta.
+    @ObservationIgnored private var ajustandoMes = false
+
+    /// Lo que enseña la Home: el mes de la cabecera o el período de la hoja
+    /// de filtros («Todos», «Este año»…).
+    var periodo: HomePeriodo { HomePeriodo.de(selectedFilter, mes: selectedMonth) }
     var searchText: String = "" {
         didSet {
             searchTask?.cancel()
@@ -184,9 +198,16 @@ final class HomeViewModel {
     /// `ExpenseFilter()` a secas volvía al mes actual aunque enseñaras otro, y
     /// la lista se quedaba vacía.
     func limpiarFiltros() {
+        let antes = selectedFilter.dateRangeForQuery()
+        ajustandoMes = true
         selectedFilter = ExpenseFilter()
         if !Calendar.current.isDate(selectedMonth, equalTo: Date(), toGranularity: .month) {
             updateFilterForSelectedMonth()
+        }
+        ajustandoMes = false
+        // Si había un período puesto, vuelven los gastos del mes.
+        if hasLoaded, antes != selectedFilter.dateRangeForQuery() {
+            Task { await loadExpenses(silent: true) }
         }
     }
 
@@ -776,13 +797,23 @@ final class HomeViewModel {
         // movimientos y no de `savingsAllocated` del presupuesto: ese contador
         // se descuadra (un mes sin presupuesto, una fecha cambiada, un fallo a
         // medias) y los movimientos son lo que el usuario ve y puede borrar.
-        let delMes = currentMonthExpenses.filter { $0.date.hasPrefix(clave) }
-        let movimientos = delMes.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) } : delMes
+        let periodo = self.periodo
+        let movimientos: [Expense]
+        if case .tramo(_, let desde, let hasta) = periodo {
+            // Un período de la hoja de filtros (#78): el tramo entero, del
+            // histórico (completo y al día) o, hasta tenerlo, de lo cargado.
+            let fuente = allHistoricalExpenses.isEmpty ? allExpenses : allHistoricalExpenses
+            movimientos = fuente.filter { $0.date >= desde && $0.date <= hasta }
+        } else {
+            let delMes = currentMonthExpenses.filter { $0.date.hasPrefix(clave) }
+            movimientos = delMes.isEmpty ? allHistoricalExpenses.filter { $0.date.hasPrefix(clave) } : delMes
+        }
         let gastos = movimientos.filter { !$0.esAhorro }
         let aportaciones = movimientos.filter(\.esAhorro)
 
+        // Fuera del mes no hay mes anterior con el que compararse.
         let anteriores: [Expense] = {
-            guard let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
+            guard periodo.esMes, let prev = cal.date(byAdding: .month, value: -1, to: selectedMonth) else { return [] }
             let k = Self.monthKey(prev)
             let delAnterior = gastosMesAnteriorCargados.filter { $0.date.hasPrefix(k) && !$0.esAhorro }
             if !delAnterior.isEmpty { return delAnterior }
@@ -824,18 +855,21 @@ final class HomeViewModel {
             calendar: cal
         )
 
+        // Fuera del mes: ni presupuesto, ni límites, ni cargos por venir, ni
+        // «tu normal»; son cosas de un mes. Queda el total, el reparto y lo
+        // que se saca de los propios gastos.
         let resumen = HomeResumen.build(
             gastos: gastos,
             gastosMesAnterior: anteriores,
-            metas: metas,
-            recurrentes: allRecurringRules,
-            presupuesto: monthlyIncome > 0 ? monthlyIncome : nil,
+            metas: periodo.esMes ? metas : [],
+            recurrentes: periodo.esMes ? allRecurringRules : [],
+            presupuesto: periodo.esMes && monthlyIncome > 0 ? monthlyIncome : nil,
             primerGasto: primerGasto,
             hoy: hoy,
             calendar: cal,
-            normal: normal,
+            normal: periodo.esMes ? normal : nil,
             filtro: criterio,
-            apartado: aportaciones.reduce(0) { $0 + $1.amount }
+            apartado: periodo.esMes ? aportaciones.reduce(0) { $0 + $1.amount } : 0
         )
 
         let ultimos = Array(analisis.sorted {
@@ -876,7 +910,12 @@ final class HomeViewModel {
         // Qué enseña cada tarjeta de la Home, y en qué filas van las que salen.
         let tarjetas = disposicion.tarjetas(relevancias: resumen.relevancias, hayUltimos: !ultimos.isEmpty,
                                             hayMesAnterior: !anteriores.isEmpty)
-        let partes = HomeDisposicion.alrededorDeLaLista(tarjetas.filter(\.conDatos))
+        // Fuera del mes, las gráficas del mes (por día, semanas, calendario,
+        // mes contra mes) no tienen qué enseñar: quedan el anillo y los últimos meses.
+        let visibles = tarjetas.filter { t in
+            periodo.esMes || t.grafica == nil || t.grafica == .reparto || t.grafica == .evolucion
+        }
+        let partes = HomeDisposicion.alrededorDeLaLista(visibles.filter(\.conDatos))
         let filasArriba = HomeDisposicion.filas(partes.arriba, tamano: \.tamano)
         let filasAbajo = HomeDisposicion.filas(partes.abajo, tamano: \.tamano)
 
@@ -1303,7 +1342,9 @@ final class HomeViewModel {
         newFilter.dateRange = .custom
         newFilter.customStartDate = startOfMonth
         newFilter.customEndDate = endOfMonth
+        ajustandoMes = true
         selectedFilter = newFilter
+        ajustandoMes = false
 
         logger.debug(
             "📅 Month changed to: \(self.monthDateFormatter.string(from: self.selectedMonth))")

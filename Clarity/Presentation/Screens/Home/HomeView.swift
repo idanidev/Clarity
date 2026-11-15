@@ -122,8 +122,8 @@ struct HomeView: View {
                     filter: $viewModel.selectedFilter,
                     availableCategories: UserDataManager.shared.categoryNames,
                     onApply: {
-                        // Trigger reload to fetch data if date range changed
-                        Task { await viewModel.loadExpenses() }
+                        // Nada que hacer: el ViewModel recarga solo al cambiar
+                        // el período (#78) y el resto de filtros son en memoria.
                     }
                 )
                 // Una hoja no tiene barra de pestañas debajo, y sus filas de
@@ -252,7 +252,7 @@ struct HomeView: View {
     /// cápsulas de vidrio, flechas en una y acciones en otra.
     private var barraSuperior: some View {
         HStack(alignment: .center, spacing: Spacing.xs) {
-            HomeTituloMes(mes: $viewModel.selectedMonth)
+            HomeTituloMes(mes: $viewModel.selectedMonth, periodo: viewModel.periodo)
             Spacer(minLength: 4)
 
             HStack(spacing: 0) {
@@ -269,8 +269,9 @@ struct HomeView: View {
                     if !buscando { viewModel.searchText = "" }
                 }
                 // Filtros de verdad, no el mes: con `hasActiveFilters` bastaba
-                // cambiar de mes para que saliera la X de limpiar.
-                if viewModel.filtroActivo {
+                // cambiar de mes para que saliera la X de limpiar. Un período
+                // de la hoja («Todos») sí cuenta: la X vuelve al mes.
+                if viewModel.filtroActivo || !viewModel.periodo.esMes {
                     botonBarra("xmark.circle.fill", "Limpiar filtros") {
                         viewModel.limpiarFiltros()
                         HapticManager.shared.notification(.success)
@@ -453,11 +454,18 @@ struct HomeView: View {
 /// saltar a cualquiera de los últimos doce.
 private struct HomeTituloMes: View {
     @Binding var mes: Date
+    /// Con un período de la hoja («Todos», «Este año»), el título es ese y no
+    /// el mes; las flechas y el menú devuelven al mes.
+    var periodo: HomePeriodo = .mes
     private let cal = Calendar.current
 
     private var esActual: Bool { cal.isDate(mes, equalTo: Date(), toGranularity: .month) }
-    private var nombre: String { Formatters.fullMonthName(from: mes).capitalized }
+    private var nombre: String { periodo.nombre ?? Formatters.fullMonthName(from: mes).capitalized }
     private var anio: String { String(cal.component(.year, from: mes)) }
+    private var detalle: String {
+        guard periodo.esMes else { return "período de los filtros" }
+        return esActual ? "\(anio) · mes actual" : anio
+    }
 
     var body: some View {
         Menu {
@@ -491,7 +499,7 @@ private struct HomeTituloMes: View {
                         .font(.caption.weight(.bold))
                         .foregroundStyle(Color.textSecondary)
                 }
-                Text(esActual ? "\(anio) · mes actual" : anio)
+                Text(detalle)
                     .font(.caption)
                     .foregroundStyle(Color.textSecondary)
             }
